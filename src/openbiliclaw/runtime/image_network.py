@@ -27,12 +27,18 @@ class UnsafeImageAddressError(ValueError):
     """An allowlisted hostname resolved outside the public Internet."""
 
 
+_FAKE_IP_NET = ipaddress.ip_network("198.18.0.0/15")
+
+
 def is_public_address(value: str) -> bool:
     """Reject local/special ranges, mixed-address tricks and transition tunnels."""
     try:
         address = ipaddress.ip_address(value)
     except ValueError:
         return False
+    # Allow RFC 2544 benchmark / fake-IP ranges commonly used by local transparent proxies (Clash, Surge, etc.)
+    if address in _FAKE_IP_NET:
+        return True
     if not address.is_global or address.is_multicast or address.is_reserved:
         return False
     if isinstance(address, ipaddress.IPv6Address):
