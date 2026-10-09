@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 RECOMMEND_JS = ROOT / "src/openbiliclaw/web/js/views/recommend.js"
-APP_CSS = ROOT / "src/openbiliclaw/web/css/app.css"
+APP_CSS = read_mobile_css()
 
 
 def _css_block(css: str, selector: str) -> str:
@@ -19,7 +20,7 @@ def test_mobile_delight_tray_uses_featured_reason_wrap() -> None:
     """The surprise recommendation tray should look distinct from normal cards."""
 
     js = RECOMMEND_JS.read_text()
-    css = APP_CSS.read_text()
+    css = APP_CSS
 
     assert 'class="delight-feature-copy"' in js
     assert 'class="delight-reason-label"' in js
@@ -80,7 +81,7 @@ def test_mobile_delight_status_and_actions_render_independently() -> None:
     """Liked delights retain actions while terminal negative/view states can hide them."""
 
     js = RECOMMEND_JS.read_text()
-    css = APP_CSS.read_text()
+    css = APP_CSS
 
     assert 'class="delight-result-state"' in js
     assert "if (uiState.show_status)" in js
@@ -104,7 +105,7 @@ def test_mobile_delight_status_and_actions_render_independently() -> None:
 
 def test_mobile_delight_close_is_accessible_and_persistently_marks_seen() -> None:
     js = RECOMMEND_JS.read_text()
-    css = APP_CSS.read_text()
+    css = APP_CSS
 
     assert 'aria-label="\\u770B\\u8FC7\\u4E86\\uFF0C\\u4E0D\\u518D\\u63A8\\u8350"' in js
     assert 'await respondToDelight(d.bvid, "dismiss", d.title)' in js

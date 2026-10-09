@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 INDEX_HTML = Path("src/openbiliclaw/web/index.html")
-APP_CSS = Path("src/openbiliclaw/web/css/app.css")
+APP_CSS = read_mobile_css()
 API_JS = Path("src/openbiliclaw/web/js/api.js")
 CHAT_JS = Path("src/openbiliclaw/web/js/views/chat.js")
 SHARED_AGENT_CHAT = Path("src/openbiliclaw/web/shared/agent-chat.js")
@@ -88,7 +89,7 @@ def test_mobile_chat_wires_sessions_skills_approvals_and_tasks() -> None:
 
 
 def test_mobile_agent_styles_keep_long_lists_bounded() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert ".chat-agent-topbar {" in css
     assert ".agent-run {" in css
@@ -118,7 +119,7 @@ def test_mobile_chat_shows_loading_indicator_until_first_history_settles() -> No
 
 
 def test_mobile_chat_history_loading_styles_exist() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert ".chat-history-loading {" in css
     assert ".chat-history-loading-text {" in css
@@ -147,6 +148,6 @@ def test_mobile_approval_cards_follow_the_async_execute_protocol() -> None:
     assert "function normalizeApproveResponse(payload)" in shared
     assert "function applyApprovalRecordToRun(run, record)" in shared
 
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert '.agent-approval-status[data-tone="executing"]' in css

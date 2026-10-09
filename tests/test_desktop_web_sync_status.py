@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 
 def test_desktop_normalizes_account_sync_error_fields() -> None:
@@ -21,7 +22,7 @@ def test_desktop_normalizes_account_sync_error_fields() -> None:
 def test_desktop_renders_account_sync_error_chip() -> None:
     """Sync failures (esp. auth-expired) render an actionable status chip."""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
 
     assert "function renderAccountSyncStatus(" in app_js
@@ -149,7 +150,7 @@ def test_desktop_source_status_poll_keeps_dashboard_current() -> None:
 
 def test_desktop_sync_error_chip_uses_readable_theme_foreground() -> None:
     """The generic sync error must remain readable outside the dark hero panel."""
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     error_rule = re.search(
         r"\.account-sync-status\.is-error\s*\{(?P<body>.*?)\}",
         app_css,
@@ -157,6 +158,7 @@ def test_desktop_sync_error_chip_uses_readable_theme_foreground() -> None:
     )
     assert error_rule is not None, "desktop sync error rule not found"
     body = error_rule.group("body")
-    assert "color: var(--fg-2);" in body
-    assert "background: color-mix(in oklab, var(--surface), var(--danger) 6%);" in body
-    assert "color-mix(in oklab, var(--surface), var(--meta) 18%)" not in body
+    # 卡片目录馆: secondary ink on card stock, tinted by the stamp, ruled by the stamp.
+    assert "color: var(--ink-2);" in body
+    assert "background: color-mix(in srgb, var(--card), var(--stamp) 8%);" in body
+    assert "border-left: 2px solid var(--stamp);" in body

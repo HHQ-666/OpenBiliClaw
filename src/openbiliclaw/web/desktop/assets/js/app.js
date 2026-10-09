@@ -9315,6 +9315,26 @@ ${cardFeedbackBarHtml()}`;
       return runtime.pool_available_count > 0 ? "可直接换一批" : "等待后台补货";
     }
 
+    // 运行时事件名是内部词汇，不能直接印到侧栏摘要上。
+    function runtimeEventSentence(type) {
+      switch (String(type || "")) {
+        case "refresh.pool_updated":
+          return "刚同步过推荐池，库存有新变化。";
+        case "pool_status":
+          return "推荐池库存已更新。";
+        case "recommendation.reshuffled":
+          return "刚换了一批推荐。";
+        case "recommendation.served":
+          return "刚取走一批推荐。";
+        case "sources.status":
+          return "内容源状态已更新。";
+        case "degraded":
+          return "AI 服务配置有误，推荐功能暂停。";
+        default:
+          return "";
+      }
+    }
+
     function renderPoolStatus(status = state.runtimeStatus) {
       const runtime = normalizeRuntimeStatus(status);
       if (!runtime) {
@@ -11674,7 +11694,7 @@ ${cardFeedbackBarHtml()}`;
         desktopRuntimeGeneration += 1;
         clearDesktopRuntimeRecovery();
       }
-      applyRuntimeStatus({ ...event, live_summary: event.message || event.live_summary || event.type });
+      applyRuntimeStatus({ ...event, live_summary: event.message || event.live_summary || runtimeEventSentence(event.type) });
       // Credential sync changes the backend-owned source contract. Refresh it
       // immediately so the dashboard warning does not retain the pre-login
       // snapshot until settings is opened or the fallback poll runs.

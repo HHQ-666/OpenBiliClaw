@@ -1,0 +1,812 @@
+/* ══════════════════════════════════════════════════════════════════
+   pages/profile.css — 我的画像 / the catalog's own record card.
+   Two renderers share it: the desktop cabinet files layers of record
+   cards under brass plates, the phone view prints sections as sheets
+   of card stock; both carry the same inline edit form. Only page
+   print lives here — world.css owns the record card, the interest
+   channel and the edit-row baseline.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── page shell ─────────────────────────────────────────────── */
+/* the record sheet is one column, never a tray of tiles */
+.profile-page-list { grid-template-columns: minmax(0, 1fr); }
+
+/* edit mode is ONE sheet of card stock: the form is ruled inside it,
+   never boxed field by field (the phone view is its own root) */
+.profile-page-list:has(> .edit-field),
+#view-profile:has(> .edit-field) {
+  gap: 0;
+  padding: var(--s4) var(--s5) var(--s3);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);
+}
+.profile-page-list:has(> .edit-field) > .profile-edit-bar,
+#view-profile:has(> .edit-field) > .profile-edit-bar {
+  padding-bottom: var(--s3);
+  margin-bottom: var(--s3);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* .profile-page-open is a body-level hook the desktop shell toggles for
+   scroll locking; the layout owns it, so it takes no print here.   */
+
+/* ── sheets, record cards, slots ────────────────────────────── */
+.profile-section,
+.profile-item,
+.profile-memory,
+.mobile-summary-card {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);
+}
+
+/* insight / awareness rows and records filed inside a record card
+   flatten to ruled slots: no card sits on another card */
+.insight-item,
+.awareness-item,
+.profile-item .profile-insight,
+.profile-item .profile-memory {
+  padding: var(--s3);
+  background: var(--card-hi);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-ctl);
+}
+.profile-section + .profile-section { margin-top: var(--s5); }
+
+/* world.css already cuts .profile-insight; these are its siblings */
+.profile-item h3,
+.profile-memory-head strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.profile-item h3 {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--rule);
+}
+.profile-memory-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--rule);
+}
+.profile-item .profile-card-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+/* the portrait reads as prose, not as typed metadata */
+.profile-portrait,
+.profile-portrait-copy p {
+  font-family: var(--font-body);
+  font-size: var(--fs-note);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+.profile-portrait {
+  max-width: 66ch;
+  color: var(--ink);
+}
+.profile-portrait-copy {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* ── uninitialized state ────────────────────────────────────── */
+.profile-uninit-icon {
+  font-size: 30px;
+  line-height: 1;
+  opacity: 0.55;
+}
+.profile-uninit-text {
+  margin-top: var(--s3);
+  font-size: var(--fs-note);
+  color: var(--ink-2);
+}
+
+/* ── layer plates (desktop renderer) ────────────────────────── */
+/* a layer is a tray of record cards under one brass drawer plate */
+.profile-layer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s4);
+  align-items: start;
+}
+.profile-layer-label {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 3px 9px;
+  color: var(--brass);
+  background: var(--brass-soft);
+  border: 1px solid var(--brass-edge);
+  border-radius: var(--r-ctl);
+}
+
+/* ── stamped labels ─────────────────────────────────────────── */
+.profile-section-title,
+.profile-layer-label,
+.context-pattern-label,
+.exploration-label,
+.insight-label,
+.awareness-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+.profile-section-title,
+.context-pattern-label,
+.exploration-label {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.insight-label,
+.awareness-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+.profile-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+/* the brass index tick, once per sheet */
+.profile-section-title::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 2px;
+  background: var(--brass);
+}
+
+/* ── chips ──────────────────────────────────────────────────── */
+.chip-list,
+.profile-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* typed values can run long: let them wrap inside the card */
+.chip-list .chip,
+.profile-chip-list .chip,
+.edit-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* core traits / followed creators: heavier stock, still neutral */
+.chip.brand {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+  background: var(--card);
+  font-weight: 600;
+}
+
+/* the values layer carries the positive status ink */
+.chip.success {
+  color: var(--ok);
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+/* the summary card is a grid, so the row's own top margin folds away */
+.mobile-summary-card .profile-chip-row { margin-top: 0; }
+.mobile-summary-card .profile-chip-row:empty { display: none; }
+.mobile-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ── measures: bars, meters, leader rows ────────────────────── */
+/* the same printed channel world.css gives .interest-bar */
+.mbti-bar,
+.exploration-track,
+.profile-meter-track,
+.spec-confidence-bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 8px;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.mbti-bar-fill,
+.exploration-fill,
+.profile-meter-fill,
+.spec-confidence-fill {
+  height: 100%;
+  background: var(--stamp);
+  opacity: 0.85;
+}
+
+/* a magnitude prints in the one accent; an avoidance files in grey ink */
+.interest-bar-fill.dislike,
+.spec-avoidance .spec-interest-progress-fill {
+  background: var(--ink-3);
+  opacity: 0.7;
+}
+.profile-interest-tree,
+.profile-bars,
+.profile-style-bars,
+.profile-context,
+.context-patterns,
+.profile-domain,
+.interest-domain,
+.profile-meter {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+.profile-domain-head,
+.profile-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.profile-domain-head {
+  padding-bottom: 5px;
+  border-bottom: 1px dotted var(--rule);
+}
+.profile-domain-title,
+.interest-domain-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.profile-meter-head {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.profile-meter-head strong {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--ink);
+}
+
+/* dotted-leader rows, like a typed circulation slip */
+.profile-context-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--rule);
+  font-size: 12px;
+}
+.profile-context-row:last-child { border-bottom: 0; }
+.profile-context-row > span {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.profile-context-row > strong {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.exploration-bar {
+  display: grid;
+  grid-template-columns: auto minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* ── MBTI ───────────────────────────────────────────────────── */
+.mbti-type,
+.mbti-type-label {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: var(--track-meta);
+  color: var(--ink);
+}
+.mbti-block,
+.mbti-dims,
+.mbti-dimensions {
+  display: grid;
+  gap: 9px;
+}
+.mbti-dim {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 6px;
+}
+.mbti-type-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.mbti-axis {
+  display: grid;
+  grid-template-columns: minmax(46px, auto) minmax(0, 1fr) minmax(46px, auto) auto;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 11.5px;
+}
+.mbti-axis-side.is-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+.mbti-axis-track {
+  position: relative;
+  height: 8px;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+}
+.mbti-axis-fill {
+  position: absolute;
+  inset: 0 auto 0 var(--start);
+  width: var(--width);
+  background: var(--stamp);
+  opacity: 0.85;
+}
+
+/* the printed head the pole leans against */
+.mbti-axis-marker {
+  position: absolute;
+  top: 50%;
+  left: var(--marker);
+  width: 9px;
+  height: 9px;
+  background: var(--card-hi);
+  border: 1px solid var(--ink);
+  transform: translate(-50%, -50%);
+}
+
+/* ── speculative rows ───────────────────────────────────────── */
+/* phone renderer: the probe above, its answers under it */
+.spec-interest,
+.speculative-item {
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.spec-interest:last-child,
+.speculative-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.spec-interest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.spec-interest-info {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 6px;
+  min-width: 0;
+}
+.spec-interest-name,
+.spec-domain {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.spec-interest-actions,
+.spec-actions,
+.spec-specifics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* the probe's answers: printed plates, affirmative stamped */
+.spec-btn {
+  padding: 4px 11px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+.spec-btn:hover {
+  color: var(--ink);
+  background: var(--card-sunk);
+  border-color: var(--rule-strong);
+}
+.spec-btn:disabled { cursor: default; }
+.spec-btn.confirm {
+  color: var(--stamp-deep);
+  background: var(--stamp-soft);
+  border-color: var(--stamp);
+}
+
+/* declining stays a blank form: dashed, unprinted */
+.spec-btn.reject {
+  color: var(--ink-3);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* desktop renderer: the same probe, filed as a ruled slot */
+.speculative-item {
+  display: grid;
+  gap: 6px;
+}
+.speculative-item.is-status-deprecated,
+.speculative-item.is-status-rejected {
+  opacity: 0.62;
+}
+.spec-header,
+.spec-confidence-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.spec-header .spec-progress { margin-left: auto; }
+.spec-specific-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-ctl);
+}
+
+/* ── insight, awareness and cognition records ───────────────── */
+/* an insight is sealed, not a form to fill in */
+.insight-readonly { border-style: dashed; }
+.insight-validated {
+  margin-left: auto;
+  padding: 0 5px;
+  font-size: 9.5px;
+  color: var(--ok);
+  border: 1px solid var(--ok);
+  border-radius: var(--r-ctl);
+}
+.insight-evidence {
+  margin-top: 5px;
+  padding-left: var(--s3);
+  border-left: 1px solid var(--rule-soft);
+}
+
+/* the ruled log of what the cabinet has noticed */
+.cognition-card {
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.cognition-card:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.cognition-card.expandable { cursor: pointer; }
+.cognition-expand-hint {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--stamp-deep);
+  border-bottom: 1px solid var(--stamp);
+}
+.cognition-detail {
+  display: none;
+  margin-top: 6px;
+  padding-left: var(--s2);
+  border-left: 1px solid var(--rule);
+}
+.cognition-card.expanded .cognition-detail { display: block; }
+
+/* the pull for another slip; scoped so the tray keeps its own button */
+.profile-section .load-more-btn,
+.profile-page-list > .load-more-btn,
+#view-profile > .load-more-btn {
+  width: 100%;
+  margin-top: var(--s3);
+  padding: 7px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+.profile-section .load-more-btn:hover,
+.profile-page-list > .load-more-btn:hover {
+  color: var(--stamp-deep);
+  border-color: var(--stamp);
+}
+
+/* ── shared meta print ──────────────────────────────────────── */
+.profile-domain-weight,
+.profile-confidence,
+.profile-memory-meta,
+.spec-interest-status,
+.spec-status,
+.spec-progress,
+.spec-confidence-label,
+.spec-specific-count,
+.insight-confidence,
+.mbti-confidence {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: var(--track-meta);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.interest-topics,
+.cognition-date,
+.spec-help,
+.mbti-axis-side,
+.mbti-axis-pct,
+.mbti-dim > span,
+.awareness-trend,
+.awareness-emotion,
+.insight-readonly-note,
+.insight-readonly-hint {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--ink-3);
+}
+.interest-topics,
+.spec-help,
+.insight-readonly-note,
+.insight-readonly-hint {
+  line-height: 1.65;
+}
+.mbti-axis-pct { text-align: right; }
+.awareness-trend,
+.awareness-emotion {
+  margin-top: 3px;
+}
+.insight-readonly-note,
+.insight-readonly-hint {
+  margin-bottom: var(--s2);
+}
+.profile-item .video-meta,
+.profile-memory .video-meta,
+.cognition-detail,
+.insight-evidence {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+/* ── inline editing: a form printed on the card ─────────────── */
+.profile-edit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+
+/* the page's one strong control */
+.profile-edit-toggle,
+.edit-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-inv);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-ctl);
+  white-space: nowrap;
+  transition: background-color var(--imp), border-color var(--imp);
+}
+.profile-edit-toggle:hover,
+.edit-save-btn:hover {
+  background: var(--stamp-deep);
+  border-color: var(--stamp-deep);
+}
+.profile-edit-note {
+  padding: var(--s2) var(--s3);
+  margin-bottom: var(--s3);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  line-height: 1.7;
+}
+.edit-field:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.edit-text-input {
+  min-height: 54px;
+  margin-top: var(--s2);
+  font-size: 12.5px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+/* the AI's counter-proposal, stamped as a drift warning */
+.edit-drift-hint {
+  padding: 4px 8px;
+  margin-top: 6px;
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-ctl);
+}
+.edit-badge {
+  color: var(--stamp-ink);
+  background: var(--stamp-soft);
+  border-color: var(--stamp);
+}
+.edit-field-actions {
+  align-items: center;
+  margin-top: var(--s3);
+}
+.edit-reset-btn,
+.edit-add-btn {
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+.edit-chip-remove {
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: var(--r-ctl);
+}
+.edit-chip-remove:hover { background: var(--stamp-soft); }
+
+/* a removal in flight: the chip is being pulled from the drawer */
+.edit-chip.is-pending { pointer-events: none; }
+.edit-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--s2);
+}
+.edit-add-input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 6px 9px;
+  font-size: 12.5px;
+}
+.edit-scalar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s2);
+}
+
+/* the field owns the hub rule; the row rides inside it */
+.edit-field > .edit-scalar-row {
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* the slider is a drawer gauge: printed channel, brass slide */
+.edit-scalar-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  accent-color: var(--brass);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.edit-scalar-input::-webkit-slider-runnable-track {
+  height: 8px;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+}
+.edit-scalar-input::-webkit-slider-thumb {
+  width: 12px;
+  height: 16px;
+  margin-top: -5px;
+  background: var(--brass);
+  border: 1px solid var(--brass-edge);
+  border-radius: 1px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Firefox keeps its native thumb, recoloured to the hardware brass */
+.edit-scalar-input::-moz-range-thumb {
+  background: var(--brass);
+  border-color: var(--brass-edge);
+}
+.edit-scalar-value {
+  flex: none;
+  min-width: 44px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.edit-interest-tree {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+/* each drawn level indents behind a hairline */
+.edit-interest-domain {
+  padding: 9px 0 9px var(--s3);
+  border-left: 3px solid var(--rule-soft);
+}
+.edit-interest-domain:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.edit-specific-list {
+  padding-left: var(--s2);
+  border-left: 1px dotted var(--rule-soft);
+}
+.edit-domain-chip {
+  color: var(--ink);
+  background: var(--card);
+  border-color: var(--rule-strong);
+  font-weight: 600;
+}
+
+/* in-field empty slots stay small: the world's hatch, at slot scale */
+.edit-empty,
+.edit-specific-empty {
+  flex: 1 1 100%;
+  padding: var(--s2) var(--s3);
+  font-size: 11.5px;
+  text-align: left;
+  border-radius: var(--r-ctl);
+}
+
+/* ── strays: markup that still ships without a name ─────────── */
+/* profile.js paints these meta rows with inline `var(--text-muted)`,
+   a token the redesign retired: the browser drops the dead colour and
+   the rows fall back to body ink, so mute them structurally until the
+   inline styles are replaced by classes. */
+.profile-section [style*="--text-muted"] { color: var(--ink-3); }
+
+/* the 喜欢 / 不喜欢 bench labels, painted inline with the retired --sky */
+.profile-section > div[style*="font-size:12px"]:not(:has(*)) { color: var(--ink-2); }
+
+/* ─────────────────────────────────────────────
+   Contract states
+   ───────────────────────────────────────────── */
+.edit-interest-domain:hover {
+  border-left-color: var(--brass);
+}
+
+.edit-chip.is-pending { opacity: .45; pointer-events: none; }

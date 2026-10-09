@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 
 def _function_body(app_js: str, name: str) -> str:
@@ -209,7 +210,7 @@ def test_desktop_renders_x_recommendations_as_text_cards() -> None:
     saved_sync_js = Path("src/openbiliclaw/web/desktop/assets/js/saved-sync-core.js").read_text(
         encoding="utf-8"
     )
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
 
     normalize_recommendation = re.search(
         r"function normalizeRecommendation\(item\) \{(?P<body>.*?)\n    \}",
@@ -392,7 +393,7 @@ def test_desktop_healthy_stream_reconnect_does_not_rebuild_cards() -> None:
 def test_desktop_web_shows_github_star_cta() -> None:
     """Desktop web should ask happy users for a GitHub Star in the top bar."""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
     top_actions = re.search(r'<div class="top-actions"[\s\S]*?</div>', index_html)
 
@@ -524,7 +525,7 @@ def test_desktop_platform_tabs_union_enabled_inventory_and_loaded() -> None:
 def test_desktop_platform_chips_render_counts_and_accessible_selected_state() -> None:
     """chip 显示紧凑库存计数，选中态不能只靠颜色表达。"""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
 
     body = _function_body(app_js, "renderFilters")

@@ -1,9 +1,10 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(js: str, name: str) -> str:
@@ -48,7 +49,7 @@ def test_autoload_observer_is_wired_to_load_more_sentinel() -> None:
 
 
 def test_autoload_sentinel_has_stable_hit_area() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert "#loadMoreSentinel" in css
     assert "height: 1px;" in css

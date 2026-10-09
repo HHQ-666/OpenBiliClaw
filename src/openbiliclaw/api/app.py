@@ -24004,6 +24004,42 @@ def create_app(
 
     _web_dir = _Path(__file__).resolve().parent.parent / "web"
     _shared_web_dir = _web_dir / "shared"
+    # The one design system both web surfaces load (see web/shared/design).
+    _design_css_files = (
+        "design/tokens.css",
+        "design/base.css",
+        "design/world.css",
+        "design/pages/desktop.css",
+        "design/pages/mobile.css",
+        "design/pages/home.css",
+        "design/pages/library.css",
+        "design/pages/profile.css",
+        "design/pages/chat.css",
+        "design/pages/settings.css",
+    )
+
+    def _design_asset_version() -> str:
+        import hashlib
+
+        digest = hashlib.sha256()
+        for relative in _design_css_files:
+            path = _shared_web_dir / relative
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            digest.update(relative.encode("utf-8"))
+            digest.update(str(stat.st_mtime_ns).encode("ascii"))
+            digest.update(str(stat.st_size).encode("ascii"))
+        return digest.hexdigest()[:12]
+
+    def _versioned_design_html(html: str, version: str) -> str:
+        for relative in _design_css_files:
+            html = html.replace(
+                f'href="/shared/{relative}"',
+                f'href="/shared/{relative}?v={version}"',
+            )
+        return html
+
     if _web_dir.is_dir():
         _favicon_path = _web_dir / "icon-32.png"
 
@@ -24012,6 +24048,30 @@ def create_app(
             if not _favicon_path.is_file():
                 raise HTTPException(status_code=404, detail="favicon not found")
             return FileResponse(_favicon_path, media_type="image/png")
+
+        _mobile_index_path = _web_dir / "index.html"
+
+        def _mobile_index_response() -> Response:
+            if not _mobile_index_path.is_file():
+                raise HTTPException(status_code=404, detail="mobile web index not found")
+            html = _mobile_index_path.read_text(encoding="utf-8")
+            # Without a version the browser keeps serving the previous design
+            # system after an upgrade until its cache expires.
+            return Response(
+                _versioned_design_html(html, _design_asset_version()),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-store"},
+            )
+
+        # Registered before the mount: an un-versioned index here would hand the
+        # browser last release's stylesheets.
+        @app.get("/m", include_in_schema=False)
+        def _mobile_index_no_slash() -> Response:
+            return _mobile_index_response()
+
+        @app.get("/m/", include_in_schema=False)
+        def _mobile_index_slash() -> Response:
+            return _mobile_index_response()
 
         app.mount("/m", _StaticFiles(directory=_web_dir, html=True), name="mobile-web")
 
@@ -24036,13 +24096,12 @@ def create_app(
             # which live outside it — an upgrade that only changed
             # shared renderers would otherwise be served from cache forever.
             for relative, root in (
-                ("assets/css/app.css", _desktop_dir),
-                ("assets/css/classic.css", _desktop_dir),
                 ("assets/js/app.js", _desktop_dir),
                 ("assets/js/chat-agent-core.js", _desktop_dir),
                 ("agent-chat.js", _shared_web_dir),
                 ("dialogue-confirmation.js", _shared_web_dir),
                 ("source-status.js", _shared_web_dir),
+                *((relative, _shared_web_dir) for relative in _design_css_files),
             ):
                 path = root / relative
                 if not path.is_file():
@@ -24057,15 +24116,7 @@ def create_app(
             if not _desktop_index_path.is_file():
                 raise HTTPException(status_code=404, detail="desktop web index not found")
             version = _desktop_asset_version()
-            html = _desktop_index_path.read_text(encoding="utf-8")
-            html = html.replace(
-                'href="/web/assets/css/app.css"',
-                f'href="/web/assets/css/app.css?v={version}"',
-            )
-            html = html.replace(
-                'href="/web/assets/css/classic.css"',
-                f'href="/web/assets/css/classic.css?v={version}"',
-            )
+            html = _versioned_design_html(_desktop_index_path.read_text(encoding="utf-8"), version)
             html = html.replace(
                 'src="/web/assets/js/app.js"',
                 f'src="/web/assets/js/app.js?v={version}"',

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._design_css import read_desktop_css, read_mobile_css
+
 
 def test_profile_analysis_default_budget_scales_with_chunk_count() -> None:
     import openbiliclaw.cli as cli
@@ -109,7 +111,7 @@ def test_setup_wizard_static_contract_uses_guided_init_endpoint() -> None:
 def test_desktop_web_static_contract_exposes_guided_init_cta() -> None:
     """Static guard for the desktop guided-init CTA wiring."""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
 
     assert 'initStatus: "/init-status"' in app_js
     assert 'startInit: "/init"' in app_js
@@ -465,7 +467,7 @@ def test_web_surfaces_offer_embedding_repair_and_progress() -> None:
     """
     setup_html = Path("src/openbiliclaw/web/setup/index.html").read_text(encoding="utf-8")
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
 
     for surface in (setup_html, app_js):
         assert "data-embedding-repair" in surface

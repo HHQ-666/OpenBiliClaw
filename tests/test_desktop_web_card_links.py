@@ -1,8 +1,9 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
 SAVED_SYNC_CORE = Path("src/openbiliclaw/web/desktop/assets/js/saved-sync-core.js")
 
@@ -89,7 +90,7 @@ def test_delight_view_button_actually_opens_the_content() -> None:
 
 def test_delight_close_button_is_labeled_as_permanent_seen_action() -> None:
     app_js = APP_JS.read_text(encoding="utf-8")
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
     index_html = INDEX_HTML.read_text(encoding="utf-8")
 
     assert (
@@ -113,7 +114,7 @@ def test_delight_close_button_is_labeled_as_permanent_seen_action() -> None:
 
 
 def test_cover_css_resets_anchor_defaults() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
 
     cover_match = re.search(r"\.cover \{(?P<body>.*?)\}", app_css, flags=re.S)
     assert cover_match is not None, ".cover rule not found"
@@ -126,7 +127,7 @@ def test_cover_css_resets_anchor_defaults() -> None:
 
 def test_saved_pages_render_manual_sync_without_platform_routing() -> None:
     app_js = APP_JS.read_text(encoding="utf-8")
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
     core = SAVED_SYNC_CORE.read_text(encoding="utf-8")
 
     assert "function runDesktopSavedSync" in app_js

@@ -1,6 +1,7 @@
 """Static contracts for Bangumi settings and recommendation surfaces."""
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,7 +58,7 @@ def test_desktop_round_trips_bangumi_settings() -> None:
 
 def test_mobile_recognizes_bangumi_identity_and_catalog_metrics() -> None:
     js = (ROOT / "src/openbiliclaw/web/js/view-models.js").read_text(encoding="utf-8")
-    css = (ROOT / "src/openbiliclaw/web/css/app.css").read_text(encoding="utf-8")
+    css = read_mobile_css()
     saved = (ROOT / "src/openbiliclaw/web/js/views/saved.js").read_text(encoding="utf-8")
 
     assert 'bangumi: "Bangumi"' in js

@@ -6291,6 +6291,614 @@
     .agent-task-detail-prompt { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px; }
     .agent-task-detail-report { margin-top: 6px; font-size: 12px; }
     .agent-tasks-empty { font-size: 12px; color: var(--text-secondary); text-align: center; margin: 18px 0; }
+/* ══════════════════════════════════════════════════════════════════
+   私人卡片目录馆 · Personal Card Catalog — the side panel's layer.
+   The popup cannot load the backend's stylesheet, so this section
+   mirrors the design system's tokens and prints the panel's own
+   vocabulary in the same world: card stock, hairlines, brass tabs,
+   one stamp red. Keep the values in step with
+   src/openbiliclaw/web/shared/design/tokens.css.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: light;
+
+  --desk: #d9d4c8;
+  --desk-deep: #cbc5b6;
+  --card: #f7f5ef;
+  --card-hi: #fdfcf9;
+  --card-sunk: #efebe1;
+
+  --ink: #1f262e;
+  --ink-2: #58606a;
+  --ink-3: #8b9199;
+  --ink-inv: #f8f6f0;
+
+  --rule: #c6bfb0;
+  --rule-soft: #dcd7ca;
+  --rule-strong: #a49c8c;
+
+  --hue: var(--hue-primary, 8);
+  --stamp: hsl(var(--hue) 56% 41%);
+  --stamp-deep: hsl(var(--hue) 58% 32%);
+  --stamp-soft: hsl(var(--hue) 56% 41% / 0.12);
+
+  --brass: #8f7339;
+  --brass-hi: #b09155;
+  --brass-soft: rgba(143, 115, 57, 0.13);
+  --brass-edge: rgba(143, 115, 57, 0.45);
+
+  --ok: #2f6f55;
+  --ok-soft: rgba(47, 111, 85, 0.12);
+  --warn: #8a6a17;
+  --warn-soft: rgba(138, 106, 23, 0.13);
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* the panel's legacy names, mapped onto the catalog */
+  --bg-base: var(--desk);
+  --bg-sky: var(--card-sunk);
+  --surface: var(--card);
+  --surface-strong: var(--card-hi);
+  --surface-soft: var(--card-sunk);
+  --line: var(--rule);
+  --line-strong: var(--rule-strong);
+  --text-main: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--ink-3);
+  --brand: var(--stamp);
+  --brand-strong: var(--stamp-deep);
+  --brand-soft: var(--stamp-soft);
+  --sky: var(--brass);
+  --sky-soft: var(--brass-soft);
+  --lime-soft: var(--ok-soft);
+  --warning-soft: var(--warn-soft);
+  --success: var(--ok);
+  --danger: var(--stamp-deep);
+  --shadow-lg: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
+  --shadow-sm: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
+  --focus-ring: 0 0 0 2px var(--card), 0 0 0 4px var(--stamp);
+  --imp: 170ms cubic-bezier(0.2, 0.85, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --desk: #15191d;
+    --desk-deep: #101418;
+    --card: #1d2329;
+    --card-hi: #232a31;
+    --card-sunk: #191f24;
+    --ink: #e8e4d8;
+    --ink-2: #a7aeb6;
+    --ink-3: #767d85;
+    --ink-inv: #15191d;
+    --rule: #363d45;
+    --rule-soft: #2a3037;
+    --rule-strong: #4d5560;
+    --stamp: hsl(var(--hue) 52% 52%);
+    --stamp-deep: hsl(var(--hue) 54% 62%);
+    --stamp-soft: hsl(var(--hue) 52% 52% / 0.16);
+    --brass: #a98f56;
+    --brass-hi: #c4a86c;
+    --brass-soft: rgba(169, 143, 86, 0.14);
+    --brass-edge: rgba(169, 143, 86, 0.4);
+    --ok: #5da184;
+    --warn: #c1a157;
+  }
+}
+
+/* —— the desk, not a pink haze —— */
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--desk);
+  background-image: radial-gradient(
+    120% 90% at 50% -10%,
+    rgba(255, 255, 255, 0.5),
+    transparent 60%
+  );
+}
+
+/* —— the case header —— */
+.hero {
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+
+.hero-copy,
+.hero-sub {
+  color: var(--ink-2);
+}
+
+.brand-title-row h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow,
+.view-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.brand-mark {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--card-hi);
+  padding: 2px;
+}
+
+.status-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ink-3);
+}
+
+.status-dot.online {
+  background: var(--ok);
+}
+
+.status-dot.offline {
+  background: var(--stamp);
+}
+
+.webui-button,
+.mobile-button,
+.messages-button,
+.settings-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  color: var(--ink);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  transition: background-color var(--imp), border-color var(--imp);
+}
+
+.webui-button svg,
+.mobile-button svg,
+.messages-button svg,
+.settings-gear svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.webui-button:hover,
+.mobile-button:hover,
+.messages-button:hover,
+.settings-gear:hover {
+  background: var(--brass-soft);
+  border-color: var(--brass-edge);
+}
+
+.mobile-button-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.message-badge,
+.tab-count-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-inv);
+  background: var(--stamp);
+  border-radius: 999px;
+}
+
+.gh-star {
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.gh-star:hover {
+  color: var(--stamp-deep);
+  border-color: var(--stamp);
+}
+
+.gh-star-count {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+/* —— index tabs —— */
+.tabs-shell,
+.tab-bar {
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+
+.tab-button {
+  color: var(--ink-3);
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+
+.tab-button:hover {
+  color: var(--ink);
+  background: var(--brass-soft);
+}
+
+.tab-button.is-active,
+.tab-button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--stamp);
+  background: var(--card-sunk);
+}
+
+/* —— card stock for every filing card —— */
+.recommendation-header-card,
+.recommendation-list > *,
+.library-panel,
+.profile-card,
+.profile-group,
+.settings-source-card,
+.settings-section,
+.chat-shell,
+.chat-messages,
+.chat-tasks-list,
+.history-sections > *,
+.init-panel,
+.settings-instance-dialog-panel,
+.chat-persona-dialog {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.recommendation-header-title,
+.profile-layer-header,
+.settings-section-head,
+.chat-pending-head {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 8px;
+}
+
+.recommendation-summary-row,
+.recommendation-status-row,
+.settings-status-grid,
+.settings-status-cell {
+  color: var(--ink-2);
+}
+
+.recommendation-status-label,
+.settings-status-cell span,
+.settings-hint,
+.settings-note,
+.view-subtitle,
+.profile-phase-copy,
+.library-intro,
+.history-intro,
+.saved-sync-status,
+.settings-probe-status {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.recommendation-status-value,
+.settings-status-cell strong {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.recommendation-status-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+/* —— buttons: printed plates —— */
+.action-button,
+.action-primary,
+.settings-secondary-btn,
+.settings-save,
+.settings-inline-btn,
+.init-start-btn,
+.init-cancel-btn,
+.source-verify-btn,
+.settings-model-discovery-btn,
+.chat-persona-toggle,
+.chat-pending-toggle,
+.chat-approvals-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  transition: background-color var(--imp), border-color var(--imp), color var(--imp);
+}
+
+.action-button:hover,
+.settings-secondary-btn:hover,
+.settings-inline-btn:hover,
+.source-verify-btn:hover {
+  background: var(--card-sunk);
+  border-color: var(--rule-strong);
+}
+
+.action-primary,
+.settings-save,
+.init-start-btn {
+  color: var(--ink-inv);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.action-primary:hover,
+.settings-save:hover,
+.init-start-btn:hover {
+  background: var(--stamp-deep);
+  border-color: var(--stamp-deep);
+}
+
+.action-secondary {
+  color: var(--ink-2);
+  background: transparent;
+}
+
+/* —— fields: typed order form —— */
+.settings-field,
+.settings-field-row,
+.settings-provider-fields {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.settings-field > span,
+.settings-field-row > span,
+.settings-field label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.settings-field input,
+.settings-field select,
+.settings-field textarea,
+.settings-field-row input,
+.settings-field-row select,
+.settings-provider-fields input,
+.settings-provider-fields select,
+.chat-input,
+.chat-skill-select,
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.settings-field input:focus-visible,
+.settings-field select:focus-visible,
+.chat-input:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* —— source cards and probe rows —— */
+.source-card-face {
+  background: var(--card-hi);
+  border-bottom: 1px solid var(--rule);
+}
+
+.src-dot {
+  border-radius: 999px;
+}
+
+.source-card-chev {
+  color: var(--ink-3);
+}
+
+.src-detail {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.source-verify-status.is-ok,
+.settings-probe-status.is-ok {
+  color: var(--ok);
+}
+
+.source-verify-status.is-error,
+.settings-probe-status.is-error,
+.settings-hint-warning {
+  color: var(--stamp-deep);
+}
+
+.settings-banner,
+.settings-issues,
+.settings-toast {
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+/* —— lists, chips, groups —— */
+.profile-group,
+.profile-layer-header,
+.interest-tree,
+.speculative-list,
+.chat-pending-list,
+.chat-approvals-list,
+.settings-llm-instance-list,
+.settings-llm-chain-list {
+  color: var(--ink-2);
+}
+
+.chip-list > *,
+.src-detail + *,
+.settings-llm-chain-list > * {
+  border-radius: 2px;
+}
+
+.empty-state {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 6px, rgba(31, 38, 46, 0.05) 6px 7px),
+    var(--card-sunk);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+}
+
+/* —— dialogs and the save bar —— */
+.settings-overlay,
+.settings-instance-dialog,
+.chat-persona-dialog {
+  background: rgba(31, 38, 46, 0.34);
+}
+
+.settings-instance-dialog-panel,
+.chat-persona-dialog {
+  background: var(--card-hi);
+  border: 1px solid var(--rule-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+.settings-instance-dialog-kicker,
+.settings-instance-id-hint,
+.settings-model-discovery-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.settings-instance-form-error {
+  color: var(--stamp-deep);
+}
+
+.settings-savebar {
+  background: var(--card-hi);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.settings-savebar-msg {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/* —— coarse pointers get full-size stamps —— */
+@media (pointer: coarse) {
+  .webui-button,
+  .mobile-button,
+  .messages-button,
+  .settings-gear,
+  .action-button,
+  .settings-secondary-btn,
+  .settings-save,
+  .source-verify-btn,
+  .tab-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ── the profile editor's tree (popup) ─────────────────────── */
+.edit-interest-domain {
+  border-left: 2px solid var(--rule-soft);
+  padding-left: 10px;
+}
+
+.edit-specific-list {
+  padding-left: 10px;
+  border-left: 1px solid var(--rule-soft);
+}
+
+.edit-specific-add-row {
+  margin-top: 6px;
+}
+
+.edit-add-btn {
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stamp-deep);
+  background: transparent;
+}
+
+
+/* text cards reserve the stamp's lane on the right, credits below */
+.cover.is-text-card,
+.card-cover.is-text-card {
+  padding: 12px 74px 34px 14px;
+  background-color: var(--card-sunk);
+  background-image: repeating-linear-gradient(
+    transparent 0 9px,
+    var(--desk-line) 9px 10px
+  );
+  border: 1px solid var(--rule-soft);
+}
+
   </style>
 </head>
 <body>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "src/openbiliclaw/web"
@@ -20,7 +21,7 @@ def test_mobile_and_desktop_web_expose_the_same_top_button() -> None:
 
 def test_mobile_top_button_tracks_page_and_chat_scroll_containers() -> None:
     app_js = (WEB_ROOT / "js/app.js").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "css/app.css").read_text(encoding="utf-8")
+    css = read_mobile_css()
 
     assert "function initBackToTop()" in app_js
     assert 'document.getElementById("chat-messages")' in app_js
@@ -44,7 +45,7 @@ def test_desktop_web_uses_popup_as_the_shared_chat_session() -> None:
 
 def test_desktop_top_button_covers_page_and_chat_logs() -> None:
     app_js = (WEB_ROOT / "desktop/assets/js/app.js").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "desktop/assets/css/app.css").read_text(encoding="utf-8")
+    css = read_desktop_css()
 
     assert '$("#chatLog")' in app_js
     assert '$("#messageChatLog")' in app_js

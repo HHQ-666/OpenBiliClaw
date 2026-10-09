@@ -2,6 +2,21 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：私人卡片目录馆 —— 三端界面重构（feat/ui-redesign）
+
+- **视觉世界整体替换**：桌面 Web、移动 Web 与插件弹窗改为一套设计系统「私人卡片目录馆」——卡纸与台面中性色、印刷细线做结构、黄铜做抽屉硬件、印章红是唯一强调色，全部来自 `web/shared/design/tokens.css`（含 light/dark 与旧 token 桥接）。原先的两套并行样式（`web/css/app.css`、`web/desktop/assets/css/app.css` + `classic.css` 覆盖层）整体删除，由 `tokens.css` / `base.css` / `world.css` + `pages/*`（desktop、mobile、home、library、profile、chat、settings）取代；页族文件零字面色值，只有 tokens 带十六进制，由 `test_desktop_web_dark_mode` 锁定。插件弹窗是扩展页面、无法链接后端样式表，`popup.html` 末尾以镜像层对齐同一套 token 值（含设置表单、来源卡、画像编辑树、文本卡）。
+
+- **词汇与交互**：编目卡（封面＋来源章＋等宽元数据）、批注块（印章红左规＝「为什么推给你」）、印章式反馈（`aria-pressed` 触发 `stamp-press` 260ms 回弹并微旋 -4°）、流通单侧栏（点线引导行＋三格度量）、导卡式平台/设置分隔（选中＝底部印章条＋字重，不只靠颜色）、印刷式表单与色相墨垫。动效语法为「impressions」：页面进场仅透明度（不移动几何），骨架屏为干胶呼吸；`prefers-reduced-motion` 全程兜底。触控目标 ≥44px（`pointer: coarse` 或 ≤820px）。
+
+- **设置页语义收缩**：退役「经典配色 / 动态主题色」双色板开关与其提示条（`data-accent`、`obc.accentStyle` 的界面入口、`#themeNotice` 标记与音效式提示一并移除），保留并改名为「印章色相」——`--hue-primary` 只旋转印章红，卡纸/墨色/黄铜固定。`settings-tabs` 在桌面印为 7 列一行。
+
+- **接口与资产服务**：`/web` 与 `/m` 的索引都由后端注入 `/shared/design/*.css?v=<指纹>`（`_design_asset_version()` 覆盖共享设计层，移动页此前完全没有版本号，升级后会继续吃旧样式）；桌面静态指纹列表改为覆盖设计层与新 JS。运行时事件名不再直接印到侧栏：新增 `runtimeEventSentence()` 把 `refresh.pool_updated` 等内部词汇翻成人话。
+
+- **契约测试迁移**：约 50 个前端契约测试改读共享设计层（新增 `tests/_design_css.py` 统一读取），并按新世界重写/补齐真实 UX 契约——焦点可见（tab/chip/chat-log/pending 开关）、文本卡与无封面图卡必须不透明可读、`--ink` on `--card` 两种外观均 ≥7:1、有界滚动（`max-height: min(30dvh,240px)` 等）、触控 44px、抽屉关闭动画与 reduced-motion 守卫、骨架 `skeleton-sweep`、诊断两级严重度、初始化进度/停滞提示。`tests/test_image_network_boundary.py` 按本机代理事实更新：`198.18.0.0/15` 是唯一放行例外，且仅在主机名通过白名单后生效。
+
+- **已知环境失败（与本变更无关）**：`test_tailnet_notices` 与 `test_six_platform_native_save_e2e_harness` 需要 Go 1.26.6 工具链与 Node ≥22 的 `--experimental-strip-types`，本机（Go 1.26.5 / Node 20）既有失败，主工作区同样红。
+
+
 ## v0.3.227：macOS 正式签名与 Instagram 实验性来源（2026-10-06）
 
 - 修复一条脏候选拖死整批评估（#284）：B 站简介等来源文本夹带 ASCII 控制字符时，`build_canonical_evaluation_batch` 的 wire 校验对整批抛错，重试烧完 50 次 `batch_eval_attempts` 后全批进 `failed_eval`。现新增 `_sanitize_wire_text()`，在构建 canonical 评估批的边界剥除 `\t \r \n` 之外的 C0 控制字符与 DEL、替换孤立代理项，清洗后为空的 tag 条目丢弃、整字段为空则省略；清洗只作用于发给 LLM 的 wire 副本，存储行保留原文，wire 校验器对 LLM 响应侧保持严格。已死信的历史候选由评估协调器启动时既有的 `revive_failed_eval_candidates` 自动复活，复活后经清洗即可正常评估。

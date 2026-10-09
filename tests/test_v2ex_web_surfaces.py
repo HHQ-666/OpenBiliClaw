@@ -1,6 +1,7 @@
 """Static contract checks for V2EX settings and recommendation surfaces."""
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -102,11 +103,9 @@ def test_v2ex_no_cover_cards_are_intentional_compact_text_cards() -> None:
     desktop_js = (ROOT / "src/openbiliclaw/web/desktop/assets/js/app.js").read_text(
         encoding="utf-8"
     )
-    desktop_css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(
-        encoding="utf-8"
-    )
+    desktop_css = read_desktop_css()
     mobile_js = (ROOT / "src/openbiliclaw/web/js/views/recommend.js").read_text(encoding="utf-8")
-    mobile_css = (ROOT / "src/openbiliclaw/web/css/app.css").read_text(encoding="utf-8")
+    mobile_css = read_mobile_css()
     popup_js = (ROOT / "extension/popup/popup.js").read_text(encoding="utf-8")
     popup_html = (ROOT / "extension/popup/popup.html").read_text(encoding="utf-8")
 

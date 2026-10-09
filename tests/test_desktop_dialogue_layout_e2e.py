@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests._design_css import read_desktop_css, read_mobile_css
 
 playwright_api = pytest.importorskip("playwright.sync_api")
 Page = playwright_api.Page
@@ -14,7 +15,7 @@ sync_playwright = playwright_api.sync_playwright
 pytestmark = pytest.mark.integration
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_CSS = ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css"
+APP_CSS = read_desktop_css()
 APP_JS = ROOT / "src/openbiliclaw/web/desktop/assets/js/app.js"
 
 
@@ -57,7 +58,7 @@ def _dialogue_card(index: int) -> str:
 
 
 def _dialogue_fixture_html() -> str:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
     pending = "".join(_pending_item(index) for index in range(1, 11))
     cards = "".join(_dialogue_card(index) for index in range(1, 10))
     return f"""<!doctype html>

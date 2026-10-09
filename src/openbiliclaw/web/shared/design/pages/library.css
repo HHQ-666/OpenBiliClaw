@@ -1,0 +1,372 @@
+/* ══════════════════════════════════════════════════════════════════
+   pages/library.css — the content library family: 内容库 tabs, the
+   稍后再看 / 收藏 saved drawers and the 30-day history ledger.
+   Stock, hairlines, chips and button print come from world.css; this
+   file adds the family's layout and its JS state hooks only.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1 · the library shell: heads, tab rail, panels ─────────────── */
+.content-library-page,
+.content-library-panel,
+.content-library-view { min-width: 0; }
+
+.content-library-head {
+  padding-bottom: var(--s3);
+  margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.content-library-head h1 { margin: 3px 0 4px; font-size: var(--fs-h2); }
+.content-library-head > p:last-child { font-size: 12.5px; color: var(--ink-2); line-height: 1.62; }
+
+/* both shells set .is-active next to aria-selected — keep the hook live */
+.content-library-tab.is-active {
+  color: var(--ink); font-weight: 600; background: var(--card);
+  border-color: var(--rule); border-bottom-color: var(--stamp);
+}
+
+.content-library-tab.is-active .nav-count-badge { color: var(--stamp-deep); }
+
+/* ── 2 · saved drawers: head, sync toolbar, status ──────────────── */
+.saved-head {
+  display: flex; align-items: center; gap: var(--s2);
+  padding-bottom: var(--s3); margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.saved-head-icon { display: inline-flex; flex: none; color: var(--brass); }
+.saved-head-icon svg { width: 17px; height: 17px; stroke-width: 1.8; }
+.saved-head-title { font-size: var(--fs-h3); font-weight: 600; }
+.saved-head-count {
+  margin-left: auto; font-family: var(--font-mono);
+  font-size: var(--fs-meta); letter-spacing: var(--track-meta); color: var(--ink-3);
+}
+
+.saved-sync-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--s2) var(--s3); margin-bottom: var(--s4);
+}
+
+.saved-sync-all { min-inline-size: 190px; }
+.saved-load-retry { min-inline-size: 96px; }
+.saved-sync-message { min-width: 0; font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--ink-3); }
+.saved-sync-message[role="alert"] { color: var(--stamp-deep); }
+
+/* desktop keeps one quiet status line between page head and grid */
+.saved-page .saved-sync-status { margin: 0 0 var(--s4); min-height: 0; }
+.saved-body { min-width: 0; }
+
+/* ── 3 · empty drawers ──────────────────────────────────────────── */
+.saved-page .saved-empty,
+.saved-view .saved-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s3); min-height: 190px; padding: var(--s7) var(--s5);
+}
+
+.saved-empty-icon { display: inline-flex; color: var(--ink-3); }
+.saved-empty-icon svg { width: 30px; height: 30px; stroke-width: 1.4; }
+.saved-empty-text { max-width: 46ch; font-size: 13px; line-height: 1.65; }
+
+/* ── 4 · the saved card, desktop grid ───────────────────────────── */
+.saved-page .saved-card { cursor: default; }
+
+/* the cover is an <a>/<button>: it needs a box before the 16:9 ratio bites */
+.saved-grid > .saved-card .cover { display: block; flex: none; }
+.saved-grid > .saved-card .saved-cover-fallback {
+  display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-3);
+}
+
+.saved-grid > .saved-card .saved-cover-fallback svg { width: 26px; height: 26px; stroke-width: 1.4; }
+
+/* feedback row and action row read as one bottom band, not two */
+.saved-grid > .saved-card .saved-feedback-bar {
+  margin-top: auto; padding-top: var(--s3); justify-content: flex-start;
+}
+
+.saved-grid > .saved-card .saved-card-actions {
+  margin-top: 0; padding-top: var(--s2); border-top: 0; justify-content: flex-end;
+}
+
+.saved-feedback-bar .cross-toggle,
+.saved-card-feedback .cross-toggle { margin-left: auto; }
+
+.saved-feedback-bar .cross-toggle.favorite-btn[aria-pressed="true"] svg,
+.saved-card-feedback .cross-toggle.favorite-btn[aria-pressed="true"] svg { fill: currentColor; }
+
+.saved-sync-one { min-inline-size: 76px; }
+
+/* 移除 is a filing action, not the loud primary — keep it quiet */
+.saved-card .saved-remove { color: var(--ink-2); background: transparent; border-color: var(--rule-soft); }
+.saved-card .saved-remove:hover { color: var(--stamp-deep); border-color: var(--stamp); background: var(--card-sunk); }
+
+/* ── 5 · the saved card, drawer row (mobile / side panel) ───────── */
+.saved-list { display: flex; flex-direction: column; gap: var(--s3); }
+.saved-list > .saved-card { display: flex; align-items: center; gap: var(--s3); padding: 9px 11px; }
+
+.saved-card-open {
+  display: block; flex: none; width: 96px; height: 60px; overflow: hidden;
+  padding: 0; border: 0; border-radius: 1px; background: none; color: inherit;
+}
+
+.saved-card-open:disabled { cursor: default; }
+.saved-card-cover {
+  display: block; width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover;
+  background: var(--card-sunk); border: 1px solid var(--rule-soft); border-radius: 1px;
+}
+
+/* a missing cover keeps the ruled stock, with the drawer's mark on it */
+.saved-card-cover-empty {
+  display: grid; place-items: center; color: var(--ink-3);
+  background: linear-gradient(var(--desk-line) 1px, transparent 1px) 0 0 / 100% 9px, var(--card-sunk);
+}
+
+.saved-card-cover-empty svg { width: 20px; height: 20px; stroke-width: 1.5; }
+.saved-card-body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px; min-width: 0; }
+.saved-card-title {
+  display: -webkit-box; overflow: hidden; font-size: 13.5px; font-weight: 600; line-height: 1.42;
+  letter-spacing: var(--track-title); color: var(--ink);
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+.saved-card-up { font-family: var(--font-mono); font-size: var(--fs-meta); letter-spacing: var(--track-meta); color: var(--ink-3); }
+
+/* the icon row sits inside the body: stamps left, cross toggle right */
+.saved-card-feedback { gap: var(--s2); margin-top: var(--s1); padding-top: 0; border-top: 0; justify-content: flex-start; }
+.saved-card-feedback .card-action-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none;
+  color: var(--ink-2); background: var(--card-hi); border: 1px solid var(--rule); border-radius: var(--r-ctl);
+  transition: border-color var(--imp), color var(--imp), background-color var(--imp);
+}
+
+.saved-card-feedback .card-action-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.saved-card-feedback .card-action-btn:hover { color: var(--ink); background: var(--card-sunk); border-color: var(--rule-strong); }
+.saved-card-feedback .card-action-btn[aria-pressed="true"] { color: var(--stamp-deep); background: var(--stamp-soft); border-color: var(--stamp); }
+.saved-list > .saved-card .saved-card-actions {
+  flex-direction: column; align-items: stretch; gap: var(--s2);
+  margin-top: 0; padding-top: 0; border-top: 0;
+}
+
+/* the row's own two controls: printed, mono, small */
+.saved-card-sync,
+.saved-card-remove {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 4px 10px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--ink-2); background: var(--card-hi);
+  border: 1px solid var(--rule); border-radius: var(--r-ctl); white-space: nowrap;
+  transition: border-color var(--imp), color var(--imp), background-color var(--imp);
+}
+
+.saved-card-sync { min-inline-size: 68px; }
+.saved-card-remove { min-width: 30px; padding: 4px 8px; font-size: 13px; line-height: 1; }
+.saved-card-sync:hover,
+.saved-card-remove:hover { color: var(--ink); background: var(--card-sunk); border-color: var(--rule-strong); }
+.saved-card-remove:hover { color: var(--stamp-deep); border-color: var(--stamp); }
+.saved-sync-one[aria-disabled="true"],
+.saved-card-sync[aria-disabled="true"],
+.saved-card .saved-remove[aria-disabled="true"] { opacity: 0.6; }
+
+/* ── 6 · the sync line and its stamped tones ────────────────────── */
+.saved-sync-line {
+  display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--font-mono);
+  font-size: var(--fs-meta); letter-spacing: var(--track-meta); color: var(--ink-3);
+}
+
+.saved-sync-line > :last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-sync-chip { flex: none; }
+
+/* tones are stamped, never neon: ok / brass / warn / stamp */
+.saved-sync-chip[data-tone="success"] { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.saved-sync-chip[data-tone="info"] { color: var(--brass); border-color: var(--brass-edge); background: var(--brass-soft); }
+.saved-sync-chip[data-tone="warning"] { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.saved-sync-chip[data-tone="error"] { color: var(--stamp-deep); border-color: var(--stamp); background: var(--stamp-soft); }
+
+/* ── 7 · the 30-day history ledger ──────────────────────────────── */
+.history-view { min-width: 0; }
+.history-head {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--s3);
+  padding-bottom: var(--s3); margin-bottom: var(--s5); border-bottom: 1px solid var(--rule);
+}
+
+.history-head-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none;
+  color: var(--brass); background: var(--brass-soft);
+  border: 1px solid var(--brass-edge); border-radius: var(--r-ctl);
+}
+
+.history-head-icon svg { width: 18px; height: 18px; stroke-width: 1.7; }
+.history-head h1 { margin: 2px 0 4px; font-size: var(--fs-h2); }
+.history-head p:not(.eyebrow) { font-size: 12.5px; color: var(--ink-2); line-height: 1.62; }
+.history-refresh { min-inline-size: 88px; }
+.history-section { min-width: 0; }
+.history-section-description { max-width: 76ch; margin: 6px 0 var(--s4); font-size: 12.5px; color: var(--ink-2); }
+.history-section-count,
+.history-count {
+  flex: none; font-family: var(--font-mono); font-size: var(--fs-meta);
+  letter-spacing: var(--track-meta); color: var(--ink-3); white-space: nowrap;
+}
+
+/* the tray of one section, desktop sections and the mobile ledger alike */
+.history-section-list,
+.history-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: var(--s3); }
+
+/* world styles .history-card as a dotted ledger row; the tray needs real
+   card stock because each entry carries a media tab and a context list */
+.history-card {
+  display: block; overflow: hidden; padding: 0; background: var(--card);
+  border: 1px solid var(--rule); border-radius: var(--r-card); box-shadow: var(--lift);
+  transition: border-color var(--imp), box-shadow var(--imp);
+}
+
+.history-card:hover { border-color: var(--rule-strong); box-shadow: var(--lift-hi); }
+.history-card-open {
+  display: grid; grid-template-columns: 118px minmax(0, 1fr); width: 100%; min-height: 82px;
+  padding: 0; border: 0; background: none; color: inherit; text-align: left;
+}
+
+.history-card-open:disabled { cursor: default; }
+.history-card-media {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1);
+  width: 118px; height: 100%; min-height: 82px; overflow: hidden;
+  color: var(--ink-3); background: var(--card-sunk); border-right: 1px solid var(--rule-soft);
+}
+
+.history-card-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.history-card-media svg { width: 24px; height: 24px; stroke-width: 1.4; }
+
+/* the typed label is the fallback; hide it whenever a cover loaded */
+.history-card-media:not(.is-fallback) > svg,
+.history-card-media:not(.is-fallback) > .history-card-fallback-label { display: none; }
+
+.history-card-media.is-fallback {
+  background: linear-gradient(var(--desk-line) 1px, transparent 1px) 0 0 / 100% 9px, var(--card-sunk);
+}
+
+.history-card-fallback-label {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+.history-card-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 11px; }
+.history-card-title,
+.history-card-copy > strong {
+  display: -webkit-box; overflow: hidden; font-size: 13.5px; font-weight: 600;
+  line-height: 1.42; letter-spacing: var(--track-title); color: var(--ink);
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+.history-card-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-card-meta { display: flex; justify-content: space-between; gap: var(--s2); margin-top: auto; padding-top: var(--s2); }
+.history-card-meta > span { color: var(--ink-2); }
+.history-card-meta time { flex: none; color: var(--ink-3); }
+
+/* the removal ledger under a removed card */
+.history-card-contexts,
+.history-contexts { display: grid; border-top: 1px solid var(--rule-soft); }
+.history-card-context,
+.history-context-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: var(--s2); min-height: 44px; padding: 5px 8px 5px 11px;
+}
+
+.history-card-context + .history-card-context,
+.history-context-row + .history-context-row { border-top: 1px solid var(--rule-soft); }
+.history-card-context-copy,
+.history-context-copy {
+  display: grid; gap: 2px; min-width: 0; font-family: var(--font-mono);
+  font-size: var(--fs-meta); letter-spacing: var(--track-meta); color: var(--ink-2);
+}
+
+.history-card-context-copy time,
+.history-context-copy time { color: var(--ink-3); }
+
+/* the restore control, same print in both shells */
+.history-card-restore,
+.history-restore {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px;
+  padding: 4px 10px; font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink);
+  background: var(--card-hi); border: 1px solid var(--rule); border-radius: var(--r-ctl);
+  white-space: nowrap; transition: border-color var(--imp), color var(--imp), background-color var(--imp);
+}
+
+.history-card-restore svg,
+.history-restore svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
+.history-card-restore:hover,
+.history-restore:hover { color: var(--stamp-deep); background: var(--card-sunk); border-color: var(--stamp); }
+.history-card-restore[aria-disabled="true"],
+.history-restore[aria-disabled="true"] { opacity: 0.6; }
+.history-card-error { display: block; padding: 0 11px 10px; font-size: 12px; line-height: 1.55; color: var(--stamp-deep); }
+.history-empty > p { margin: 0 0 var(--s3); }
+.history-empty .btn,
+.history-empty .history-section-more { margin-top: var(--s3); }
+.history-page-message {
+  margin-top: var(--s3); padding: 8px 11px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2);
+  background: var(--card-sunk); border: 1px solid var(--rule-soft); border-radius: var(--r-card);
+}
+
+.history-page-message.is-error { color: var(--stamp-deep); background: var(--stamp-soft); border-color: var(--stamp); }
+.history-page-message.is-notice { color: var(--ink-2); background: var(--brass-soft); border-color: var(--rule); }
+.history-section-more { display: flex; justify-content: center; margin-top: var(--s4); }
+.history-more { display: flex; width: fit-content; margin: var(--s4) auto 0; }
+
+/* ── 8 · loading and the pull indicator ─────────────────────────── */
+.saved-view .spinner { display: block; width: 18px; height: 18px; margin: var(--s6) auto; }
+
+/* the pull slip above the tray; world draws it, the JS toggles .visible */
+.pull-indicator {
+  height: 0; padding: 0 var(--s3); overflow: hidden; opacity: 0;
+  transition: opacity var(--imp);
+}
+
+.pull-indicator.visible { height: 30px; padding: var(--s2) var(--s3); opacity: 1; }
+
+/* ── 9 · narrow screens ─────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .saved-grid,
+  .history-section-list,
+  .history-list { grid-template-columns: minmax(0, 1fr); }
+
+  .history-card-open { grid-template-columns: 92px minmax(0, 1fr); }
+  .history-card-media { width: 92px; }
+  .saved-page .saved-empty,
+  .saved-view .saved-empty { min-height: 150px; }
+}
+
+/* ─────────────────────────────────────────────
+   Contract states
+   ───────────────────────────────────────────── */
+.saved-feedback-bar .feedback-icon-btn {
+  width: 36px;
+  height: 36px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+}
+
+.saved-feedback-bar .feedback-icon-btn:active {
+  background: var(--accent-subtle);
+  transform: scale(0.94);
+}
+
+.saved-feedback-bar .feedback-icon-btn[aria-pressed="true"],
+.saved-feedback-bar .favorite-btn[aria-pressed="true"] {
+  color: var(--star-active);
+  fill: currentColor;
+}
+
+.saved-feedback-bar .cross-toggle {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.saved-feedback-bar .feedback-icon-btn:hover {
+  color: var(--ink);
+  background: var(--card-sunk);
+  border-color: var(--rule);
+}
+
+.saved-card-sync:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

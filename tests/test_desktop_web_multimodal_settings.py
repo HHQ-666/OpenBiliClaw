@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -147,7 +148,7 @@ def test_desktop_advanced_panel_owns_all_moved_controls_and_recommendation_field
 def test_desktop_settings_tabs_have_tabpanel_contract_and_advanced_registration() -> None:
     html = (ROOT / "src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
     js = (ROOT / "src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    css = read_desktop_css()
 
     tab_names = ("Models", "Sources", "Scheduler", "Advanced", "General", "Frontend", "Logging")
     assert len(re.findall(r'class="settings-tab(?:\s|")', html)) == 7

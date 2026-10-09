@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from openbiliclaw.sources.platforms import CANONICAL_SOURCE_FAMILIES
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -95,11 +96,11 @@ def test_weibo_current_docs_store_metadata_and_release_boundary_are_in_sync() ->
 
 def test_recommendation_and_saved_surfaces_recognize_weibo_identity() -> None:
     desktop_js = _read("src/openbiliclaw/web/desktop/assets/js/app.js")
-    desktop_css = _read("src/openbiliclaw/web/desktop/assets/css/app.css")
+    desktop_css = read_desktop_css()
     saved_core = _read("src/openbiliclaw/web/desktop/assets/js/saved-sync-core.js")
     mobile_models = _read("src/openbiliclaw/web/js/view-models.js")
     mobile_saved = _read("src/openbiliclaw/web/js/views/saved.js")
-    mobile_css = _read("src/openbiliclaw/web/css/app.css")
+    mobile_css = read_mobile_css()
 
     assert 'wb: "weibo"' in desktop_js
     assert 'weibo: "微博"' in desktop_js

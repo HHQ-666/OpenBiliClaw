@@ -9,12 +9,13 @@ with the backend-reported LAN IP so a phone can reach them.
 from __future__ import annotations
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 _DESKTOP_DIR = Path(__file__).resolve().parent.parent / "src" / "openbiliclaw" / "web" / "desktop"
 _INDEX = (_DESKTOP_DIR / "index.html").read_text(encoding="utf-8")
 _APP_JS = (_DESKTOP_DIR / "assets" / "js" / "app.js").read_text(encoding="utf-8")
 _QR_JS = (_DESKTOP_DIR / "assets" / "js" / "mobile-qr.js").read_text(encoding="utf-8")
-_CSS = (_DESKTOP_DIR / "assets" / "css" / "app.css").read_text(encoding="utf-8")
+_CSS = read_desktop_css()
 
 
 def test_topbar_has_labelled_mobile_entry() -> None:

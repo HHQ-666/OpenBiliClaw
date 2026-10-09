@@ -3,8 +3,9 @@
 ## 概述
 
 `src/openbiliclaw/web/desktop/` 是桌面 Web 单页应用（`/web`，入口
-`index.html`，主逻辑 `assets/js/app.js` 单文件 IIFE，样式
-`assets/css/app.css`）。本文档当前聚焦「聊聊口味」tab 的 agent loop
+`index.html`，主逻辑 `assets/js/app.js` 单文件 IIFE，样式来自与移动 Web
+共用的设计系统 `web/shared/design/`，见
+[设计系统记录](../../DESIGN.md)）。本文档当前聚焦「聊聊口味」tab 的 agent loop
 前端（M8，设计共识见
 [聊一聊 Agent Loop 设计](../plans/2026-09-23-chat-agent-loop-design.md)，
 后端协议见 [agent 模块](agent.md) 与 [api 模块](api.md)）。
@@ -48,7 +49,7 @@ LLM 实例设置页可选择 `cheaperinference`（Cheaper Inference），新实�
 web/desktop/
 ├── index.html                       # SPA 骨架；chatPage = 会话侧栏 + 对话区 + 三个浮层
 └── assets/
-    ├── css/app.css                  # 末尾「聊一聊 Agent Loop（M8）」段：侧栏/过程流/卡片/抽屉样式
+    ├── shared/design/pages/chat.css  # 设计系统页族层：会话侧栏/过程流/卡片/抽屉
     └── js/
         ├── app.js                   # 主逻辑；M8 集中在「agent loop（M8）」注释段
         └── chat-agent-core.js       # M8 纯逻辑层（无 DOM）：SSE 增量解析、

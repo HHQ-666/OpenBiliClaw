@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PIL import Image
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -78,12 +79,8 @@ def test_user_facing_brand_marks_reference_canonical_icon_assets() -> None:
         encoding="utf-8"
     )
     mobile = (ROOT / "src" / "openbiliclaw" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    mobile_css = (ROOT / "src" / "openbiliclaw" / "web" / "css" / "app.css").read_text(
-        encoding="utf-8"
-    )
-    desktop_css = (
-        ROOT / "src" / "openbiliclaw" / "web" / "desktop" / "assets" / "css" / "app.css"
-    ).read_text(encoding="utf-8")
+    mobile_css = read_mobile_css()
+    desktop_css = read_desktop_css()
     homepage = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
     assert '<img class="brand-mark" src="../icons/icon128.png"' in popup
@@ -103,5 +100,5 @@ def test_user_facing_brand_marks_reference_canonical_icon_assets() -> None:
         "box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 12px 24px rgba(251, 114, 153, 0.18);"
     ) not in popup
     assert "background: var(--brand);" in popup
-    assert "background: #fb7299; box-shadow: none;" in desktop_css
-    assert "background: #fb7299;" in mobile_css
+    assert "background: var(--src-bilibili); box-shadow: none;" in desktop_css
+    assert "background: var(--src-bilibili);" in mobile_css

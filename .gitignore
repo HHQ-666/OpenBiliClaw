@@ -116,3 +116,4 @@ dsh-plugin/
 # UI redesign preview workspace
 .preview-data/
 .impeccable/
+.venv-dev/

@@ -1,15 +1,14 @@
 """Static regressions for Zhihu recommendation card source styling."""
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_zhihu_recommendation_cards_have_source_specific_styles() -> None:
-    desktop_css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(
-        encoding="utf-8"
-    )
-    mobile_css = (ROOT / "src/openbiliclaw/web/css/app.css").read_text(encoding="utf-8")
+    desktop_css = read_desktop_css()
+    mobile_css = read_mobile_css()
     popup_html = (ROOT / "extension/popup/popup.html").read_text(encoding="utf-8")
 
     assert '.cover[data-platform="zhihu"]' in desktop_css
@@ -25,10 +24,8 @@ def test_zhihu_recommendation_cards_have_source_specific_styles() -> None:
 
 
 def test_reddit_recommendation_cards_have_source_specific_styles() -> None:
-    desktop_css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(
-        encoding="utf-8"
-    )
-    mobile_css = (ROOT / "src/openbiliclaw/web/css/app.css").read_text(encoding="utf-8")
+    desktop_css = read_desktop_css()
+    mobile_css = read_mobile_css()
     popup_html = (ROOT / "extension/popup/popup.html").read_text(encoding="utf-8")
 
     assert '.cover[data-platform="reddit"]' in desktop_css

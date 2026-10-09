@@ -1,10 +1,11 @@
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 MOBILE_HISTORY = Path("src/openbiliclaw/web/js/views/history.js")
 MOBILE_SAVED = Path("src/openbiliclaw/web/js/views/saved.js")
 DESKTOP_APP = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-MOBILE_CSS = Path("src/openbiliclaw/web/css/app.css")
-DESKTOP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+MOBILE_CSS = read_mobile_css()
+DESKTOP_CSS = read_desktop_css()
 
 
 def test_web_history_surfaces_use_opaque_cursor_without_an_empty_initial_cursor() -> None:
@@ -81,7 +82,7 @@ def test_web_history_shown_click_refreshes_after_successful_report() -> None:
 
 def test_desktop_history_broken_cover_has_an_accessible_fallback() -> None:
     source = DESKTOP_APP.read_text(encoding="utf-8")
-    css = DESKTOP_CSS.read_text(encoding="utf-8")
+    css = DESKTOP_CSS
 
     assert '"#historySections .history-card-media img"' in source
     assert 'image.addEventListener("error"' in source
@@ -92,7 +93,7 @@ def test_desktop_history_broken_cover_has_an_accessible_fallback() -> None:
 
 def test_mobile_history_broken_cover_reveals_icon_and_platform_label() -> None:
     source = MOBILE_HISTORY.read_text(encoding="utf-8")
-    css = MOBILE_CSS.read_text(encoding="utf-8")
+    css = MOBILE_CSS
 
     assert "const fallbackMedia = `${IMAGE_ICON}" in source
     assert 'class="history-card-fallback-label"' in source
@@ -104,7 +105,7 @@ def test_mobile_history_broken_cover_reveals_icon_and_platform_label() -> None:
 def test_saved_lists_replace_failed_and_cached_broken_covers() -> None:
     mobile = MOBILE_SAVED.read_text(encoding="utf-8")
     desktop = DESKTOP_APP.read_text(encoding="utf-8")
-    desktop_css = DESKTOP_CSS.read_text(encoding="utf-8")
+    desktop_css = DESKTOP_CSS
 
     assert 'image.addEventListener("error", showFallback, { once: true })' in mobile
     assert 'data-cover-src="${esc(cover.src)}"' in mobile
@@ -121,8 +122,7 @@ def test_saved_lists_replace_failed_and_cached_broken_covers() -> None:
 
 
 def test_history_page_messages_are_visually_distinct_and_live_announced() -> None:
-    for path in (MOBILE_CSS, DESKTOP_CSS):
-        source = path.read_text(encoding="utf-8")
+    for source in (MOBILE_CSS, DESKTOP_CSS):
 
         assert ".history-page-message.is-error" in source
         assert ".history-page-message.is-notice" in source

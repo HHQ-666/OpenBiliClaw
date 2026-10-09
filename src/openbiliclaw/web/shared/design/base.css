@@ -1,0 +1,358 @@
+/* ══════════════════════════════════════════════════════════════════
+   base.css — reset + element-level print. Every raw element lands in
+   the catalog world, so un-styled blocks still read as printed forms.
+   ══════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* the page ground never shifts when a scrollbar appears */
+html { min-width: 0; background: var(--bg); scrollbar-gutter: stable; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  background-color: var(--desk);
+  /* the desk under the light: one soft pool, then flat stock */
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.5), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 320px);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] body {
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%);
+}
+
+/* —— headings: catalog headers, tight and upright —— */
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-title);
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-display); }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); }
+h4 { font-size: var(--fs-title); }
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* —— links: ruled, in ink —— */
+a {
+  color: var(--ink);
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  text-decoration-color: var(--stamp);
+  color: var(--stamp-deep);
+}
+
+/* —— controls: printed rectangles —— */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="email"],
+input:not([type]),
+select,
+textarea {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  padding: 8px 10px;
+  width: 100%;
+  transition: border-color var(--imp), background-color var(--imp), box-shadow var(--imp);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--rule-strong);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-ctl);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* —— tables: ruled forms —— */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-note);
+}
+
+th {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+
+/* —— code —— */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+kbd {
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--card-hi);
+  padding: 1px 5px;
+}
+
+/* —— rules —— */
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: var(--s4) 0;
+}
+
+/* —— lists —— */
+ul,
+ol {
+  margin: 0;
+  padding-left: 1.3em;
+}
+
+li::marker {
+  color: var(--ink-3);
+}
+
+::selection {
+  background: var(--stamp-soft);
+  color: var(--ink);
+}
+
+/* —— scrollbars: thin ruled rails —— */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+  background-clip: content-box;
+}
+
+/* —— utilities —— */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* —— the typed label: every eyebrow/label speaks in mono —— */
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* —— skeletons: ruled stock, breathing (never a shimmer gloss) —— */
+.skeleton-line,
+.skeleton-shimmer {
+  background: var(--card-sunk);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line {
+  height: 12px;
+  margin: 0;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--card-hi) 85%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: skeleton-sweep 1.6s var(--imp) infinite;
+}
+
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ruled-breathe {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* —— the stamp impression (signature motion) —— */
+@keyframes stamp-press {
+  0% {
+    transform: rotate(-14deg) scale(1.5);
+    opacity: 0;
+    filter: blur(2px);
+  }
+  55% {
+    transform: rotate(-8deg) scale(0.96);
+    opacity: 0.92;
+    filter: blur(0);
+  }
+  100% {
+    transform: rotate(-8deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes page-enter { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slip-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

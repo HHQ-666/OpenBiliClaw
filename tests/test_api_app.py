@@ -1645,8 +1645,9 @@ class TestBackendAPI:
 
         assert response.status_code == 200
         assert response.headers.get("cache-control") == "no-store"
-        assert 'href="/web/assets/css/app.css?v=' in response.text
-        assert 'href="/web/assets/css/classic.css?v=' in response.text
+        assert 'href="/shared/design/tokens.css?v=' in response.text
+        assert 'href="/shared/design/world.css?v=' in response.text
+        assert 'href="/shared/design/pages/desktop.css?v=' in response.text
         assert 'src="/web/assets/js/app.js?v=' in response.text
         assert 'src="/web/assets/js/chat-agent-core.js?v=' in response.text
         assert 'src="/shared/agent-chat.js?v=' in response.text

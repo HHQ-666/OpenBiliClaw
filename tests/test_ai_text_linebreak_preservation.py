@@ -1,12 +1,13 @@
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
-MOBILE_CSS = Path("src/openbiliclaw/web/css/app.css")
-DESKTOP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+MOBILE_CSS = read_mobile_css()
+DESKTOP_CSS = read_desktop_css()
 POPUP_HTML = Path("extension/popup/popup.html")
 
 
 def test_mobile_web_preserves_ai_delight_reason_linebreaks() -> None:
-    css = MOBILE_CSS.read_text(encoding="utf-8")
+    css = MOBILE_CSS
     assert ".delight-reason {" in css
     assert ".card-expression {" in css
     assert "white-space: pre-wrap;" in css
@@ -14,7 +15,7 @@ def test_mobile_web_preserves_ai_delight_reason_linebreaks() -> None:
 
 
 def test_desktop_web_preserves_ai_text_linebreaks() -> None:
-    css = DESKTOP_CSS.read_text(encoding="utf-8")
+    css = DESKTOP_CSS
     assert ".reason-text," in css
     assert "#delightReason," in css
     assert "white-space: pre-wrap;" in css

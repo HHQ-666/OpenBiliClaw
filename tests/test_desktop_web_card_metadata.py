@@ -1,8 +1,9 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(name: str) -> str:
@@ -64,7 +65,7 @@ def test_card_metadata_css_defines_duration_badge_and_stats_line() -> None:
     assert ".duration-badge" in APP_CSS
     assert ".video-stats" in APP_CSS
     assert "background: var(--overlay);" in APP_CSS
-    assert "color: var(--muted);" in APP_CSS
+    assert "color: var(--card-hi);" in APP_CSS
 
 
 def test_desktop_recommendation_covers_bound_eager_loading_to_first_four() -> None:

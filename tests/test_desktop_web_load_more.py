@@ -6,14 +6,15 @@
 
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
-def _read(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def _read(source) -> str:
+    return source if isinstance(source, str) else source.read_text(encoding="utf-8")
 
 
 def _function_body(source: str, name: str) -> str:

@@ -1,0 +1,776 @@
+/* ══════════════════════════════════════════════════════════════════
+   pages/mobile.css — the phone cabinet.
+   A typed header strip, one column of card stock, an index tab bar.
+   Shared vocabulary lives in world.css; this file owns the phone
+   shell and the compact card/delight furniture the phone renders.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── the header strip ──────────────────────────────────────── */
+#status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: max(8px, var(--safe-top)) var(--s4) 8px;
+  background: var(--card);
+  border-bottom: 1px solid var(--rule);
+}
+
+.status-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.status-brand-icon {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px;
+  background: var(--card-hi);
+}
+
+.status-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-3);
+  flex: none;
+}
+
+.status-dot.online {
+  background: var(--ok);
+}
+
+.status-dot.offline {
+  background: var(--stamp);
+}
+
+.badge-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  background: var(--card-hi);
+  color: var(--ink);
+  transition: background-color var(--imp), border-color var(--imp);
+}
+
+.badge-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.8;
+}
+
+.badge-btn:active {
+  background: var(--card-sunk);
+}
+
+.badge-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  color: var(--ink-inv);
+  background: var(--stamp);
+  border-radius: var(--r-pill);
+}
+
+.badge-count[data-count="0"],
+.badge-count:empty {
+  display: none;
+}
+
+/* ── the tray ──────────────────────────────────────────────── */
+#app {
+  display: block;
+  padding: var(--s4) var(--s3) calc(84px + var(--safe-bottom));
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  animation: card-enter var(--imp-slow) both;
+}
+
+/* ── the index tabs ────────────────────────────────────────── */
+#tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--card);
+  border-top: 1px solid var(--rule);
+  padding-bottom: var(--safe-bottom);
+}
+
+.tab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px 8px;
+  color: var(--ink-3);
+  background: transparent;
+  border-top: 2px solid transparent;
+  transition: color var(--imp), border-color var(--imp), background-color var(--imp);
+}
+
+.tab-item .tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.tab-item .tab-icon svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+}
+
+.tab-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: var(--track-meta);
+}
+
+.tab-item.active,
+.tab-item[aria-selected="true"] {
+  color: var(--ink);
+  border-top-color: var(--stamp);
+  background: var(--card-sunk);
+}
+
+.tab-count-badge {
+  position: absolute;
+  top: 5px;
+  right: 50%;
+  margin-right: -22px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  color: var(--ink-inv);
+  background: var(--stamp);
+  border-radius: var(--r-pill);
+}
+
+/* ── the compact recommendation card (phone renderer) ──────── */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);
+}
+
+.card-cover-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+}
+
+.card-cover,
+.card-cover-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-cover-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background:
+    repeating-linear-gradient(
+      transparent 0 9px,
+      var(--desk-line) 9px 10px
+    ),
+    var(--card-sunk);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: var(--track-title);
+  color: var(--ink);
+}
+
+.card-meta,
+.card-published-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--track-meta);
+  color: var(--ink-3);
+}
+
+.card-stats {
+  display: inline-flex;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* the annotation, same rule as the desktop card */
+.card-expression {
+  position: relative;
+  padding: 8px 10px 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  background: var(--card-sunk);
+  border-left: 2px solid var(--stamp);
+  border-radius: 0 1px 1px 0;
+}
+
+.card-source {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+}
+
+/* ── the phone's featured card ────────────────────────────── */
+.delight-compact {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--s4);
+  background: var(--card-hi);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift-hi);
+}
+
+.delight-compact::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: var(--s4);
+  width: 56px;
+  height: 3px;
+  background: var(--stamp);
+}
+
+.delight-kicker-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.delight-tag {
+  display: inline-flex;
+  padding: 2px 8px;
+  background-image: linear-gradient(180deg, var(--stamp), var(--stamp-deep));
+  border: 1px solid var(--stamp-deep);
+  border-radius: var(--r-ctl);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-inv);
+}
+
+.delight-hook-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: var(--track-meta);
+  padding: 1px 6px;
+  color: var(--ink-2);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+
+.delight-corner-nav,
+.delight-inline-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delight-inline-counter {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.delight-later-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+
+.delight-later-btn:hover {
+  color: var(--stamp-deep);
+  border-color: var(--stamp);
+}
+
+.delight-title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.delight-stats {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.delight-thumb {
+  position: relative;
+  float: left;
+  width: 44%;
+  margin: 0 var(--s3) var(--s2) 0;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+}
+
+.delight-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.delight-thumb-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  background:
+    repeating-linear-gradient(
+      transparent 0 9px,
+      var(--desk-line) 9px 10px
+    ),
+    var(--card-sunk);
+}
+
+.delight-media-only .delight-thumb {
+  aspect-ratio: 4 / 3;
+}
+
+.delight-feature-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.delight-reason-wrap {
+  position: relative;
+  display: flow-root;
+  padding: 9px 11px 9px 13px;
+  background: var(--card-sunk);
+  border-left: 2px solid var(--stamp);
+  border-radius: 0 1px 1px 0;
+}
+
+.delight-reason-label {
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--stamp-deep);
+}
+
+.delight-reason {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.delight-result-state,
+.delight-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/* ── the pool strip above the tray ────────────────────────── */
+.recommend-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.recommend-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.recommend-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.recommend-pool-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.recommend-pool-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.recommend-activity-text {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/* ── the messages drawer (phone) ──────────────────────────── */
+.messages-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-bottom: 9px;
+  margin-bottom: var(--s3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.messages-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+}
+
+.messages-empty-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.messages-empty-subtitle {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ── the phone's settings sheet ───────────────────────────── */
+.mobile-settings-card {
+  width: min(420px, 100%);
+  margin: 0 auto;
+  padding: var(--s4) var(--s5) var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.mobile-settings-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.mobile-settings-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+}
+
+.mobile-settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--rule);
+  font-size: 13px;
+}
+
+.mobile-settings-hint,
+.mobile-settings-status {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+
+.mobile-settings-status[role="alert"] {
+  color: var(--stamp-deep);
+}
+
+.mobile-settings-actions {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+/* ── the phone menu (history / activity sheets) ───────────── */
+.mobile-menu {
+  display: block;
+}
+
+.mobile-menu.is-open {
+  display: block;
+}
+
+.mobile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid transparent;
+  border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+  background: var(--card-hi);
+  margin-bottom: 6px;
+}
+
+.mobile-menu-item:hover {
+  background: var(--brass-soft);
+  color: var(--ink);
+}
+
+.mobile-search-row {
+  padding: 8px 0;
+}
+
+.mobile-search-row input {
+  height: 34px;
+}
+
+/* ── the desktop page's phone breakpoint already collapses the
+      tray; this keeps the phone shell's own rhythm tight ──── */
+@media (max-width: 420px) {
+  #app {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .card,
+  .delight-compact {
+    padding: 10px;
+  }
+}
+
+/* the confirmation card's answers print as two columns */
+.dialogue-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.dialogue-card-action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+
+.chat-pending {
+  max-height: min(30dvh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─────────────────────────────────────────────
+   Phone contract states
+   ───────────────────────────────────────────── */
+.card-cover-frame.is-error {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      var(--desk-line) 6px 7px
+    ),
+    var(--card-sunk);
+  border-color: var(--rule);
+}
+
+.card-cover-frame.is-error .card-cover-text {
+  color: var(--warn);
+}
+
+.back-to-top[hidden] { display: none; }
+
+.mobile-settings-retry[hidden] { display: none; }
+
+.chat-messages,
+.chat-pending-list,
+.chat-approvals-list,
+.chat-tasks-list,
+.agent-drawer-list,
+.speculative-list,
+.profile-card-list {
+  max-height: min(30dvh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─────────────────────────────────────────────
+   The phone's featured card: media floats, stock fills
+   ───────────────────────────────────────────── */
+.delight-tray {
+  position: relative;
+  padding: var(--s4);
+  background-color: var(--card);
+  background-image: linear-gradient(180deg, var(--card-hi), var(--card));
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);
+}
+
+.delight-tag {
+  background-image: linear-gradient(180deg, var(--stamp), var(--stamp-deep));
+  color: var(--ink-inv);
+  border-color: var(--stamp-deep);
+}
+
+.delight-reason-wrap {
+  display: flow-root;
+}
+
+.delight-thumb {
+  float: left;
+  width: 44%;
+  margin: 0 var(--s3) var(--s2) 0;
+}
+
+.delight-later-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.delight-later-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.card-cover-frame.is-text-card {
+  aspect-ratio: auto;
+  min-height: 76px;
+  background-color: var(--card-sunk);
+  background-image: repeating-linear-gradient(
+    transparent 0 9px,
+    var(--desk-line) 9px 10px
+  );
+  border: 1px solid var(--rule-soft);
+}
+
+/* the pressed stamp inside the featured card */
+.delight-actions [data-delight-action="like"][aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--card-hi), var(--accent) 12%);
+  color: var(--accent-strong);
+}

@@ -8,6 +8,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+from tests._design_css import read_desktop_css, read_mobile_css
 
 _NODE = shutil.which("node")
 ROOT = Path(__file__).resolve().parents[1]
@@ -574,7 +575,7 @@ class TestMobileWebViewModels:
     def test_mobile_cover_templates_use_wrapper_fallbacks(self) -> None:
         recommend_js = Path("src/openbiliclaw/web/js/views/recommend.js").read_text()
         chat_js = Path("src/openbiliclaw/web/js/views/chat.js").read_text()
-        app_css = Path("src/openbiliclaw/web/css/app.css").read_text()
+        app_css = read_mobile_css()
 
         assert 'referrerpolicy="${cover.referrerPolicy}"' not in recommend_js
         assert 'referrerpolicy="${cover.referrerPolicy}"' not in chat_js

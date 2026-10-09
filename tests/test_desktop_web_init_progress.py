@@ -7,9 +7,10 @@ These string-level assertions keep the mirrored formulas / copy from drifting.
 """
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _app_js() -> str:
@@ -57,7 +58,7 @@ def test_desktop_surfaces_stall_copy_after_90s_of_silence() -> None:
     assert "● 后端在线" in app_js
     # Amber styling hook for the stalled state.
     assert "init-stall-hint" in app_js
-    assert ".init-stall-hint" in APP_CSS.read_text(encoding="utf-8")
+    assert ".init-stall-hint" in APP_CSS
 
 
 def test_desktop_shows_expectation_copy_and_observed_stage_facts() -> None:
@@ -130,7 +131,7 @@ def test_setup_wizard_surfaces_stall_and_expectation_copy() -> None:
 
 def test_web_surfaces_indeterminate_progress_timeouts_and_cancel() -> None:
     app_js = _app_js()
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
     html = _setup_html()
     for source in (app_js, html):
         assert 'mode === "indeterminate"' in source

@@ -1,8 +1,9 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(js: str, name: str) -> str:
@@ -16,7 +17,7 @@ def _function_body(js: str, name: str) -> str:
 
 
 def test_scrollbar_gutter_and_page_enter_animation_are_declared() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
 
     assert "html { min-width: 0; background: var(--bg); scrollbar-gutter: stable; }" in app_css
     assert "@keyframes page-enter" in app_css
@@ -31,7 +32,7 @@ def test_scrollbar_gutter_and_page_enter_animation_are_declared() -> None:
 
 
 def test_drawer_close_animation_css_and_reduced_motion_guard_exist() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
 
     assert ".drawer.is-closing, .overlay.is-closing { display: block; }" in app_css
     assert ".drawer.is-closing .drawer-panel" in app_css
@@ -81,7 +82,7 @@ def test_delight_drag_thresholds_and_autoload_margin_remain_calibrated() -> None
 
 
 def test_desktop_delight_has_available_width_container_rules() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
 
     assert "container-type: inline-size" in app_css
     assert "container-name: desktop-main" in app_css

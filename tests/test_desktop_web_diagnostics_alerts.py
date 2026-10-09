@@ -5,10 +5,11 @@
 """
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 API_APP = Path("src/openbiliclaw/api/app.py")
 
 
@@ -65,7 +66,7 @@ def test_app_js_fetches_polls_and_renders_alerts_safely() -> None:
 
 
 def test_styles_cover_both_severity_levels() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     for selector in (
         ".diag-alerts {",

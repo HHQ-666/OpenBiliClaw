@@ -8,11 +8,12 @@ desktop web surface. These are byte-level source contracts, not runtime tests.
 from __future__ import annotations
 
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 RECOMMEND_JS = ROOT / "src/openbiliclaw/web/js/views/recommend.js"
 VIEW_MODELS_JS = ROOT / "src/openbiliclaw/web/js/view-models.js"
-APP_CSS = ROOT / "src/openbiliclaw/web/css/app.css"
+APP_CSS = read_mobile_css()
 
 
 def _function_source(name: str) -> str:
@@ -99,7 +100,7 @@ def test_delight_tray_renders_stats() -> None:
 def test_card_stats_css_is_muted() -> None:
     """The stats row uses the muted meta styling."""
 
-    css = APP_CSS.read_text()
+    css = APP_CSS
 
     assert ".card-stats {" in css
     assert "var(--text-muted)" in css
@@ -141,7 +142,7 @@ def test_publication_html_escapes_text_and_exact_tooltip() -> None:
 def test_publication_time_css_is_muted() -> None:
     """Publication time remains secondary metadata."""
 
-    css = APP_CSS.read_text()
+    css = APP_CSS
 
     assert ".card-published-time {" in css
     assert "var(--text-muted)" in css

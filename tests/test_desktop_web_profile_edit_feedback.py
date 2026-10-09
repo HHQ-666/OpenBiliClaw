@@ -1,8 +1,9 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(js: str, name: str) -> str:
@@ -28,7 +29,7 @@ def _listener_body(bind_body: str, selector: str) -> str:
 
 
 def test_edit_chip_pending_style_is_declared() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
 
     assert ".edit-chip.is-pending { opacity: .45; pointer-events: none; }" in app_css
 

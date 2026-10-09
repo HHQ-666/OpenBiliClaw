@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,7 +24,7 @@ def test_mobile_recommendation_header_has_no_correction_entry() -> None:
 def test_mobile_recommendation_view_does_not_import_correction_navigation() -> None:
     recommend_js = (ROOT / "src/openbiliclaw/web/js/views/recommend.js").read_text(encoding="utf-8")
     profile_js = (ROOT / "src/openbiliclaw/web/js/views/profile.js").read_text(encoding="utf-8")
-    css = (ROOT / "src/openbiliclaw/web/css/app.css").read_text(encoding="utf-8")
+    css = read_mobile_css()
 
     assert not re.search(
         r"\bimport\s+(?:[^;]*?\s+from\s+)?['\"]\.\./app\.js['\"]", recommend_js, re.DOTALL

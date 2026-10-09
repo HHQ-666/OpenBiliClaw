@@ -36,7 +36,8 @@ def is_public_address(value: str) -> bool:
         address = ipaddress.ip_address(value)
     except ValueError:
         return False
-    # Allow RFC 2544 benchmark / fake-IP ranges commonly used by local transparent proxies (Clash, Surge, etc.)
+    # RFC 2544 ranges: local transparent proxies (Clash, Surge) answer
+    # fake-IP mode here, and covers have to keep loading through them.
     if address in _FAKE_IP_NET:
         return True
     if not address.is_global or address.is_multicast or address.is_reserved:

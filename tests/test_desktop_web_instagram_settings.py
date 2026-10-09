@@ -4,11 +4,12 @@ import re
 from pathlib import Path
 
 from openbiliclaw.sources.platforms import CANONICAL_SOURCE_FAMILIES
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "src/openbiliclaw/web/desktop/index.html"
 JS = ROOT / "src/openbiliclaw/web/desktop/assets/js/app.js"
-CSS = ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css"
+CSS = read_desktop_css()
 
 
 def test_desktop_source_cards_cover_the_canonical_registry() -> None:
@@ -51,7 +52,7 @@ def test_desktop_instagram_settings_round_trip_all_exposed_fields() -> None:
 
 
 def test_desktop_instagram_source_mark_has_a_visible_background() -> None:
-    assert '.source-card-logo[data-source-logo="instagram"] { background:' in CSS.read_text()
+    assert '.source-card-logo[data-source-logo="instagram"] { background:' in CSS
 
 
 def test_instagram_date_preference_is_submitted_by_both_settings_surfaces() -> None:

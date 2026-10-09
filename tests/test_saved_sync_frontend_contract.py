@@ -1,4 +1,5 @@
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).parents[1]
 WARNING = (
@@ -109,8 +110,8 @@ def test_all_graphical_saved_surfaces_keep_manual_controls_and_default_auto_sync
 
 def test_saved_sync_css_preserves_focus_motion_and_mobile_touch_safety() -> None:
     css_sources = (
-        _read("src/openbiliclaw/web/css/app.css"),
-        _read("src/openbiliclaw/web/desktop/assets/css/app.css"),
+        read_mobile_css(),
+        read_desktop_css(),
         _read("extension/popup/popup.html"),
     )
     for css in css_sources:
@@ -124,7 +125,7 @@ def test_saved_sync_review_repairs_are_wired_to_all_surfaces() -> None:
     popup = _read("extension/popup/popup.js")
     popup_runtime = _read("extension/popup/popup-saved-sync.js")
     mobile_app = _read("src/openbiliclaw/web/js/app.js")
-    mobile_css = _read("src/openbiliclaw/web/css/app.css")
+    mobile_css = read_mobile_css()
     mobile_saved = _read("src/openbiliclaw/web/js/views/saved.js")
     mobile_recommend = _read("src/openbiliclaw/web/js/views/recommend.js")
     desktop_html = _read("src/openbiliclaw/web/desktop/index.html")

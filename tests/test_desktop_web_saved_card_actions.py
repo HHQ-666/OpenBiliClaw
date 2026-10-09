@@ -8,9 +8,10 @@ recommendation-only endpoint.
 
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _read() -> str:
@@ -18,7 +19,7 @@ def _read() -> str:
 
 
 def _read_css() -> str:
-    return APP_CSS.read_text(encoding="utf-8")
+    return APP_CSS
 
 
 def _fn_body(src: str, name: str) -> str:
@@ -122,7 +123,8 @@ def test_saved_feedback_bar_uses_ghost_icon_styles() -> None:
     assert "background: var(--accent-subtle)" in css
     assert "transform: scale(0.94)" in css
     assert ".saved-feedback-bar .cross-toggle" in css
-    assert "color: #e8a33d" in css
+    # 点赞/收藏的激活墨色由设计系统命名，不再写死十六进制。
+    assert "color: var(--star-active);" in css
     assert "fill: currentColor" in css
 
 

@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -11,9 +12,7 @@ def _css_block(source: str, selector: str) -> str:
 
 
 def test_profile_edit_interest_tree_uses_grouped_pc_and_compact_popup_styles() -> None:
-    desktop_css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(
-        encoding="utf-8"
-    )
+    desktop_css = read_desktop_css()
     popup_html = (ROOT / "extension/popup/popup.html").read_text(encoding="utf-8")
 
     desktop_domain = _css_block(desktop_css, ".edit-interest-domain")

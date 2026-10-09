@@ -144,7 +144,7 @@ async def test_proxy_dns_fails_closed_without_local_or_hostname_fallback(
     assert 1 <= len(queried) <= 2
 
 
-@pytest.mark.parametrize("address", ["127.0.0.1", "10.0.0.1", "169.254.169.254", "198.18.0.1"])
+@pytest.mark.parametrize("address", ["127.0.0.1", "10.0.0.1", "169.254.169.254"])
 async def test_allowed_hostname_cannot_connect_to_nonpublic_ip(
     monkeypatch: pytest.MonkeyPatch, address: str
 ) -> None:
@@ -163,6 +163,48 @@ async def test_allowed_hostname_cannot_connect_to_nonpublic_ip(
         await image_cache.fetch_cover_bytes("https://media.cdninstagram.com/image.jpg")
     assert error.value.status_code == 403
     assert sent == []
+
+
+async def test_fake_ip_range_stays_scoped_to_allowlisted_hosts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local transparent proxies answer through 198.18.0.0/15.
+
+    The public-address guard carries exactly one exception so covers still
+    load on machines running Clash/Surge in fake-IP mode. It must stay
+    narrow: the range is accepted only after the hostname passed the
+    allowlist, and every other private range is still refused.
+    """
+    import ipaddress
+
+    fake = ipaddress.ip_network("198.18.0.0/15")
+    assert network.is_public_address("198.18.0.93")
+    assert network.is_public_address("198.19.255.254")  # the /15's far edge
+    assert ipaddress.ip_address("198.17.255.255") not in fake  # the exception stops at the /15
+    assert not network.is_public_address("10.0.0.1")
+    assert not network.is_public_address("127.0.0.1")
+
+    sent: list[str] = []
+
+    def resolve(*args: Any, **kwargs: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.18.0.93", 443))]
+
+    async def send(_self: Any, request: httpx.Request, **kwargs: Any) -> httpx.Response:
+        sent.append(str(request.url))
+        return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=b"x")
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(httpx.AsyncClient, "send", send)
+    # An allowlisted host resolves into the fake-IP range and is fetched.
+    payload, content_type = await image_cache.fetch_cover_bytes(
+        "https://media.cdninstagram.com/image.jpg"
+    )
+    assert payload == b"x" and content_type == "image/jpeg"
+    assert len(sent) == 1
+    # A host outside the allowlist never reaches DNS, fake-IP or not.
+    with pytest.raises(image_cache.CoverFetchError):
+        await image_cache.fetch_cover_bytes("https://evil.example.com/image.jpg")
+    assert len(sent) == 1
 
 
 @pytest.mark.parametrize(

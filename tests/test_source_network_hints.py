@@ -28,6 +28,7 @@ from openbiliclaw.sources.platforms import (
     overseas_network_hint,
     requires_overseas_network,
 )
+from tests._design_css import read_desktop_css
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -188,9 +189,7 @@ def test_both_frontends_actually_render_the_backend_field() -> None:
 
     # Each surface needs its own style hook or the advisory renders as a plain
     # muted paragraph indistinguishable from the status line beneath it.
-    desktop_css = (ROOT / "src/openbiliclaw/web/desktop/assets/css/app.css").read_text(
-        encoding="utf-8"
-    )
+    desktop_css = read_desktop_css()
     assert ".source-status-row .source-network-hint" in desktop_css
     assert ".source-network-hint {" in SETTINGS_SURFACES["popup html"].read_text(encoding="utf-8")
 

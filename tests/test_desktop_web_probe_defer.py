@@ -2,9 +2,10 @@
 
 import re
 from pathlib import Path
+from tests._design_css import read_desktop_css, read_mobile_css
 
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(js: str, name: str) -> str:
@@ -73,7 +74,7 @@ def test_deferred_events_do_not_trigger_profile_refresh() -> None:
 
 
 def test_defer_button_css_present() -> None:
-    app_css = APP_CSS.read_text(encoding="utf-8")
+    app_css = APP_CSS
     assert ".feedback-icon-btn.is-neutral" in app_css
     assert ".spec-actions .probe-btn.is-neutral" in app_css
 
