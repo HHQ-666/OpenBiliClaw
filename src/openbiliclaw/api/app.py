@@ -65,6 +65,8 @@ from openbiliclaw.api.models import (
     BilibiliCookieIn,
     BilibiliCookieResponse,
     BilibiliSourceConfigOut,
+    CardTextTranslationIn,
+    CardTextTranslationOut,
     ChatIn,
     ChatSessionCreateIn,
     ChatSessionDetailResponse,
@@ -2031,6 +2033,12 @@ _SESSION_TITLE_SYSTEM_PROMPT = (
 # Strong references for fire-and-forget title tasks so the event loop cannot
 # garbage-collect them mid-flight.
 _SESSION_TITLE_TASKS: set[asyncio.Task[None]] = set()
+
+# Card-text translation (/api/translate-texts) is a cosmetic first-paint path.
+# Two LLM batches per request bounds how long one render can hold provider
+# slots and how long the request itself can run; the next render asks for the
+# rest, and each rendering lands in the persistent cache once.
+CARD_TEXT_MAX_LLM_BATCHES = 2
 
 
 def fallback_session_title(message: str) -> str:
@@ -15286,6 +15294,115 @@ def create_app(
             event_id=item_receipt.event_id,
             duplicate=item_receipt.duplicate,
             processing="queued",
+        )
+
+    @app.post("/api/translate-texts", response_model=CardTextTranslationOut)
+    async def translate_card_texts(payload: CardTextTranslationIn) -> CardTextTranslationOut:
+        """Render non-Chinese card text into Chinese for the surface to paint.
+
+        A card quotes its source verbatim, so every X / Reddit / GitHub card is
+        unreadable to a Chinese reader until its title and excerpt are
+        rendered. This answers from the persistent translation cache and, on a
+        miss, spends a bounded number of LLM calls filling it.
+
+        It is deliberately a best-effort cosmetic path: ids whose text is
+        already Chinese, too short to be worth rendering, or left over after
+        the batch budget come back untouched (the last group under
+        ``pending``), and a backend with no chat-capable LLM returns an empty
+        map rather than an error. The caller keeps painting the original text.
+        """
+        from openbiliclaw.llm.translation import (
+            chunk_translation_entries,
+            needs_translation,
+            translatable_excerpt,
+            translate_batch,
+        )
+        from openbiliclaw.storage.text_translation_cache import (
+            TextTranslationCache,
+            translation_cache_key,
+        )
+
+        def resolve_llm_service() -> Any | None:
+            """Find a service that can run the structured translation task."""
+
+            for owner in (
+                getattr(ctx, "recommendation_engine", None),
+                getattr(ctx, "agent_loop", None),
+                getattr(ctx, "dialogue", None),
+                getattr(ctx, "soul_engine", None),
+            ):
+                service = getattr(owner, "_llm", None) or getattr(owner, "_llm_service", None)
+                if service is not None and callable(
+                    getattr(service, "complete_structured_task", None)
+                ):
+                    return service
+            return None
+
+        # id → (cache key, excerpt) for the strings actually worth rendering.
+        # Two ids carrying the same words (a title that is also the excerpt)
+        # collapse onto one cache key, so one rendering serves both.
+        wanted: dict[str, tuple[str, str]] = {}
+        for item in payload.items:
+            text = str(item.text or "")
+            if not needs_translation(text):
+                continue
+            excerpt = translatable_excerpt(text)
+            wanted[str(item.id)] = (translation_cache_key(excerpt), excerpt)
+        if not wanted:
+            return CardTextTranslationOut()
+
+        cache = TextTranslationCache(ctx.database)
+        cached_by_key = cache.get_many(sorted({key for key, _ in wanted.values()}))
+
+        translations: dict[str, str] = {}
+        misses: dict[str, str] = {}
+        for item_id, (key, excerpt) in wanted.items():
+            hit = cached_by_key.get(key)
+            if hit:
+                translations[item_id] = hit
+            elif key not in misses:
+                misses[key] = excerpt
+
+        pending = sorted(
+            item_id for item_id, (key, _) in wanted.items() if key not in cached_by_key
+        )
+        if not misses:
+            return CardTextTranslationOut(translations=translations, pending=pending, cached=True)
+
+        llm_service = resolve_llm_service()
+        if llm_service is None:
+            return CardTextTranslationOut(translations=translations, pending=pending)
+
+        # Bounded work per request: the first screenful settles over a couple
+        # of calls, and whatever is left waits for the next render.
+        batches = chunk_translation_entries(list(misses.items()))[:CARD_TEXT_MAX_LLM_BATCHES]
+        rendered: dict[str, str] = {}
+        for batch in batches:
+            # The model gets positional ids, never the cache hashes: shorter
+            # prompts, and a 64-character digest in the payload invites a weak
+            # model to echo or invent instead of translating.
+            local_entries = [(str(index), text) for index, (_key, text) in enumerate(batch)]
+            answered = await translate_batch(llm_service, local_entries)
+            for index, (key, _text) in enumerate(batch):
+                answer = answered.get(str(index))
+                if answer:
+                    rendered[key] = answer
+        if rendered:
+            cache.put_many(
+                {key: (misses[key], zh) for key, zh in rendered.items() if key in misses},
+                model=str(getattr(getattr(llm_service, "registry", None), "default_provider", "")),
+            )
+        resolved_keys = set(rendered)
+        for item_id, (key, _) in wanted.items():
+            if item_id not in translations and key in rendered:
+                translations[item_id] = rendered[key]
+        return CardTextTranslationOut(
+            translations=translations,
+            pending=sorted(
+                item_id
+                for item_id, (key, _) in wanted.items()
+                if key not in cached_by_key and key not in resolved_keys
+            ),
         )
 
     @app.post("/api/insights/feedback", response_model=InsightFeedbackResponse)

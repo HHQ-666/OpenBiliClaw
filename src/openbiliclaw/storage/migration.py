@@ -1147,6 +1147,10 @@ def normalize_frontend_settings(
     theme = raw.get("theme_mode")
     if isinstance(theme, str) and theme in {"auto", "light", "dark"}:
         result["theme_mode"] = theme
+    # 纸张（卡纸/台面材质）；色相随纸张走，除非 theme_hue 里存了显式选择。
+    palette = raw.get("palette")
+    if isinstance(palette, str) and palette in {"plain", "paper", "moss"}:
+        result["palette"] = palette
     hue = raw.get("theme_hue")
     if isinstance(hue, int) and not isinstance(hue, bool) and 0 <= hue <= 360:
         result["theme_hue"] = hue

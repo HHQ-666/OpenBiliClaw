@@ -54,7 +54,8 @@
       watchLater: "/watch-later",
       favorites: "/favorites",
       profileEdit: "/profile/edit",
-      profileEditState: "/profile/edit-state"
+      profileEditState: "/profile/edit-state",
+      translateTexts: "/translate-texts"
     };
     const SHARED_CHAT_SESSION = "popup";
     const CHAT_HISTORY_REFRESH_INTERVAL_MS = 2500;
@@ -945,9 +946,18 @@
     const THEME_LABELS = { auto: "跟随系统", light: "浅色", dark: "深色" };
     const THEME_GLYPHS = { auto: "◐", light: "☼", dark: "☾" };
     state.themeMode = THEME_OPTIONS.includes(storageGet(THEME_STORAGE_KEY)) ? storageGet(THEME_STORAGE_KEY) : "auto";
+    // 纸张：卡纸与台面的材质。素白（默认）是冷中性的白纸 + 钢制标签；暖纸是原来的
+    // 目录馆米色纸 + 黄铜；青苔介于两者之间。色相随纸张走，除非用户自己挑过印章色。
+    const PALETTE_STORAGE_KEY = "obc.palette";
+    const PALETTE_OPTIONS = ["plain", "paper", "moss"];
+    const PALETTE_LABELS = { plain: "素白", paper: "暖纸", moss: "青苔" };
+    const PALETTE_DEFAULT_HUE = { plain: 212, paper: 8, moss: 152 };
+    state.palette = PALETTE_OPTIONS.includes(storageGet(PALETTE_STORAGE_KEY)) ? storageGet(PALETTE_STORAGE_KEY) : "plain";
     const _storedHue = parseInt(storageGet(THEME_HUE_STORAGE_KEY), 10);
-    // Number.isFinite guard so a persisted hue of 0 (烈焰红) survives reload instead of falling back to 20.
-    state.themeHue = Number.isFinite(_storedHue) ? _storedHue : 20;
+    // 只有用户真的挑过印章色相才算显式；否则色相由纸张决定，不写 --hue-primary。
+    // Number.isFinite guard so a persisted hue of 0 (烈焰红) survives reload.
+    state.themeHueExplicit = Number.isFinite(_storedHue);
+    state.themeHue = state.themeHueExplicit ? _storedHue : PALETTE_DEFAULT_HUE[state.palette];
     const ACCENT_STORAGE_KEY = "obc.accentStyle";
     const ACCENT_OPTIONS = ["modern", "classic"];
     const THEME_NOTICE_DISMISSED_KEY = "obc.noticeDismissed";
@@ -1115,6 +1125,7 @@
       const configuredLimit = config.scheduler?.delight_queue_limit;
       const limit = configuredLimit || storageGet(DELIGHT_QUEUE_LIMIT_KEY) || "20";
       setInput("delightQueueLimit", String(limit));
+      applyPalette(state.palette);
       applyThemeMode(state.themeMode);
       applyThemeHue(state.themeHue);
       applyAccentStyle(state.accentStyle);
@@ -1129,10 +1140,13 @@
       setInput("delightQueueLimit", String(limit));
       storageSet(DELIGHT_QUEUE_LIMIT_KEY, String(limit));
       storageSet(THEME_STORAGE_KEY, state.themeMode);
-      storageSet(THEME_HUE_STORAGE_KEY, String(state.themeHue));
+      // 只在用户挑过色相时落盘：写死一个数字会让「跟着纸张走」变成一次性选择。
+      storageSet(THEME_HUE_STORAGE_KEY, state.themeHueExplicit ? String(state.themeHue) : "");
+      storageSet(PALETTE_STORAGE_KEY, state.palette);
       storageSet(ACCENT_STORAGE_KEY, state.accentStyle);
       storageSet(AUTO_LOAD_ON_SCROLL_KEY, state.autoLoadOnScroll ? "1" : "0");
       storageSet(SHOW_PENDING_CHAT_COUNT_KEY, state.showPendingChatCount ? "1" : "0");
+      applyPalette(state.palette);
       applyThemeMode(state.themeMode);
       applyThemeHue(state.themeHue);
       applyAccentStyle(state.accentStyle);
@@ -1140,7 +1154,7 @@
       renderAutoLoadOnScrollToggle();
       renderShowPendingChatCountToggle();
       syncAutoLoadObserver();
-      return { delightQueueLimit: limit, themeMode: state.themeMode, accentStyle: state.accentStyle, autoLoadOnScroll: state.autoLoadOnScroll, showPendingChatCount: state.showPendingChatCount };
+      return { delightQueueLimit: limit, themeMode: state.themeMode, palette: state.palette, accentStyle: state.accentStyle, autoLoadOnScroll: state.autoLoadOnScroll, showPendingChatCount: state.showPendingChatCount };
     }
 
     function getRuntimeStreamUrl() {
@@ -1528,6 +1542,15 @@
     let migrationBusy = false;
     const MIGRATION_FRONTEND_APPLIED_KEY = "openbiliclaw.webui.appliedMigrationFrontend";
 
+    // 卡片照抄的原文（X 推文正文、英文标题）交给 shared/text-localize.js 换成中文：
+    // 请求复用同一个 requestJsonStrict（cookie/bearer + CSRF 头），只重写卡片里的文本
+    // 节点，不参与卡片对账，也不阻塞首屏 —— 译文到了就替换，没到就继续显示原文。
+    function localizeCardText(root) {
+      const localizer = window.OpenBiliClawTextLocalize;
+      if (!localizer) return;
+      localizer.localizeWithin(root || document, { request: requestJsonStrict });
+    }
+
     function setMigrationStatus(message, tone = "neutral") {
       const status = $("#migrationStatus");
       if (status) {
@@ -1558,6 +1581,7 @@
     function collectMigrationFrontendSettings() {
       return {
         theme_mode: normalizeThemeMode(state.themeMode),
+        palette: PALETTE_OPTIONS.includes(state.palette) ? state.palette : "plain",
         theme_hue: Number.isFinite(state.themeHue) ? Math.max(0, Math.min(360, Math.round(state.themeHue))) : 20,
         accent_style: ACCENT_OPTIONS.includes(state.accentStyle) ? state.accentStyle : "classic",
         auto_load_on_scroll: Boolean(state.autoLoadOnScroll),
@@ -1569,6 +1593,9 @@
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       if (THEME_OPTIONS.includes(value.theme_mode)) {
         setThemeMode(value.theme_mode, { persist: true });
+      }
+      if (PALETTE_OPTIONS.includes(value.palette)) {
+        setThemePalette(value.palette, { persist: true });
       }
       if (Number.isInteger(value.theme_hue) && value.theme_hue >= 0 && value.theme_hue <= 360) {
         setThemeHue(value.theme_hue, { persist: true });
@@ -3403,6 +3430,7 @@ ${savedCardFeedbackBarHtml(listKind)}
       if (window.OpenBiliClawSavedSync.restoreSavedFocus(focusRoot, focusToken)) {
         desktopSavedPendingFocus[listKind] = null;
       }
+      localizeCardText(grid);
     }
 
     async function runDesktopSavedSync(listKind, selected, activeButton, reload, confirmBatch = false) {
@@ -3952,12 +3980,59 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     function applyThemeHue(hue = state.themeHue) {
       state.themeHue = hue;
-      document.documentElement.style.setProperty("--hue-primary", hue);
+      const root = document.documentElement;
+      // 没挑过色相时不写 --hue-primary：让所选纸张自带的默认色相生效（tokens.css）。
+      if (state.themeHueExplicit) root.style.setProperty("--hue-primary", String(hue));
+      else root.style.removeProperty("--hue-primary");
+    }
+
+    function applyPalette(palette = state.palette) {
+      state.palette = PALETTE_OPTIONS.includes(palette) ? palette : "plain";
+      document.documentElement.dataset.palette = state.palette;
+      if (!state.themeHueExplicit) {
+        // 换纸张时把跟着纸走的色相一起更新，设置页的滑块才显示真实生效值。
+        state.themeHue = PALETTE_DEFAULT_HUE[state.palette];
+        applyThemeHue(state.themeHue);
+      }
+      renderThemePaletteControls();
+      renderThemeHueControls();
+    }
+
+    function setThemePalette(palette, { persist = true, toast = false } = {}) {
+      applyPalette(palette);
+      if (persist) storageSet(PALETTE_STORAGE_KEY, state.palette);
+      if (toast) showToast(`纸张已换成${PALETTE_LABELS[state.palette] || state.palette}`);
+    }
+
+    function resetThemeHue({ persist = true, toast = false } = {}) {
+      state.themeHueExplicit = false;
+      if (persist) storageSet(THEME_HUE_STORAGE_KEY, "");
+      state.themeHue = PALETTE_DEFAULT_HUE[state.palette];
+      applyThemeHue(state.themeHue);
+      renderThemeHueControls();
+      renderThemePaletteControls();
+      if (toast) showToast(`印章颜色跟随「${PALETTE_LABELS[state.palette] || state.palette}」纸张`);
+    }
+
+    function renderThemePaletteControls() {
+      document.querySelectorAll("[data-palette-choice]").forEach((button) => {
+        const isActive = button.dataset.paletteChoice === state.palette;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-checked", isActive ? "true" : "false");
+        button.tabIndex = isActive ? 0 : -1;
+      });
+      const reset = $("#themeHueReset");
+      if (reset) reset.hidden = state.themeHueExplicit !== true;
     }
 
     function setThemeHue(hue, { persist = true, toast = false, render = true } = {}) {
+      state.themeHueExplicit = true;
       applyThemeHue(hue);
-      if (render) renderThemeHueControls();
+      if (render) {
+        renderThemeHueControls();
+        // 「跟随纸张」只在用户挑过色相时出现，显式性变了就得重画。
+        renderThemePaletteControls();
+      }
       if (persist) storageSet(THEME_HUE_STORAGE_KEY, String(state.themeHue));
       if (toast) {
         const names = { 20: "暖陶土", 210: "极客蓝", 340: "元气粉", 150: "自然绿", 280: "暗夜紫", 45: "活力橙" };
@@ -4020,17 +4095,16 @@ ${savedCardFeedbackBarHtml(listKind)}
         button.setAttribute("aria-checked", isActive ? "true" : "false");
         button.tabIndex = isActive ? 0 : -1;
       });
+      // 色相不再是「经典配色」的附加项：每张纸都带默认色相，用户随时可以改。
       const hueSection = document.querySelector(".settings-hue-field");
       if (!hueSection) return;
-      const isClassic = state.accentStyle === "classic";
-      hueSection.classList.toggle("is-disabled", isClassic);
+      hueSection.classList.remove("is-disabled");
       hueSection.querySelectorAll("button, input").forEach((el) => {
-        if (el.matches("[data-accent-choice]")) return;
-        el.disabled = isClassic;
-        el.setAttribute("aria-disabled", isClassic ? "true" : "false");
+        el.disabled = false;
+        el.setAttribute("aria-disabled", "false");
       });
       const hint = hueSection.querySelector(".settings-hue-hint");
-      if (hint) hint.hidden = !isClassic;
+      if (hint) hint.hidden = false;
     }
 
     function renderThemeControls() {
@@ -4052,8 +4126,8 @@ ${savedCardFeedbackBarHtml(listKind)}
     }
 
     function renderThemeHueControls() {
-      // Number.isFinite so hue 0 (烈焰红) renders as active instead of falling back to 20.
-      const hue = Number.isFinite(state.themeHue) ? state.themeHue : 20;
+      // Number.isFinite so hue 0 (烈焰红) renders as active instead of falling back to the palette.
+      const hue = Number.isFinite(state.themeHue) ? state.themeHue : PALETTE_DEFAULT_HUE[state.palette];
       const buttons = Array.from(document.querySelectorAll("[data-hue]"));
       const activeIndex = buttons.findIndex((button) => parseInt(button.dataset.hue, 10) === hue);
       buttons.forEach((button, index) => {
@@ -4696,6 +4770,7 @@ ${savedCardFeedbackBarHtml(listKind)}
       if (!root) return;
       root.innerHTML = CONTENT_HISTORY_SECTIONS.map(contentHistorySectionHtml).join("");
       bindContentHistoryCards();
+      localizeCardText(root);
     }
 
     async function loadContentHistoryCategory(category, append, generation = contentHistoryGeneration, focusToken = null) {
@@ -5203,6 +5278,9 @@ ${cardFeedbackBarHtml()}`;
       for (const skeleton of skeletons) grid.appendChild(skeleton);
       previous.clear();
       for (const [key, entry] of next) previous.set(key, entry);
+      // 卡片建好之后再补中文，不进对账循环：这一句只往 text-localize 的队列里塞几个
+      // 文本节点，幂等且不产生 DOM 结构变化。
+      localizeCardText(grid);
     }
 
     function renderVideos() {
@@ -11427,6 +11505,8 @@ ${cardFeedbackBarHtml()}`;
         }
         $("#delightReason").textContent = state.delight.reason;
         if ($("#delightStatus")) $("#delightStatus").textContent = state.delight.response_message || "";
+        // 惊喜卡的标题 / 正文同样照抄原文，切到这一条时补中文。
+        localizeCardText($("#delightBanner") || document);
         if (copy) copy.classList.remove("is-exiting");
         if (thumb) thumb.classList.remove("is-exiting");
         // 用 requestAnimationFrame 手动驱动高度动画（避免 CSS transition 启动时序问题）
@@ -13286,8 +13366,10 @@ ${cardFeedbackBarHtml()}`;
     window.addEventListener("resize", syncTopbarHeight);
     safeBind("#themeToggleBtn", "click", cycleThemeMode);
     bindRovingChoiceGroup("[data-theme-choice]", (button) => setThemeMode(button.dataset.themeChoice, { toast: true }));
+    bindRovingChoiceGroup("[data-palette-choice]", (button) => setThemePalette(button.dataset.paletteChoice, { toast: true }));
     bindRovingChoiceGroup("[data-hue]", (button) => setThemeHue(parseInt(button.dataset.hue, 10), { toast: true }));
     bindRovingChoiceGroup("[data-accent-choice]", (button) => setAccentStyle(button.dataset.accentChoice, { toast: true }));
+    safeBind("#themeHueReset", "click", () => resetThemeHue({ toast: true }));
     safeBind("#hueSlider", "input", (event) => {
       const val = parseInt(event.target.value, 10);
       setThemeHue(val);

@@ -1,6 +1,7 @@
 """Static regressions for Zhihu recommendation card source styling."""
 
 from pathlib import Path
+
 from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,8 +16,15 @@ def test_zhihu_recommendation_cards_have_source_specific_styles() -> None:
     assert '.card-source[data-source="zhihu"]' in mobile_css
     assert ".source-platform-zhihu" in popup_html
     assert "padding: var(--space-3) calc(var(--space-3) + 76px)" in desktop_css
-    assert "padding: 12px 114px 12px 14px" in mobile_css
+    assert "padding: 12px 14px 26px" in mobile_css
     assert "padding: 12px 74px 34px 14px" in popup_html
+    # The clipping is a bounded window: the right padding used to reserve 114px
+    # for a stamp that is not inside the text flow, and the excerpt had no line
+    # clamp, so one long tweet stretched its whole grid row.
+    assert "max-height: 176px" in mobile_css
+    assert "-webkit-line-clamp: 6" in mobile_css
+    assert "max-height: 132px" in mobile_css
+    assert "-webkit-line-clamp: 5" in mobile_css
     # issue #79 §2: text cards carrying a cover get a blurred glassmorphism
     # backdrop so they read as the same visual family as photo cards.
     assert ".cover.is-text-card.has-backdrop .cover-backdrop" in desktop_css

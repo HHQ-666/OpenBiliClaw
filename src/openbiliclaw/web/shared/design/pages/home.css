@@ -80,22 +80,6 @@
   opacity: 1;
 }
 
-/* text-only cards (X / 微博 long posts): a ruled clipping, no fake image */
-.video-card.is-text-card .cover {
-  aspect-ratio: auto;
-  min-height: 84px;
-  padding: 12px 114px 12px 14px;
-  background-color: var(--card-sunk);
-  background-image: repeating-linear-gradient(
-    transparent 0 9px,
-    var(--desk-line) 9px 10px
-  );
-}
-
-.video-card.is-text-card .cover img {
-  display: none;
-}
-
 /* —— the featured card: give the thumbnail the left column breath —— */
 .delight .thumb .cover,
 .delight .thumb img {
@@ -347,12 +331,20 @@
 }
 
 /* ─────────────────────────────────────────────
-   Text-first cards: the cover slot becomes a ruled clipping
+   Text-first cards: the cover slot becomes a bounded ruled clipping
+
+   The clipping is a window, not a transcript. Left unbounded, a 2000-character
+   tweet body ran 55 lines: the card stood ~1400px tall and, because grid rows
+   stretch, it dragged every card beside it up with it. The window is the
+   height a 16:9 cover occupies at the same width, so a tray of mixed cards
+   stays level.
    ───────────────────────────────────────────── */
 .cover.is-text-card,
 .video-card .cover.is-text-card {
   aspect-ratio: auto;
   min-height: 84px;
+  max-height: 176px;
+  padding: 12px 14px 26px;
   background:
     repeating-linear-gradient(
       transparent 0 9px,
@@ -371,6 +363,17 @@
     var(--desk-line) 9px 10px
   );
   border: 1px solid var(--rule-soft);
+}
+
+/* the excerpt: six ruled lines, then the line is simply gone */
+.cover.is-text-card .cover-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
 }
 
 .cover.is-text-card img {

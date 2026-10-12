@@ -704,10 +704,80 @@
   display: block;
 }
 
-/* ── theme: light/dark + the stamp hue ─────────────────────── */
+/* ── theme: paper (palette) + light/dark + the stamp hue ───── */
 .settings-theme-field,
+.settings-palette-field,
 .settings-hue-field {
   padding: var(--s4) 0;
+}
+
+/* The paper choices: each chip previews a palette that is NOT the active one,
+   so its three colours arrive inline from the button (see index.html) — the
+   chip itself is only geometry. */
+.palette-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 8px 0;
+}
+
+.palette-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 6px;
+  font-size: var(--fs-note);
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+
+.palette-swatch:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.palette-swatch.is-active,
+.palette-swatch[aria-checked="true"] {
+  border-color: var(--stamp);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--stamp);
+}
+
+.palette-chip {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 20px;
+  background: var(--chip-desk);
+  border: 1px solid var(--rule-strong);
+  border-radius: 1px;
+}
+
+/* card stock, with the stamp's ink in the corner */
+.palette-chip::before {
+  content: "";
+  position: absolute;
+  inset: 3px 10px 3px 3px;
+  background: var(--chip-card);
+  border: 1px solid var(--rule-strong);
+}
+
+.palette-chip::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--chip-ink);
+}
+
+.palette-name {
+  white-space: nowrap;
 }
 
 .theme-segmented {
@@ -766,14 +836,40 @@
   width: 26px;
   height: 26px;
   padding: 0;
+  /* the chip IS the colour; the button's own label stays for screen readers */
+  background: var(--swatch);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-ctl);
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
 }
 
 .hue-swatch.is-active,
 .hue-swatch[aria-pressed="true"] {
   outline: 1px solid var(--ink);
   outline-offset: 1px;
+}
+
+.hue-reset {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--track-label);
+  color: var(--stamp-deep);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  white-space: nowrap;
+}
+
+.hue-reset:hover {
+  border-color: var(--stamp);
+}
+
+.hue-reset[hidden] {
+  display: none;
 }
 
 .hue-slider-wrap {
@@ -821,7 +917,9 @@
   -webkit-appearance: none;
 }
 
-.hue-value {
+/* Scoped past base.css's `input[type="number"] { width: 100% }`: that rule made
+   the number box eat the whole row and collapsed the slider to 0px. */
+.hue-slider-wrap .hue-value {
   flex: none;
   width: 56px;
   height: 26px;

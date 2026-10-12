@@ -760,12 +760,35 @@
 .card-cover-frame.is-text-card {
   aspect-ratio: auto;
   min-height: 76px;
+  max-height: 132px;
   background-color: var(--card-sunk);
   background-image: repeating-linear-gradient(
     transparent 0 9px,
     var(--desk-line) 9px 10px
   );
   border: 1px solid var(--rule-soft);
+}
+
+/* the phone's text card carries a real excerpt, not the placeholder label:
+   same ruled clipping as the desktop tray, clamped so a long tweet cannot
+   push the whole list out of reach. */
+.card-cover-frame.is-text-card .card-cover-text {
+  display: -webkit-box;
+  align-items: flex-start;
+  justify-content: flex-start;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  height: auto;
+  padding: 12px 14px 26px;
+  overflow: hidden;
+  text-align: left;
+  text-transform: none;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.62;
+  letter-spacing: normal;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
 }
 
 /* the pressed stamp inside the featured card */

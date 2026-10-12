@@ -477,6 +477,30 @@ profile_delta = extract_llm_json_object(
 
 这些 helper 是 MiMo / OpenAI-compatible / reasoning 模型结构化输出的统一容错边界。`allow_singleton=True` 接受格式化为多行的合法 root object，并把它视为一个列表成员；调用方仍应用 predicate 限定自己真正接受的 shape，避免 schema echo 或 prompt 示例被误当作结果。
 
+### 展示期卡片文案翻译（`llm/translation.py`）
+
+`openbiliclaw.llm.translation` 把卡片上照抄来源的英文文本（推文正文、英文标题）翻成简体中文。它是**展示层**模块，不属于评估或推荐链路：结果不参与打分、筛选或入池，失败只退回原文。
+
+```python
+from openbiliclaw.llm.translation import (
+    needs_translation,
+    translatable_excerpt,
+    chunk_translation_entries,
+    translate_batch,
+)
+
+if needs_translation(title):
+    rendered = await translate_batch(llm_service, [("0", translatable_excerpt(title))])
+```
+
+| 元素 | 语义 |
+|---|---|
+| `needs_translation(text)` | 拉丁字母 ≥1、无 CJK、去掉 URL 后 ≥8 字符才值得翻译；纯中文、纯数字、纯链接、emoji 一律 `False`。 |
+| `translatable_excerpt(text)` | 最多 600 字符，按词边界截断。卡片只显示两行标题与六行摘要，长贴尾部永远不会上屏。 |
+| `chunk_translation_entries(entries)` | 每次调用最多 8 条 / 3000 字符，超出拆批；跑几批由调用方的时间预算决定。 |
+| `translate_batch(llm_service, entries, caller=..., timeout=30.0)` | 走 `complete_structured_task`（`temperature=0.2`、`reasoning_effort=""`、`inject_core_memory=False`），caller 为 `recommendation.translate_card_text`，因此沿用 recommendation 模块路由与并发闸门。system prompt 是模块级静态常量 `TRANSLATION_SYSTEM_PROMPT`，批次内用位置 id 而非内容哈希，弱模型不必回显长摘要。超时 / 供应商错误 / 输出格式错误一律返回 `{}`。 |
+| `parse_translation_items(content, ids)` | 用 `extract_llm_json_list` 容错解析 `{"id","zh"}` 列表；未知或缺失 id 直接丢弃，不合成空值。 |
+
 ### Merged keyword prompt
 
 ```python

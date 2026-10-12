@@ -799,6 +799,24 @@ db.suppress_low_confidence_recommendations()
 - `suppress_low_confidence_recommendations()` 会把低于阈值且尚无用户反馈的历史推荐标为 `feedback_type='suppressed_low_score'`。
 - `Database.initialize()` 会用默认阈值执行一次上述清理，处理旧版本已经入池 / 入历史的低分数据。
 
+### 卡片文案翻译缓存（`text_translations`）
+
+`storage.text_translation_cache.TextTranslationCache(db)` 是展示层翻译的持久缓存：卡片照抄的原文换成中文后按源文本哈希存这里，命中即零成本（见 `api.md` 的 `POST /api/translate-texts`）。
+
+| 列 | 语义 |
+|---|---|
+| `text_hash` | 主键：源文本归一化空白后的 sha256（`translation_cache_key()`）。与 `bvid` / `item_key` 无关，所以同一段话在托盘、内容库、惊喜卡之间共享一次翻译。 |
+| `source_text` | 源文本，截断到 2000 字符，仅供人工核对与排查坏批次。 |
+| `text_zh` | 简体中文译文；空值不写库（`put_many()` 跳过） |
+| `model` | 产出该译文的 provider 名，便于判断换模型后是否需要重译 |
+| `created_at` | 首次写入时间；重译按 `ON CONFLICT(text_hash)` 覆盖译文 |
+
+行为边界：
+
+- 表由 `_ensure_table_once()` **懒创建**（首次读写时 `CREATE TABLE IF NOT EXISTS`），不进主 schema 的迁移序列，老库升级不需要迁移窗口；风格与 `storage.x_health` 一致，用 `open_connection()` 短连接让 SQLite 在 FastAPI 线程池与 runtime 写入之间自行串行。
+- 读写失败一律降级（读返回 `{}`、写返回 `0`）并记 `DEBUG`：纯展示缓存不允许把异常带进请求路径。
+- 失效策略是「不主动失效」：译文由用户本机 LLM 产出，换模型后旧译文可能带旧风格但依然比英文原文可读，是否清表由 `model` 列人工判断。
+
 ## 配置项
 
 存储层本身不新增独立配置。本次涉及的运行时上限仍来自：

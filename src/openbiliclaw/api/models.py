@@ -1994,6 +1994,42 @@ class RecommendationClickResponse(BaseModel):
     processing: str = "queued"
 
 
+class CardTextTranslationItem(BaseModel):
+    """One ``id``/``text`` pair a surface wants rendered into Chinese."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: StrictStr = Field(max_length=200)
+    text: StrictStr = Field(max_length=8000)
+
+
+class CardTextTranslationIn(BaseModel):
+    """Texts a surface is about to paint and would rather show in Chinese.
+
+    ``id`` is opaque to the backend: the caller invents it, gets it back, and
+    decides how it maps onto the DOM. Cache identity comes from the text
+    itself, so the same tweet asked for from the tray and from the library is
+    one LLM call, not two.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CardTextTranslationItem] = Field(default_factory=list, max_length=60)
+
+
+class CardTextTranslationOut(BaseModel):
+    """Chinese renderings for the texts this call could serve.
+
+    ``pending`` lists ids deliberately not attempted (batch budget spent, or no
+    chat-capable LLM wired): the caller keeps the original text and may ask
+    again. An empty ``translations`` map is a normal answer, never an error.
+    """
+
+    translations: dict[str, str] = Field(default_factory=dict)
+    pending: list[str] = Field(default_factory=list)
+    cached: bool = False
+
+
 class ChatIn(BaseModel):
     """Popup chat request."""
 

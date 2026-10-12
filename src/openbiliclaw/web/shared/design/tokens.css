@@ -11,15 +11,20 @@
 :root {
   color-scheme: light;
 
+  /* —— 纸张 / paper: 素白台 is the default. The catalog's furniture (cards,
+     printed rules, drawer labels, one stamp) is fixed; the material it is cut
+     from is the palette. 暖纸 and 青苔 re-cut the same world in other stock —
+     see the [data-palette] blocks below. —— */
+
   /* —— the desk: page ground and wells —— */
-  --desk: #d9d4c8;
-  --desk-deep: #cbc5b6;
-  --desk-line: rgba(31, 38, 46, 0.07);
+  --desk: #eef0f2;
+  --desk-deep: #e2e6e9;
+  --desk-line: rgba(23, 26, 31, 0.06);
 
   /* —— card stock —— */
-  --card: #f7f5ef;
-  --card-hi: #fdfcf9;
-  --card-sunk: #efebe1;
+  --card: #ffffff;
+  --card-hi: #ffffff;
+  --card-sunk: #f4f6f7;
 
   /* the accent chain legacy renderers still paint with */
   --accent: var(--brand);
@@ -41,28 +46,31 @@
   --accent-strong: var(--brand-strong);
 
   /* —— ink (never pure black) —— */
-  --ink: #1f262e;
-  --ink-2: #58606a;
-  --ink-3: #8b9199;
-  --ink-inv: #f8f6f0;
+  --ink: #171a1f;
+  --ink-2: #565c65;
+  --ink-3: #878e97;
+  --ink-inv: #ffffff;
 
   /* —— printed rules —— */
-  --rule: #c6bfb0;
-  --rule-soft: #dcd7ca;
-  --rule-strong: #a49c8c;
+  --rule: #d8dce1;
+  --rule-soft: #e7eaed;
+  --rule-strong: #aeb5bd;
 
-  /* —— the one accent: the stamp. hue is user-rotatable via --hue-primary —— */
-  --hue: var(--hue-primary, 8);
+  /* —— the one accent: the stamp. Each palette carries its own default hue;
+     an explicit 印章色相 choice (--hue-primary set inline by the settings page)
+     wins over it. —— */
+  --hue-primary: 212;
+  --hue: var(--hue-primary);
   --stamp: hsl(var(--hue) 56% 41%);
   --stamp-deep: hsl(var(--hue) 58% 32%);
   --stamp-soft: hsl(var(--hue) 56% 41% / 0.12);
   --stamp-ink: hsl(var(--hue) 52% 36% / 0.9);
 
-  /* —— brass hardware: drawer labels, rails —— */
-  --brass: #8f7339;
-  --brass-hi: #b09155;
-  --brass-soft: rgba(143, 115, 57, 0.13);
-  --brass-edge: rgba(143, 115, 57, 0.45);
+  /* —— hardware: drawer labels, rails (brass in 暖纸, steel in 素白) —— */
+  --brass: #5c636e;
+  --brass-hi: #7b838f;
+  --brass-soft: rgba(92, 99, 110, 0.1);
+  --brass-edge: rgba(92, 99, 110, 0.4);
 
   /* —— status inks (stamped, never neon) —— */
   --ok: #2f6f55;
@@ -127,6 +135,75 @@
   --safe-top: env(safe-area-inset-top, 0px);
 
   --focus-ring: 0 0 0 2px var(--card), 0 0 0 4px var(--stamp);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   纸张 / paper palettes — the same catalog on other stock
+
+   The world does not change with the paper: cards still sit on a desk,
+   rules are still hairlines, the drawer labels are still metal, and there
+   is still exactly one stamp. What changes is the material those are cut
+   from, plus the stamp's default hue. 素白 (the :root default above) is
+   the sober one: white card stock on a cool desk, steel instead of brass,
+   an ink-blue stamp.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* —— 暖纸 the original reading-desk paper: greige desk, cream stock, brass,
+   a seal-red stamp. —— */
+:root[data-palette="paper"] {
+  --desk: #d9d4c8;
+  --desk-deep: #cbc5b6;
+  --desk-line: rgba(31, 38, 46, 0.07);
+
+  --card: #f7f5ef;
+  --card-hi: #fdfcf9;
+  --card-sunk: #efebe1;
+
+  --ink: #1f262e;
+  --ink-2: #58606a;
+  --ink-3: #8b9199;
+  --ink-inv: #f8f6f0;
+
+  --rule: #c6bfb0;
+  --rule-soft: #dcd7ca;
+  --rule-strong: #a49c8c;
+
+  --hue-primary: 8;
+
+  --brass: #8f7339;
+  --brass-hi: #b09155;
+  --brass-soft: rgba(143, 115, 57, 0.13);
+  --brass-edge: rgba(143, 115, 57, 0.45);
+
+  --lift: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
+  --lift-hi: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
+}
+
+/* —— 青苔 green-grey stock, weathered brass, a moss-green stamp. —— */
+:root[data-palette="moss"] {
+  --desk: #e4e8e2;
+  --desk-deep: #d5dbd3;
+  --desk-line: rgba(27, 35, 32, 0.06);
+
+  --card: #fbfcfa;
+  --card-hi: #ffffff;
+  --card-sunk: #f0f3ee;
+
+  --ink: #1b2320;
+  --ink-2: #4f5b55;
+  --ink-3: #7f8a84;
+  --ink-inv: #fbfcfa;
+
+  --rule: #ccd4cb;
+  --rule-soft: #dfe5dd;
+  --rule-strong: #a8b3a6;
+
+  --hue-primary: 152;
+
+  --brass: #6f6a3d;
+  --brass-hi: #8d8757;
+  --brass-soft: rgba(111, 106, 61, 0.12);
+  --brass-edge: rgba(111, 106, 61, 0.42);
 }
 
 /* —— night reading room —— */

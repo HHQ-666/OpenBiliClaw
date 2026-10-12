@@ -203,6 +203,19 @@ result，再经过后端身份门禁转换统一事件和账号分区 Node affin
 | `GET /api/delight/pending-batch` | ✅ | 动态阈值、候选查询与不喜欢主题过滤在线程池完整执行；返回 liked/delivered 队列成员，避免读取阻塞主 API 的推荐转发。参数与响应不变。 |
 | `POST /api/delight/sent` | ✅ | 仅确认主动通知已送达并维护推送冷却，不代表用户已看，不写 `seen_items`，也不置 `delight_seen`；该候选仍会被 `GET /api/delight/pending-batch` 返回用于 popup 重灌。UI 叉号不得把它作为消费路径。 |
 
+## 展示期文案翻译（`POST /api/translate-texts`）
+
+| 方法与路径 | 状态 | 契约 |
+|---|---|---|
+| `POST /api/translate-texts` | ✅ | 请求 `{"items":[{"id","text"}]}`（≤60 条、单条 ≤8000 字符，`extra="forbid"`），响应 `{"translations":{"<id>":"<中文>"},"pending":["<id>"],"cached":bool}`。`id` 由调用方自定义，后端只负责原样带回。 |
+
+语义要点：
+
+- **纯展示路径**：不写 `recommendations`、`content_cache`、`events` 或反馈状态，也不影响排序与评分。没有 chat-capable LLM 时返回空 `translations` + 全部 `pending`（HTTP 200），调用方继续显示原文；同一响应里已命中的缓存项照常返回。
+- **判定与预算**：`needs_translation` 过滤掉中文、纯数字、纯链接与过短文本；未命中缓存的部分按每批 8 条 / 3000 字符交给 `recommendation.translate_card_text`，单次请求最多 2 批（`CARD_TEXT_MAX_LLM_BATCHES`），其余进 `pending` 由下一次渲染再问。
+- **缓存**：`storage.text_translation_cache` 的 `text_translations` 表按源文本哈希存取（见 `storage.md`），同一段话在托盘、内容库与惊喜卡之间共享一次翻译；命中时 `cached=true` 且不发生任何 LLM 调用。
+- **身份**：缓存键是文本本身（归一化空白后 sha256），与 `bvid` / `item_key` 无关，因此重渲染、换批与跨端复用都命中同一条。
+
 ## 推荐反馈端点
 
 ### 推荐输出与 dislike 的即时一致性

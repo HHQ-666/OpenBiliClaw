@@ -14,6 +14,10 @@
         if (theme === "light" || theme === "dark") {
           document.documentElement.dataset.theme = theme;
         }
+        const palette = storage?.getItem("obc.palette");
+        if (palette === "paper" || palette === "moss") {
+          document.documentElement.dataset.palette = palette;
+        }
         const hue = storage?.getItem("obc.themeHue");
         if (hue) { document.documentElement.style.setProperty("--hue-primary", hue); }
       } catch {}
@@ -1534,6 +1538,26 @@
               <button type="button" role="radio" data-theme-choice="dark">深色</button>
             </div>
           </div>
+          <div class="settings-field full settings-palette-field">
+            <span>纸张</span>
+            <div class="palette-swatches" id="themePaletteSetting" role="radiogroup" aria-label="纸张">
+              <!-- 每块色板预览的是「另一种」纸张，所以它必须自带色值，不能用当前 token：
+                   台面色 / 卡纸色 / 印染色，与 tokens.css 的 [data-palette] 区块一一对应。 -->
+              <button type="button" role="radio" data-palette-choice="plain" class="palette-swatch" title="素白：冷中性白纸，钢制标签，靛蓝印">
+                <span class="palette-chip" style="--chip-desk:#eef0f2;--chip-card:#ffffff;--chip-ink:#2e5b9e" aria-hidden="true"></span>
+                <span class="palette-name">素白</span>
+              </button>
+              <button type="button" role="radio" data-palette-choice="paper" class="palette-swatch" title="暖纸：米色台面，奶油卡纸，黄铜标签，印章红">
+                <span class="palette-chip" style="--chip-desk:#d9d4c8;--chip-card:#f7f5ef;--chip-ink:#9e442e" aria-hidden="true"></span>
+                <span class="palette-name">暖纸</span>
+              </button>
+              <button type="button" role="radio" data-palette-choice="moss" class="palette-swatch" title="青苔：灰绿纸面，旧铜标签，苔绿印">
+                <span class="palette-chip" style="--chip-desk:#e4e8e2;--chip-card:#fbfcfa;--chip-ink:#2e9e78" aria-hidden="true"></span>
+                <span class="palette-name">青苔</span>
+              </button>
+            </div>
+            <p class="settings-hue-hint">纸张决定台面、卡纸和五金件的材质；换纸张会把印章颜色一起换成它的默认色相。</p>
+          </div>
           <div class="settings-field full settings-hue-field">
             <span>印章色相</span>
             <div class="hue-swatches" id="themeHueSetting" role="radiogroup" aria-label="印章色相">
@@ -1553,8 +1577,9 @@
             <div class="hue-slider-wrap">
               <input type="range" id="hueSlider" min="0" max="360" value="20" class="hue-slider" aria-label="自定义色相">
               <input type="number" id="hueValueInput" min="0" max="360" value="20" class="hue-value" aria-label="色相值">
+              <button type="button" id="themeHueReset" class="hue-reset" hidden title="清除自定义色相，回到纸张自带的印章颜色">跟随纸张</button>
             </div>
-            <p class="settings-hue-hint">色相只改变印章红；卡纸、墨色与黄铜由目录馆的世界固定。</p>
+            <p class="settings-hue-hint">色相只改变印章；台面、卡纸与五金件由纸张决定。</p>
           </div>
           <label class="settings-field full settings-switch-field" title="开启：滚动到底部且推荐池可用时自动加载更多；关闭：保留纯手动加载。">
             <span>滚动到底自动加载推荐</span>
@@ -1574,7 +1599,7 @@
               <span id="showPendingChatCountSettingText">关闭</span>
             </span>
           </label>
-          <p class="settings-note-inline">后端地址、端口、外观主题、色彩引擎、自动加载和待聊未读数偏好保存在当前浏览器；惊喜推荐加载数量会随保存配置写入后端，供桌面 Web、移动 Web 和插件共享。</p>
+          <p class="settings-note-inline">后端地址、端口、外观主题、纸张、印章色相、自动加载和待聊未读数偏好保存在当前浏览器；惊喜推荐加载数量会随保存配置写入后端，供桌面 Web、移动 Web 和插件共享。</p>
         </div>
 
         <div id="settingsPanelLogging" class="settings-panel" data-settings-panel="logging" role="tabpanel" aria-labelledby="settingsTabLogging" hidden>
@@ -1769,6 +1794,7 @@
   <script src="/shared/dialogue-confirmation.js" defer></script>
   <script src="/shared/agent-chat.js" defer></script>
   <script src="/shared/source-status.js" defer></script>
+  <script src="/shared/text-localize.js" defer></script>
   <script src="/web/assets/js/chat-agent-core.js" defer></script>
   <script src="/web/assets/js/app.js" defer></script>
 </body></html>
