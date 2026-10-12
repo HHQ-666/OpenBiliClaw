@@ -1,5 +1,6 @@
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_desktop_css
 
 APP_CSS = read_desktop_css()
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")

@@ -6,6 +6,7 @@ its copy uses the surface's foreground ink.
 """
 
 import re
+
 from tests._design_css import read_desktop_css
 
 APP_CSS = read_desktop_css()

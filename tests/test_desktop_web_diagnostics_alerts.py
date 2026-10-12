@@ -5,7 +5,8 @@
 """
 
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_desktop_css
 
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")

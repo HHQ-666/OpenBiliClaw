@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from tests._design_css import read_desktop_css, read_mobile_css
 
 MOBILE_CSS = read_mobile_css()

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_desktop_css
 
 playwright_api = pytest.importorskip("playwright.sync_api")
 Page = playwright_api.Page

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests._design_css import read_desktop_css, read_mobile_css
+from tests._design_css import read_desktop_css
 
 
 def test_profile_analysis_default_budget_scales_with_chunk_count() -> None:

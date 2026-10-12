@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from tests._design_css import read_desktop_css, read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]

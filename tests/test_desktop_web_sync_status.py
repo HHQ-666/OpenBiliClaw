@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_desktop_css
 
 
 def test_desktop_normalizes_account_sync_error_fields() -> None:

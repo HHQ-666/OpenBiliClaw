@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_mobile_css
 
 INDEX_HTML = Path("src/openbiliclaw/web/index.html")
 APP_CSS = read_mobile_css()

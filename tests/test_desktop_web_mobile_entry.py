@@ -9,7 +9,8 @@ with the backend-reported LAN IP so a phone can reach them.
 from __future__ import annotations
 
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_desktop_css
 
 _DESKTOP_DIR = Path(__file__).resolve().parent.parent / "src" / "openbiliclaw" / "web" / "desktop"
 _INDEX = (_DESKTOP_DIR / "index.html").read_text(encoding="utf-8")

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from tests._design_css import read_desktop_css, read_mobile_css
 
 MOBILE_HISTORY = Path("src/openbiliclaw/web/js/views/history.js")
@@ -123,6 +124,5 @@ def test_saved_lists_replace_failed_and_cached_broken_covers() -> None:
 
 def test_history_page_messages_are_visually_distinct_and_live_announced() -> None:
     for source in (MOBILE_CSS, DESKTOP_CSS):
-
         assert ".history-page-message.is-error" in source
         assert ".history-page-message.is-notice" in source

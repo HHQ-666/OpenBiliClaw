@@ -8,7 +8,8 @@ desktop web surface. These are byte-level source contracts, not runtime tests.
 from __future__ import annotations
 
 from pathlib import Path
-from tests._design_css import read_desktop_css, read_mobile_css
+
+from tests._design_css import read_mobile_css
 
 ROOT = Path(__file__).resolve().parents[1]
 RECOMMEND_JS = ROOT / "src/openbiliclaw/web/js/views/recommend.js"
