@@ -114,8 +114,10 @@ def test_desktop_pool_status_shows_available_count() -> None:
     assert "pool_available_count" in app_js
     assert "还有 ${runtime.pool_available_count} 条可换" in app_js
     assert "暂无可换库存" in app_js
-    assert "当前可换库存" in index_html
-    assert "当前可换" in index_html
+    assert "可换库存" in index_html
+    # 三格统计里的数字各管一件事：可换库存 / 通知 / 已开启来源；「池中素材」
+    # 是旁边那一行原始候选数，不再复述同一个数字。
+    assert "池中素材" in index_html
 
 
 def test_desktop_hydration_refetches_runtime_after_recommendation_bootstrap() -> None:
@@ -141,7 +143,7 @@ def test_desktop_pool_status_labels_pending_signals_as_discovery_context() -> No
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
 
     assert "待处理 ${runtime.pending_signal_events} 条行为信号" not in app_js
-    assert "已记下 ${runtime.pending_signal_events} 个新动作" in app_js
+    assert "刚记下你 ${runtime.pending_signal_events} 条新动态" in app_js
     assert "待处理行为信号" not in index_html
     assert "新动作" in index_html
 

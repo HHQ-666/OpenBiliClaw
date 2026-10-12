@@ -106,14 +106,14 @@
           <h3>推荐池实时看板</h3>
           <p id="runtimeSummary">连接 FastAPI 后，这里会显示候选池、补货和新动作记录。</p>
           <div class="hero-status-grid" aria-label="推荐池实时状态">
-            <div><span>当前可换库存</span><strong id="poolAvailable">—</strong></div>
+            <div><span>池中素材</span><strong id="poolAvailable">—</strong></div>
             <div><span>补货进展</span><strong id="poolReplenished">—</strong></div>
             <div><span>补货状态</span><strong id="poolRefreshState">—</strong></div>
           </div>
           <div class="metric-row">
-            <div class="metric"><strong id="metricPool">—</strong><span>当前可换</span></div>
+            <div class="metric"><strong id="metricPool">—</strong><span>可换库存</span></div>
             <div class="metric"><strong id="metricUnread">—</strong><span>通知数</span></div>
-            <div class="metric"><strong id="metricSources">—</strong><span>内容源</span></div>
+            <div class="metric"><strong id="metricSources">—</strong><span>已开启来源</span></div>
           </div>
           <p class="hero-topics"><span id="poolTopicsLabel">最近主题</span>：<span id="poolTopics">等待后端同步</span></p>
           <p id="accountSyncStatus" class="account-sync-status" hidden></p>
@@ -199,6 +199,9 @@
           </div>
           <!-- chip 由 renderFilters 渲染成 role=tab（含 instagram、aria-selected 与库存计数） -->
           <div class="filter-row" id="filterRow" role="tablist" aria-label="推荐平台与库存"></div>
+          <!-- 徽标语义说明：数字是后端还能换的库存，不是这一屏的卡片数；0 常见于
+               来源没开或补货还没回来，所以顺手说清它为什么会涨。 -->
+          <p class="filter-legend">平台后的数字＝还能换的数量，后台补货后会涨</p>
           <!-- 首屏骨架占位：后端推荐取回前先撑住版面，renderVideos 首次渲染时整体替换 -->
           <div class="card-grid" id="videoGrid">
             <article class="video-card is-skeleton" aria-hidden="true"><div class="cover skeleton-shimmer"></div><div><p class="video-title skeleton-line skeleton-shimmer"></p><p class="video-meta skeleton-line skeleton-shimmer short"></p></div><p class="reason skeleton-line skeleton-shimmer"></p></article>

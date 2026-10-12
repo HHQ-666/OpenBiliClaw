@@ -623,15 +623,15 @@
         $("#runtimeSummary").textContent = "库存状态读取失败；这不代表候选池真的为空。";
       } else {
         $("#runtimeSummary").textContent = exhausted
-          ? "库存状态同步失败；当前显示的是上次成功读取的库存，点击库存数可重试。"
-          : "库存状态同步失败，正在重试；当前显示的是上次成功读取的库存。";
+          ? "候选池状态同步失败；当前显示的是上次成功读取的数字，点击「池中素材」可重试。"
+          : "候选池状态同步失败，正在重试；当前显示的是上次成功读取的数字。";
       }
-      $("#poolRefreshState").textContent = exhausted ? "同步失败，点击库存重试" : "状态重试中";
+      $("#poolRefreshState").textContent = exhausted ? "同步失败，点击素材数重试" : "状态重试中";
       if (exhausted) {
         const poolAvailable = $("#poolAvailable");
         poolAvailable.setAttribute("role", "button");
         poolAvailable.setAttribute("tabindex", "0");
-        poolAvailable.setAttribute("aria-label", "库存状态同步失败，重新加载");
+        poolAvailable.setAttribute("aria-label", "候选池状态同步失败，重新加载");
         poolAvailable.onclick = restartDesktopFailedRecoveries;
         poolAvailable.onkeydown = (event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -4406,14 +4406,25 @@ ${savedCardFeedbackBarHtml(listKind)}
         // role=tab + aria-selected：选中态不能只靠颜色表达，AT 也要能读到。
         btn.setAttribute("role", "tab");
         btn.setAttribute("aria-selected", selected ? "true" : "false");
-        btn.setAttribute("aria-label", `${name}，可推荐 ${count === null ? PLATFORM_COUNT_UNKNOWN_LABEL : `${count} 条`}`);
+        // 徽标是后端还能换的库存，不是这一屏的卡片数：0 常见于来源关着或补货
+        // 还没回来，所以用 title/aria 说明它为什么会是 0（列表里已装入的卡片
+        // 不会因为库存归零就消失，数字也就没必要跟着变）。
+        const countLabel = count === null
+          ? PLATFORM_COUNT_UNKNOWN_LABEL
+          : count > 0
+            ? `${count} 条可换`
+            : "暂时没有可换库存，后台补货中";
+        btn.setAttribute("aria-label", `${name}，${countLabel}`);
+        btn.title = count === 0
+          ? `${name}暂时没有可换的新内容，后台会继续补货`
+          : `还能换 ${count === null ? "待读取" : count} 条`;
         btn.tabIndex = selected ? 0 : -1;
         const labelSpan = document.createElement("span");
         labelSpan.className = "chip-label";
         labelSpan.textContent = name;
         const countSpan = document.createElement("span");
         countSpan.className = "chip-count";
-        countSpan.dataset.state = count === null ? "unknown" : "known";
+        countSpan.dataset.state = count === null ? "unknown" : count > 0 ? "known" : "zero";
         countSpan.textContent = count === null ? PLATFORM_COUNT_UNKNOWN_TEXT : String(count);
         countSpan.setAttribute("aria-hidden", "true");
         btn.replaceChildren(labelSpan, countSpan);
@@ -5363,7 +5374,7 @@ ${cardFeedbackBarHtml()}`;
             ? `${escapeHtml(platformName(activePlatform))}还没有装入推荐，可以点「加载更多推荐」试试。`
             : activePlatformCount > 0
               ? `${escapeHtml(platformName(activePlatform))}还有 ${activePlatformCount} 条候选没装进来，点「加载更多推荐」即可。`
-              : `${escapeHtml(platformName(activePlatform))}暂时没有新候选，后台会继续补货。`
+              : `${escapeHtml(platformName(activePlatform))}暂时没有新候选，后台会继续补货；补上后会直接出现在这里。`
           : "";
         const message = state.query.trim()
           ? `没有找到包含“${escapeHtml(state.query.trim())}”的推荐。`
@@ -5382,7 +5393,8 @@ ${cardFeedbackBarHtml()}`;
           ? '<button class="small-btn" id="retryEmptyRecommendations" type="button">重新加载</button>'
           : "";
         renderedRecommendationCards.clear();
-        grid.innerHTML = `<div class="empty-state">${message}${retry}</div>`;
+        // 空态也是一张卡位：用与其它页面一致的图标 + 文案结构，别让整屏只剩一行字。
+        grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">🗂</div><div class="empty-state-text">${message}${retry}</div></div>`;
         $("#retryEmptyRecommendations")?.addEventListener("click", restartDesktopFailedRecoveries);
         return;
       }
@@ -9439,7 +9451,11 @@ ${cardFeedbackBarHtml()}`;
           }
         } else {
           rememberEmptyAppend(requestPlatform);
-          showToast(`候选池暂时没有新内容，已请求后台补货，${retryHint}`);
+          // 列表空态里已经写了同一句「后台会继续补货」；再弹一条 toast 就是同一句话
+          // 说两遍。只有列表还在（只是这批没新货）时才用 toast 补一句。
+          if (!$("#videoGrid .empty-state")) {
+            showToast(`候选池暂时没有新内容，已请求后台补货，${retryHint}`);
+          }
         }
       } finally {
         removeAppendSkeletons();
@@ -9474,6 +9490,7 @@ ${cardFeedbackBarHtml()}`;
         pool_available_count: Number(state.platformAvailability?.total_available ?? merged.pool_available_count ?? merged.pool_available ?? merged.available_count ?? 0),
         pool_pending_count: Number(merged.pool_pending_count ?? 0),
         pool_target_count: Number(merged.pool_target_count ?? state.config?.scheduler?.pool_target_count ?? 0),
+        pool_raw_count: Number(merged.pool_raw_count ?? 0),
         last_discovered_count: Number(merged.last_discovered_count ?? 0),
         last_replenished_count: Number(merged.last_replenished_count ?? 0),
         recent_pool_topics: Array.isArray(merged.recent_pool_topics) ? merged.recent_pool_topics.map(String).filter(Boolean) : [],
@@ -9594,9 +9611,21 @@ ${cardFeedbackBarHtml()}`;
       if (runtime.manual_refresh_state === "running") return runtime.pool_available_count > 0 ? "后台继续补货中" : "正在补货";
       if (runtime.manual_refresh_state === "success") return "刚同步完成";
       if (runtime.manual_refresh_state === "failed") return "刷新失败";
-      if (runtime.pending_signal_events > 0) return `已记下 ${runtime.pending_signal_events} 个新动作`;
+      if (runtime.pending_signal_events > 0) return `刚记下你 ${runtime.pending_signal_events} 条新动态`;
       if (runtime.runtime_event_type === "refresh.pool_updated") return "刚同步推荐池";
       return runtime.pool_available_count > 0 ? "可直接换一批" : "等待后台补货";
+    }
+
+    // 侧栏摘要说「现在能不能换」，不复述上面的数字：库存数字只出现在
+    // 统计格里一次，摘要负责讲清状态（PRODUCT.md 原则 3：状态用一句人话讲清）。
+    function poolSummarySentence(runtime) {
+      if (!runtime) return "";
+      const available = Number(runtime.pool_available_count) || 0;
+      const target = Number(runtime.pool_target_count) || 0;
+      if (runtime.manual_refresh_state === "running") return "后台正在翻找新的内容。";
+      if (available === 0) return "库存见底，后台在继续找。";
+      if (target > 0 && available >= target) return "库存充足，慢慢换。";
+      return "够换一阵子，后台还在补。";
     }
 
     // 运行时事件名是内部词汇，不能直接印到侧栏摘要上。
@@ -9632,7 +9661,11 @@ ${cardFeedbackBarHtml()}`;
       }
       $("#metricPool").textContent = String(runtime.pool_available_count);
       const summary = getPoolStatusSummary(runtime);
-      $("#poolAvailable").textContent = summary?.available || "后端未初始化";
+      // 「池中素材」是原始候选数，跟统计格的「当前可换库存」是两个不同的量：
+      // 之前这一格复述同一句话，侧栏因此出现三遍同一个数字。
+      $("#poolAvailable").textContent = runtime.pool_raw_count > 0
+        ? String(runtime.pool_raw_count)
+        : "—";
       $("#poolReplenished").textContent = summary?.replenished || "—";
       $("#poolTopics").textContent = summary?.topics || "—";
       $("#poolTopicsLabel").textContent = summary?.replenished === "内容发现未完成" ? "补货状态" : "最近主题";
@@ -9693,12 +9726,11 @@ ${cardFeedbackBarHtml()}`;
     function applyRuntimeStatus(payload) {
       if (!payload) return;
       state.runtimeStatus = normalizeRuntimeStatus(payload);
-      const summary = getPoolStatusSummary(state.runtimeStatus);
       $("#statusLabel").textContent = state.runtimeStatus.initialized === false ? "后端未初始化" : "已连接本地后端";
       $("#metricPool").textContent = String(state.runtimeStatus.pool_available_count);
       syncMessageCount();
       syncSourceMetric();
-      $("#runtimeSummary").textContent = state.runtimeStatus.live_summary || summary?.available || "后端在线，推荐池与采集运行时可读取。";
+      $("#runtimeSummary").textContent = state.runtimeStatus.live_summary || poolSummarySentence(state.runtimeStatus) || "后端在线，推荐池与采集运行时可读取。";
       renderPoolStatus(state.runtimeStatus);
       maybeAutoLoadAfterPoolRefill();
       renderAccountSyncStatus(state.runtimeStatus);

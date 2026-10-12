@@ -444,6 +444,27 @@
   color: var(--stamp-deep);
 }
 
+/* 库存为 0 的平台把数字压暗：它读起来是「等补货」的状态，不是「这里是空的」。
+   选中的 Tab 也不给这个 0 加强调色。 */
+.filter-row .chip .chip-count[data-state="zero"] {
+  opacity: 0.6;
+}
+
+.filter-row .chip.is-active .chip-count[data-state="zero"],
+.filter-row .chip[aria-selected="true"] .chip-count[data-state="zero"] {
+  color: var(--ink-3);
+}
+
+/* 徽标语义说明：一行小字挂在筛选行下方，右对齐，不抢卡片的注意力。 */
+.filter-legend {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--track-meta);
+  color: var(--ink-3);
+  text-align: right;
+}
+
 .message-item {
   padding: 10px 12px;
   border-bottom: 1px dotted var(--rule);

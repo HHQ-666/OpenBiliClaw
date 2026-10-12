@@ -59,8 +59,9 @@
 - **原文与译文**（`shared/text-localize.js`）：卡片照抄来源原文（推文正文、英文标题）。非中文文本由 `/api/translate-texts` 翻成简体中文后就地替换文本节点，原文保留在 `title` 悬浮提示里；翻译只重写文本，不参与卡片对账、不阻塞首屏，失败就继续显示原文。超长原文只翻前 600 字，译文末尾标注「此处为节译」。
 - **批注块**（`.reason` / `#delightReason` / `.card-expression`）：凹陷卡纸＋左侧 2px 印章条——「为什么推给你」的固定形制，桌面与手机同一语言。
 - **印章**（`.feedback-icon-btn`）：30px 方章；按下（`aria-pressed`）＝印章落下（旋转 -4°＋`stamp-press` 260ms 回弹＋印章色底）；`is-neutral` 虚线空章。
-- **流通单**（`.side-section`）：左侧抽屉里的运行时/动态条；点线引导行（`label … value`）、三格度量、动态项带印章点。
-- **导卡分隔**（`.filter-row .chip` / `.content-library-tab` / `.settings-tab`）：平台与视图切换＝目录导卡；等宽标签＋计数列（tabular-nums）；选中＝底部 2px 印章条＋字重 600（不只靠颜色）。
+- **流通单**（`.side-section`）：左侧抽屉里的运行时/动态条；点线引导行（`label … value`）、三格度量、动态项带印章点。看板一条数字只说一件事：顶上一句状态话（`poolSummarySentence`，如「够换一阵子，后台还在补」）不复述数字，行里是**池中素材**（原始候选数）与补货进展/状态，三格度量分别是**可换库存 / 通知数 / 已开启来源**——同一个数字不在同一屏出现两遍。
+- **导卡分隔**（`.filter-row .chip` / `.content-library-tab` / `.settings-tab`）：平台与视图切换＝目录导卡；等宽标签＋计数列（tabular-nums）；选中＝底部 2px 印章条＋字重 600（不只靠颜色）。导卡上的计数是**还能换的库存**，不是这一屏的卡片数：列表里已装入的卡片不会因为库存归零而消失，所以 `0` 只是一个被压暗的状态（`[data-state="zero"]`），筛选行下方 `数字＝还能换的数量，后台补货后会涨` 一行小字说明它会涨；每个导卡的 `title` 把零库存讲成「暂时没有可换的新内容，后台会继续补货」。
+- **空卡位**（`.empty-state`）：某一平台暂时无货时，卡盘位置留给一张空卡位——图标（`.empty-state-icon`）＋一句「暂时没有新候选，后台会继续补货；补上后会直接出现在这里。」——同一句话不再用 toast 重复（`#videoGrid .empty-state` 在场时静默）。
 - **表单**（`.settings-field` / `.edit-field`）：印刷订单：等宽标签在上、控件在下、点线分栏；开关＝印刷槽＋滑动墨块；色相＝墨垫阵列。
 - **抽屉与遮罩**：`.drawer` / `.overlay` 默认 `display:none`，`.is-open` 出现，`.is-closing` 播放退出（面板右移 16px 淡出）；`prefers-reduced-motion` 全程兜底。
 
