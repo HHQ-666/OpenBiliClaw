@@ -656,6 +656,8 @@ def _summarize_mbti(profile: SoulProfile) -> dict[str, object] | None:
             return None
         return {
             "type": mbti.type,
+            "identity": mbti.identity,
+            "declared": mbti.declared,
             "confidence": mbti.confidence,
             "dimensions": {
                 key: {"pole": dim.pole, "strength": dim.strength}
@@ -685,6 +687,8 @@ def _summarize_mbti(profile: SoulProfile) -> dict[str, object] | None:
 
     return {
         "type": mbti_type,
+        "identity": str(raw_mbti.get("identity", "") or ""),
+        "declared": bool(raw_mbti.get("declared", False)),
         "confidence": _coerce_profile_float(raw_mbti.get("confidence", 0.0), 0.0),
         "dimensions": dimensions,
         "inferred_from": _coerce_profile_str_list(raw_mbti.get("inferred_from"), limit=30),

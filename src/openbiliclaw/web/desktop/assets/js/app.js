@@ -1551,6 +1551,17 @@
       localizer.localizeWithin(root || document, { request: requestJsonStrict });
     }
 
+    // 批注被真的截断时才挂「展开全文」——排版层量不出来，只能比较 scrollHeight。
+    // 已展开的批注跳过：展开后两者相等，再量一次会把 is-clampable 抹掉，连「收起」一起丢。
+    function markClampedReasons(root) {
+      const scope = root || document;
+      scope.querySelectorAll(".reason").forEach((reason) => {
+        if (reason.classList.contains("is-expanded")) return;
+        const source = reason.querySelector(".reason-text") || reason;
+        reason.classList.toggle("is-clampable", source.scrollHeight > source.clientHeight + 1);
+      });
+    }
+
     function setMigrationStatus(message, tone = "neutral") {
       const status = $("#migrationStatus");
       if (status) {
@@ -1973,8 +1984,17 @@
       showToast("模型配置不可用，已打开恢复设置");
     }
 
+    // 提示条：每条自己计时，最多同时挂 3 条，同一条话在窗口期内只出现一次。
+    //
+    // 之前只有最底下那条会开始倒计时（_reposition 里 `first` 分支），上面叠着的
+    // 每一条都永远等不到计时器 —— 补货重试几轮之后，右下角就挂了一列永不消失的
+    // 提示。现在每条创建即计时；同文案 20 秒内只提示一次（补货轮询每几秒重复一次
+    // 同一句话），超过 3 条时挤掉最旧的一条。
+    const TOAST_GAP_PX = 8;
+    const TOAST_MAX_VISIBLE = 3;
+    const TOAST_DEDUPE_MS = 20000;
     const toastManager = {
-      items: [], gap: 8, container: null,
+      items: [], gap: TOAST_GAP_PX, container: null, recent: new Map(),
       init() {
         this.container = document.getElementById("toastContainer");
         if (!this.container) {
@@ -1983,34 +2003,49 @@
           document.body.appendChild(this.container);
         }
       },
-      showToast(msg, { duration = 2600 } = {}) {
+      showToast(msg, { duration = 2600, dedupeMs = TOAST_DEDUPE_MS } = {}) {
+        const text = String(msg ?? "").trim();
+        if (!text) return null;
+        const live = this.items.find((it) => !it.exiting && it.text === text);
+        if (live) {
+          // Same sentence still on screen: restart its clock instead of stacking.
+          live.remaining = Math.max(live.remaining, duration);
+          if (!live.paused) this._startTimer(live);
+          return live;
+        }
+        const lastShownAt = this.recent.get(text) || 0;
+        if (dedupeMs > 0 && Date.now() - lastShownAt < dedupeMs) return null;
+        this.recent.set(text, Date.now());
+        if (this.recent.size > 40) {
+          const cutoff = Date.now() - TOAST_DEDUPE_MS;
+          for (const [key, at] of this.recent) if (at < cutoff) this.recent.delete(key);
+        }
+
         const el = document.createElement("div");
         el.className = "toast-item entering";
-        el.textContent = msg;
-        el.addEventListener("click", (e) => this.dismiss(el));
+        el.textContent = text;
+        el.addEventListener("click", () => this.dismiss(el));
         el.addEventListener("mouseenter", () => { const i = this.items.find(it => it.el === el); if (i) this._pause(i); });
         el.addEventListener("mouseleave", () => { const i = this.items.find(it => it.el === el); if (i) this._resume(i); });
         this.container.appendChild(el);
-        const item = { el, timer: null, remaining: duration, started: Date.now(), paused: false, exiting: false };
+        const item = { el, text, timer: null, remaining: duration, started: Date.now(), paused: false, exiting: false };
         this.items.push(item);
+        while (this.items.filter((it) => !it.exiting).length > TOAST_MAX_VISIBLE) {
+          const oldest = this.items.find((it) => !it.exiting);
+          if (!oldest || oldest === item) break;
+          this.dismiss(oldest.el);
+        }
         this._reposition();
         void el.offsetHeight;
         el.classList.remove("entering");
+        if (!item.paused) this._startTimer(item);
         return item;
       },
       _reposition() {
         let bottom = 0;
         for (const item of this.items) {
           if (item.exiting) continue;
-          const first = bottom === 0;
           item.el.style.bottom = bottom + "px";
-          if (first && !item.reachedBottom) {
-            item.reachedBottom = true;
-            const elapsed = Date.now() - item.started;
-            const actual = Math.max(0, item.remaining - elapsed);
-            if (actual < 2000) item.remaining = actual + 2000;
-            if (!item.paused) this._startTimer(item);
-          }
           bottom += item.el.offsetHeight + this.gap;
         }
       },
@@ -2026,26 +2061,35 @@
           el.remove();
           this._reposition();
         }, { once: true });
+        // 过渡被 reduced-motion 关掉时 transitionend 不会来，兜底清一次。
+        window.setTimeout(() => {
+          const idx = this.items.indexOf(item);
+          if (idx >= 0) {
+            this.items.splice(idx, 1);
+            el.remove();
+            this._reposition();
+          }
+        }, 400);
       },
       _startTimer(item) {
         this._clearTimer(item);
         item.started = Date.now();
-        item.timer = setTimeout(() => this.dismiss(item.el), item.remaining);
+        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 600));
       },
       _clearTimer(item) {
         if (item.timer) { clearTimeout(item.timer); item.timer = null; }
       },
       _pause(item) {
-        if (item.paused || item.exiting || !item.reachedBottom) return;
+        if (item.paused || item.exiting) return;
         this._clearTimer(item);
         item.remaining -= Date.now() - item.started;
         item.paused = true;
       },
       _resume(item) {
-        if (!item.paused || item.exiting || !item.reachedBottom) return;
+        if (!item.paused || item.exiting) return;
         item.paused = false;
         item.started = Date.now();
-        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 2000));
+        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 600));
       }
     };
 
@@ -3431,6 +3475,7 @@ ${savedCardFeedbackBarHtml(listKind)}
         desktopSavedPendingFocus[listKind] = null;
       }
       localizeCardText(grid);
+      markClampedReasons(grid);
     }
 
     async function runDesktopSavedSync(listKind, selected, activeButton, reload, confirmBatch = false) {
@@ -4048,7 +4093,8 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     function cycleThemeMode() {
       const index = THEME_OPTIONS.indexOf(normalizeThemeMode(state.themeMode));
-      setThemeMode(THEME_OPTIONS[(index + 1) % THEME_OPTIONS.length], { toast: true });
+      // 主题切换本身就看得见（顶栏字形 + 整页配色），不再弹提示。
+      setThemeMode(THEME_OPTIONS[(index + 1) % THEME_OPTIONS.length]);
     }
 
     function bindRovingChoiceGroup(selector, onChoose) {
@@ -4771,6 +4817,7 @@ ${savedCardFeedbackBarHtml(listKind)}
       root.innerHTML = CONTENT_HISTORY_SECTIONS.map(contentHistorySectionHtml).join("");
       bindContentHistoryCards();
       localizeCardText(root);
+      markClampedReasons(root);
     }
 
     async function loadContentHistoryCategory(category, append, generation = contentHistoryGeneration, focusToken = null) {
@@ -4974,7 +5021,10 @@ ${savedCardFeedbackBarHtml(listKind)}
             </div>
             <div class="comment-field"><input placeholder="想围绕这条聊什么？" aria-label="想围绕这条聊什么？"></div>
             <button class="small-btn composer-cancel" data-action="cancel-comment" type="button" aria-label="返回" title="返回">‹</button>
-            <button class="small-btn chat-action" data-action="comment" type="button">聊一聊</button>
+            <button class="small-btn chat-action" data-action="comment" type="button" aria-label="聊一句" title="聊一句">
+              <span class="chat-action-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-8.4 8.4H8L4 22l1.1-3.6A8.4 8.4 0 1 1 21 11.5Z"/></svg></span>
+              <span class="chat-action-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 12 20 4l-5 16-3.2-6.8L4 12Z"/><path d="m11.8 13.2 3.7-3.7"/></svg></span>
+            </button>
           </div>
           <p class="status-line" aria-live="polite"></p>`;
     }
@@ -5186,11 +5236,13 @@ ${savedCardFeedbackBarHtml(listKind)}
 ${cardFeedbackBarHtml()}`;
     }
 
-    function createRecommendationCard(item, html) {
+    function createRecommendationCard(item, html, index = 0) {
       const card = document.createElement("article");
       card.className = recommendationIsTextCard(item) && !recommendationTextCardBackdrop(item)
         ? "video-card is-text-only"
         : "video-card";
+      // 进场错峰：同一批卡片按位置依次落下（CSS 只读这个变量，序号不参与对账）。
+      card.style.setProperty("--card-index", String(Math.min(index, 11)));
       card.dataset.bvid = item.bvid || item.id;
       card.innerHTML = html;
       const reason = card.querySelector(".reason");
@@ -5264,7 +5316,7 @@ ${cardFeedbackBarHtml()}`;
         const node =
           cached && cached.html === html && cached.id === item.id && cached.node.parentNode === grid
             ? cached.node
-            : createRecommendationCard(item, html);
+            : createRecommendationCard(item, html, index);
         next.set(key, { node, html, id: item.id });
         const target = cursor ? cursor.nextSibling : grid.firstChild;
         if (node !== target) grid.insertBefore(node, target);
@@ -5281,6 +5333,7 @@ ${cardFeedbackBarHtml()}`;
       // 卡片建好之后再补中文，不进对账循环：这一句只往 text-localize 的队列里塞几个
       // 文本节点，幂等且不产生 DOM 结构变化。
       localizeCardText(grid);
+      markClampedReasons(grid);
     }
 
     function renderVideos() {
@@ -5525,9 +5578,10 @@ ${cardFeedbackBarHtml()}`;
       const actions = card.querySelector(".card-actions");
       const button = card.querySelector(".chat-action");
       actions.classList.add("is-composing");
+      // 同一个按钮承担入口与发送：换图标靠 .is-send 在 CSS 里切（markup 里两个 span
+      // 都在），不再用 innerHTML 覆写，关掉时才不会把入口图标也一起丢掉。
       button.classList.add("is-send");
       button.dataset.action = "send-comment";
-      button.innerHTML = sendIcon;
       button.setAttribute("aria-label", "发送");
       button.setAttribute("title", "发送");
       requestAnimationFrame(() => card.querySelector(".comment-field input")?.focus());
@@ -5539,9 +5593,8 @@ ${cardFeedbackBarHtml()}`;
       actions.classList.remove("is-composing");
       button.classList.remove("is-send");
       button.dataset.action = "comment";
-      button.textContent = "聊一聊";
-      button.removeAttribute("aria-label");
-      button.removeAttribute("title");
+      button.setAttribute("aria-label", "聊一句");
+      button.setAttribute("title", "聊一句");
     }
 
     // Collapse an open composer back to the 聊一聊 button when focus leaves it
@@ -5785,7 +5838,9 @@ ${cardFeedbackBarHtml()}`;
     function formatPersonalityType(value) {
       if (!value) return "";
       if (typeof value !== "object") return String(value);
-      return String(value.type || value.mbti || value.name || value.label || "");
+      const base = String(value.type || value.mbti || value.name || value.label || "");
+      const identity = String(value.identity || "").toUpperCase();
+      return base && identity ? `${base}-${identity}` : base;
     }
 
     function formatProfileObject(value) {
@@ -5883,14 +5938,20 @@ ${cardFeedbackBarHtml()}`;
     function mbtiHtml(value) {
       if (!value) return `<p class="video-meta">MBTI 还没推断出来，再多看一阵。</p>`;
       if (typeof value !== "object") return `<p class="video-meta">${escapeHtml(value)}</p>`;
-      const type = value.type || value.mbti || value.name || "—";
+      const identity = String(value.identity || "").toUpperCase();
+      const baseType = value.type || value.mbti || value.name || "—";
+      const type = `${baseType}${identity ? `-${identity}` : ""}`;
+      // 自测结果和模型推断要一眼分得开：一个是「你测过的」，一个是「我看出来的」。
+      const sourceLine = value.declared
+        ? `<span class="mbti-source-badge">你自测</span>`
+        : `<span class="mbti-confidence">整体可信度 ${formatPercent(value.confidence)}</span>`;
       const axes = [
         { key: "EI", left: "E", right: "I", leftName: "外向", rightName: "内向" },
         { key: "SN", left: "S", right: "N", leftName: "实感", rightName: "直觉" },
         { key: "TF", left: "T", right: "F", leftName: "思考", rightName: "情感" },
         { key: "JP", left: "J", right: "P", leftName: "判断", rightName: "知觉" }
       ].map((config) => mbtiAxisHtml(value, config)).filter(Boolean).join("");
-      return `<div class="mbti-block"><div class="mbti-type-row"><span class="mbti-type-label">${escapeHtml(type)}</span>${value.confidence ? `<span class="mbti-confidence">整体可信度 ${formatPercent(value.confidence)}</span>` : ""}</div>${axes ? `<div class="mbti-dimensions">${axes}</div>` : ""}</div>`;
+      return `<div class="mbti-block"><div class="mbti-type-row"><span class="mbti-type-label">${escapeHtml(type)}</span>${sourceLine}</div>${axes ? `<div class="mbti-dimensions">${axes}</div>` : ""}</div>`;
     }
 
     function interestTreeHtml(value, fallback) {
@@ -6044,7 +6105,10 @@ ${cardFeedbackBarHtml()}`;
         profileLayer("Core — 比较稳定的底色", [
           profileItem("核心特质", chipsHtml(profile.core_traits, "这部分还在慢慢补。")),
           profileItem("深层需求", chipsHtml(profile.deep_needs, "这块还要再多看一点。")),
-          profileItem("MBTI / 人格推断", mbtiHtml(firstValue(profile.mbti, profile.personality_type)))
+          profileItem(
+            (firstValue(profile.mbti, profile.personality_type) || {}).declared ? "MBTI / 你自测的结果" : "MBTI / 人格推断",
+            mbtiHtml(firstValue(profile.mbti, profile.personality_type))
+          )
         ]),
         profileLayer("Values — 你在内容里长期在找什么", [
           profileItem("价值偏好", chipsHtml(firstValue(profile.values, profile.value_preferences), "价值偏好还在继续归拢。")),
@@ -6086,6 +6150,7 @@ ${cardFeedbackBarHtml()}`;
       personality_portrait: "人格素描",
       "core.core_traits": "核心特质",
       "core.deep_needs": "深层需求",
+      "core.mbti": "MBTI 人格",
       "values_layer.values": "价值偏好",
       "values_layer.motivational_drivers": "内在驱动力",
       likes: "感兴趣的方向",
@@ -6103,6 +6168,7 @@ ${cardFeedbackBarHtml()}`;
       "personality_portrait",
       "core.core_traits",
       "core.deep_needs",
+      "core.mbti",
       "values_layer.values",
       "values_layer.motivational_drivers",
       "likes",
@@ -6184,6 +6250,69 @@ ${cardFeedbackBarHtml()}`;
           <div class="edit-field-actions">
             <button class="pill-btn primary" type="button" data-edit-save-scalar="${escapeHtml(path)}">保存</button>
             ${pinned ? `<button class="edit-reset-btn" type="button" data-edit-reset="${escapeHtml(path)}">恢复 AI 建议</button>` : ""}
+          </div>
+        </div>`;
+    }
+
+    // 自测 MBTI：四个滑杆就是四组二分维度，类型由滑块直接推出来（左极百分比 >= 50
+    // 取左字母），所以不需要让用户手打 "INFJ" 再和滑块对不上。第五维度 A/T 单独一格。
+    const MBTI_AXES = [
+      { key: "EI", left: "E", leftName: "外向", right: "I", rightName: "内向" },
+      { key: "SN", left: "S", leftName: "实感", right: "N", rightName: "直觉" },
+      { key: "TF", left: "T", leftName: "思考", right: "F", rightName: "情感" },
+      { key: "JP", left: "J", leftName: "判断", right: "P", rightName: "知觉" }
+    ];
+
+    function mbtiAxesFromField(field) {
+      const dims = (field && typeof field.value === "object" && field.value?.dimensions) || {};
+      const type = String((field?.value && field.value.type) || "INFJ").toUpperCase();
+      return MBTI_AXES.map((axis, index) => {
+        const stored = Number(dims[axis.key]);
+        const dominant = type[index] || axis.right;
+        // 存的是「主导极强度」，滑杆用的是「左极百分比」，这里换算一次。
+        const dominantStrength = Number.isFinite(stored) ? Math.max(0, Math.min(1, stored)) : 0.6;
+        const leftPct = dominant === axis.left
+          ? Math.round(dominantStrength * 100)
+          : Math.round((1 - dominantStrength) * 100);
+        return { ...axis, leftPct };
+      });
+    }
+
+    function mbtiTypeFromAxes(axes) {
+      return axes.map((axis) => (axis.leftPct >= 50 ? axis.left : axis.right)).join("");
+    }
+
+    function profileEditMbtiField(path, label, field) {
+      const pinned = Boolean(field.pinned);
+      const axes = mbtiAxesFromField(field);
+      const identity = String((field?.value && field.value.identity) || "").toUpperCase();
+      const suggestion = field.ai_suggestion && typeof field.ai_suggestion === "object"
+        ? String(field.ai_suggestion.type || "")
+        : "";
+      const rows = axes.map((axis) => `
+            <div class="edit-mbti-axis">
+              <span class="edit-mbti-pole${axis.leftPct >= 50 ? " is-dominant" : ""}">${axis.left} <small>${axis.leftName}</small></span>
+              <input class="edit-scalar-input" type="range" min="0" max="100" step="1" value="${axis.leftPct}" data-edit-mbti-axis="${axis.key}" aria-label="${axis.leftName} / ${axis.rightName}" />
+              <span class="edit-mbti-pole${axis.leftPct < 50 ? " is-dominant" : ""}">${axis.right} <small>${axis.rightName}</small></span>
+              <span class="edit-scalar-value" data-edit-mbti-pct="${axis.key}">${axis.leftPct >= 50 ? axis.left : axis.right} ${axis.leftPct >= 50 ? axis.leftPct : 100 - axis.leftPct}%</span>
+            </div>`).join("");
+      return `
+        <div class="edit-field edit-mbti-field">
+          <div class="edit-field-head">
+            <span class="edit-field-label">${escapeHtml(label)}</span>
+            ${pinned ? `<span class="edit-badge">你自测</span>` : ""}
+            <span class="edit-mbti-type" data-edit-mbti-type>${escapeHtml(mbtiTypeFromAxes(axes))}${identity ? `-${escapeHtml(identity)}` : ""}</span>
+          </div>
+          <p class="edit-mbti-note">照着 16Personalities 之类的自测结果拖四个滑杆即可；类型由滑杆直接算出来。写进画像后不会被后续自动推断覆盖。</p>
+          ${rows}
+          <div class="edit-mbti-identity" role="radiogroup" aria-label="第五维度">
+            <span class="edit-mbti-identity-label">第五维度</span>
+            ${["", "A", "T"].map((value) => `<button type="button" role="radio" class="edit-mbti-identity-btn${value === identity ? " is-active" : ""}" data-edit-mbti-identity="${value}" aria-checked="${value === identity ? "true" : "false"}">${value === "" ? "不填" : value}</button>`).join("")}
+          </div>
+          ${suggestion ? `<p class="edit-drift-hint">系统现在推断为：${escapeHtml(suggestion)}</p>` : ""}
+          <div class="edit-field-actions">
+            <button class="pill-btn primary" type="button" data-edit-mbti-save="${escapeHtml(path)}">保存自测结果</button>
+            ${pinned ? `<button class="edit-reset-btn" type="button" data-edit-reset="${escapeHtml(path)}">恢复系统推断</button>` : ""}
           </div>
         </div>`;
     }
@@ -6277,6 +6406,7 @@ ${cardFeedbackBarHtml()}`;
         else if (field.type === "scalar") html += profileEditScalarField(path, label, field);
         else if (field.type === "list") html += profileEditListField(path, label, field);
         else if (field.type === "interest") html += profileEditInterestField(path, label, field);
+        else if (field.type === "mbti") html += profileEditMbtiField(path, label, field);
       }
       return html;
     }
@@ -6307,6 +6437,82 @@ ${cardFeedbackBarHtml()}`;
             op: "remove",
             value: btn.dataset.editValue,
             parent: btn.dataset.editParent || ""
+          });
+        });
+      });
+      // 自测 MBTI：滑杆即时改标签 + 推出来的类型；保存时把「左极百分比」换算回
+      // 「主导极强度」，类型也由当时的两极大小决定 —— 前端不做第二套语义。
+      root.querySelectorAll("[data-edit-mbti-axis]").forEach((slider) => {
+        slider.addEventListener("input", () => {
+          const fieldEl = slider.closest(".edit-mbti-field");
+          if (!fieldEl) return;
+          const axes = MBTI_AXES.map((axis) => {
+            const el = fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`);
+            const leftPct = Math.max(0, Math.min(100, Number.parseInt(el?.value || "50", 10)));
+            const pctEl = fieldEl.querySelector(`[data-edit-mbti-pct="${axis.key}"]`);
+            const dominantLetter = leftPct >= 50 ? axis.left : axis.right;
+            const dominantPct = leftPct >= 50 ? leftPct : 100 - leftPct;
+            if (pctEl) pctEl.textContent = `${dominantLetter} ${dominantPct}%`;
+            const poles = fieldEl.querySelectorAll(`[data-edit-mbti-axis="${axis.key}"]`);
+            const row = poles.length ? poles[0].closest(".edit-mbti-axis") : null;
+            if (row) {
+              const poleEls = row.querySelectorAll(".edit-mbti-pole");
+              poleEls[0]?.classList.toggle("is-dominant", leftPct >= 50);
+              poleEls[1]?.classList.toggle("is-dominant", leftPct < 50);
+            }
+            return { key: axis.key, left: axis.left, right: axis.right, leftPct };
+          });
+          const typeEl = fieldEl.querySelector("[data-edit-mbti-type]");
+          if (typeEl) {
+            const identityBtn = fieldEl.querySelector(".edit-mbti-identity-btn.is-active");
+            const identity = identityBtn?.dataset.editMbtiIdentity || "";
+            typeEl.textContent = `${mbtiTypeFromAxes(axes)}${identity ? `-${identity}` : ""}`;
+          }
+        });
+      });
+      root.querySelectorAll("[data-edit-mbti-identity]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const fieldEl = btn.closest(".edit-mbti-field");
+          fieldEl?.querySelectorAll("[data-edit-mbti-identity]").forEach((other) => {
+            const active = other === btn;
+            other.classList.toggle("is-active", active);
+            other.setAttribute("aria-checked", active ? "true" : "false");
+          });
+          const typeEl = fieldEl?.querySelector("[data-edit-mbti-type]");
+          if (!typeEl || !fieldEl) return;
+          const axes = MBTI_AXES.map((axis) => ({
+            ...axis,
+            leftPct: Number.parseInt(fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`)?.value || "50", 10)
+          }));
+          const identity = btn.dataset.editMbtiIdentity || "";
+          typeEl.textContent = `${mbtiTypeFromAxes(axes)}${identity ? `-${identity}` : ""}`;
+        });
+      });
+      root.querySelectorAll("[data-edit-mbti-save]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (btn.disabled) return;
+          const fieldEl = btn.closest(".edit-mbti-field");
+          if (!fieldEl) return;
+          const dimensions = {};
+          const letters = [];
+          for (const axis of MBTI_AXES) {
+            const leftPct = Math.max(0, Math.min(100, Number.parseInt(fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`)?.value || "50", 10)));
+            const dominant = leftPct >= 50 ? axis.left : axis.right;
+            letters.push(dominant);
+            dimensions[axis.key] = Math.round((leftPct >= 50 ? leftPct : 100 - leftPct)) / 100;
+          }
+          const identityBtn = fieldEl.querySelector(".edit-mbti-identity-btn.is-active");
+          btn.disabled = true;
+          await applyProfileEdit({
+            target: btn.dataset.editMbtiSave,
+            op: "set",
+            mbti: {
+              type: letters.join(""),
+              identity: identityBtn?.dataset.editMbtiIdentity || "",
+              dimensions,
+              confidence: 1,
+              source: "用户自测"
+            }
           });
         });
       });
@@ -9224,11 +9430,11 @@ ${cardFeedbackBarHtml()}`;
           // Keep decoding off the interaction path: slow first-miss covers should
           // not delay the new recommendation cards from appearing.
           void warmCoverImages(freshItems, { waitForDecode: true }).catch(() => {});
-          if (!appendCameUpShort) {
-            showToast("已加载更多推荐");
-          } else if (freshItems.length) {
+          // 卡片自己出现在列表里就是反馈；满批加载不再弹提示（用户明确不想要这条）。
+          // 只有「本批见底 / 都已反馈过」才说话，且同一句话 20 秒内只出现一次。
+          if (appendCameUpShort && freshItems.length) {
             showToast(`已加载 ${freshItems.length} 条，候选池暂时见底，后台正在补货，${retryHint}`);
-          } else {
+          } else if (!freshItems.length) {
             showToast(`这批内容都已反馈过，后台正在补货，${retryHint}`);
           }
         } else {
@@ -13365,11 +13571,11 @@ ${cardFeedbackBarHtml()}`;
     syncTopbarHeight();
     window.addEventListener("resize", syncTopbarHeight);
     safeBind("#themeToggleBtn", "click", cycleThemeMode);
-    bindRovingChoiceGroup("[data-theme-choice]", (button) => setThemeMode(button.dataset.themeChoice, { toast: true }));
-    bindRovingChoiceGroup("[data-palette-choice]", (button) => setThemePalette(button.dataset.paletteChoice, { toast: true }));
-    bindRovingChoiceGroup("[data-hue]", (button) => setThemeHue(parseInt(button.dataset.hue, 10), { toast: true }));
-    bindRovingChoiceGroup("[data-accent-choice]", (button) => setAccentStyle(button.dataset.accentChoice, { toast: true }));
-    safeBind("#themeHueReset", "click", () => resetThemeHue({ toast: true }));
+    bindRovingChoiceGroup("[data-theme-choice]", (button) => setThemeMode(button.dataset.themeChoice));
+    bindRovingChoiceGroup("[data-palette-choice]", (button) => setThemePalette(button.dataset.paletteChoice));
+    bindRovingChoiceGroup("[data-hue]", (button) => setThemeHue(parseInt(button.dataset.hue, 10)));
+    bindRovingChoiceGroup("[data-accent-choice]", (button) => setAccentStyle(button.dataset.accentChoice));
+    safeBind("#themeHueReset", "click", () => resetThemeHue());
     safeBind("#hueSlider", "input", (event) => {
       const val = parseInt(event.target.value, 10);
       setThemeHue(val);
@@ -13379,13 +13585,13 @@ ${cardFeedbackBarHtml()}`;
       setThemeHue(val);
     });
     safeBind("#autoLoadOnScrollSetting", "change", (event) => {
-      setAutoLoadOnScroll(Boolean(event.target.checked), { toast: true });
+      setAutoLoadOnScroll(Boolean(event.target.checked));
     });
     safeBind("#showPendingChatCountSetting", "change", (event) => {
-      setShowPendingChatCount(Boolean(event.target.checked), { toast: true });
+      setShowPendingChatCount(Boolean(event.target.checked));
     });
     safeBind("#chatPendingBadgeToggle", "change", (event) => {
-      setShowPendingChatCount(Boolean(event.target.checked), { toast: true });
+      setShowPendingChatCount(Boolean(event.target.checked));
     });
     window.addEventListener("scroll", scheduleAutoLoadCheck, { passive: true });
     window.addEventListener("resize", scheduleAutoLoadCheck);

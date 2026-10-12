@@ -756,6 +756,110 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* ── 自测 MBTI：四组二分维度滑杆 ───────────────────────────── */
+.edit-mbti-field .edit-field-head {
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.edit-mbti-type {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--stamp-deep);
+}
+
+/* 说明文字不用警告色：警告色留给「系统现在推断为 X」那条真正的分歧提示 */
+.edit-mbti-note {
+  padding: 5px 9px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-ctl);
+}
+
+.edit-mbti-axis {
+  display: grid;
+  grid-template-columns: 84px 1fr 84px 52px;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: 6px;
+}
+
+.edit-mbti-pole {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--track-meta);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.edit-mbti-pole:last-of-type {
+  text-align: right;
+}
+
+.edit-mbti-pole.is-dominant {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.edit-mbti-pole small {
+  font-size: 10.5px;
+  letter-spacing: normal;
+}
+
+.edit-mbti-axis .edit-scalar-value {
+  min-width: 52px;
+}
+
+.edit-mbti-identity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--s3);
+}
+
+.edit-mbti-identity-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.edit-mbti-identity-btn {
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--card-hi);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+
+.edit-mbti-identity-btn.is-active {
+  color: var(--stamp-deep);
+  border-color: var(--stamp);
+  background: var(--stamp-soft);
+}
+
+/* 画像卡里的「你自测」标记：不是推断，是用户自己的结论 */
+.mbti-source-badge {
+  padding: 1px 7px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  color: var(--stamp-deep);
+  background: var(--stamp-soft);
+  border: 1px solid var(--stamp);
+  border-radius: var(--r-pill);
+}
+
 .edit-interest-tree {
   display: grid;
   gap: var(--s2);

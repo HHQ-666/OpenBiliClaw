@@ -30,6 +30,19 @@
 /* —— the recommendation card: image-led, stamped source, annotation —— */
 .video-card .cover {
   position: relative;
+  /* 封面是贴在卡上的印刷品：一圈更深的细线做切口，底部压一道很薄的墨，来源章
+     才不会被浅色封面吃掉 */
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+.video-card .cover::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 32%;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.2));
+  pointer-events: none;
+  z-index: 1;
 }
 
 .video-card .cover img {
@@ -140,6 +153,20 @@
 
 .delight-excerpt-text {
   white-space: pre-line;
+}
+
+/* 惊喜卡的标题用衬线大字，跟目录卡的书脊一致 */
+.delight-copy h3,
+#delightTitle {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: 1.24;
+  letter-spacing: -0.005em;
+}
+
+/* 平台分隔导卡：hover 与选中都要有过渡，而不是瞬间跳变 */
+.filter-row .chip {
+  transition: background-color var(--imp), border-color var(--imp), color var(--imp);
 }
 
 /* —— the tray header: title + reshuffle, ruled —— */

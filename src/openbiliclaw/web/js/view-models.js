@@ -1176,7 +1176,14 @@ function normalizeMBTI(raw) {
       dims[k] = { pole: normalizeText(v?.pole), strength: Number(v?.strength ?? 0.5) };
     }
   }
-  return { type: normalizeText(raw.type), dimensions: dims, confidence: Number(raw.confidence ?? 0) };
+  return {
+    type: normalizeText(raw.type),
+    dimensions: dims,
+    confidence: Number(raw.confidence ?? 0),
+    // 自测标记与第五维度要让手机端也看得到，否则同一个画像两端说法不一致。
+    identity: normalizeText(raw.identity),
+    declared: raw.declared === true,
+  };
 }
 
 export function getMbtiDisplayState(mbti) {

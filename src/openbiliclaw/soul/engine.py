@@ -272,6 +272,7 @@ _MANUAL_EDIT_LABELS = {
     "surface.style.quality_sensitivity": "画质敏感度",
     "surface.style.humor_preference": "幽默偏好",
     "surface.style.depth_preference": "深度偏好",
+    "core.mbti": "MBTI 人格",
 }
 
 _FEEDBACK_ANALYSIS_METADATA_KEYS = frozenset(
@@ -927,6 +928,7 @@ class SoulEngine:
         value: object = None,
         parent: str = "",
         weight: float | None = None,
+        mbti: object = None,
         database: Any | None = None,
         embedding_service: Any | None = None,
         llm_service: Any | None = None,
@@ -945,7 +947,13 @@ class SoulEngine:
 
         overrides = self._memory.load_profile_overrides()
         updated, _ = apply_edit(
-            overrides, target=target, op=op, value=value, parent=parent, weight=weight
+            overrides,
+            target=target,
+            op=op,
+            value=value,
+            parent=parent,
+            weight=weight,
+            mbti=mbti,
         )
         updated.updated_at = datetime.now().isoformat()
         self._memory.save_profile_overrides(updated)

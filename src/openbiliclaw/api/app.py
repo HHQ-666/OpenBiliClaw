@@ -9023,11 +9023,13 @@ def create_app(
         if mbti_type:
             mbti_out = MBTIOut(
                 type=mbti_type,
+                identity=str(getattr(mbti_obj, "identity", "") or ""),
                 dimensions={
                     k: MBTIDimensionOut(pole=str(v.pole), strength=float(v.strength))
                     for k, v in getattr(mbti_obj, "dimensions", {}).items()
                 },
                 confidence=float(getattr(mbti_obj, "confidence", 0.0)),
+                declared=bool(getattr(mbti_obj, "declared", False)),
             )
 
         # ── Interest layer (tree structure) ──
@@ -9299,6 +9301,7 @@ def create_app(
                 value=payload.value,
                 parent=payload.parent,
                 weight=payload.weight,
+                mbti=payload.mbti.model_dump(exclude_none=True) if payload.mbti else None,
                 database=ctx.database,
             )
         except ProfileEditError as exc:

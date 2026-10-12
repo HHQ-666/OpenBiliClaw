@@ -37,6 +37,7 @@
 
 ## 字体
 
+- 标题：衬线（`--font-display`：Songti SC / Source Han Serif SC / Noto Serif SC / Georgia）——书脊字只用在 h1–h4、区块抬头与惊喜卡文案上；正文与元数据不受影响。
 - 正文：系统无衬线（`-apple-system` / `PingFang SC` / `Noto Sans SC`）。
 - 元数据、标签、按钮：等宽（`ui-monospace` / SF Mono / Menlo）。目录卡是打出来的——来源、日期、编号、计数、状态一律等宽，含 `font-variant-numeric: tabular-nums`。
 - 标题：系统无衬线 700，`letter-spacing: -0.005em`；「label/eyebrow」用等宽小号＋0.14em 字距。
@@ -46,7 +47,8 @@
 
 - 圆角 ≤ 2px（索引胶囊 999px）；影印品是方的。
 - 立体感只用 `--lift` / `--lift-hi`（纸抬起），禁止发光；描边（细线）是结构，不是装饰。
-- 纸纹＝`repeating-linear-gradient` 网点（等宽 9–12px），只用于「无图占位/长文剪报」，不是渐变装饰。
+- 纸纹＝`repeating-linear-gradient` 网点（等宽 9–12px），只用于「无图占位/长文剪报」，不是渐变装饰；台面另有一层 `--desk-grain` 点阵（9px 网格，只在侧光下显形）。
+- 卡片是压在台面上的纸：`--card-edge` 给切口一道高光，悬停时多一层 `--stamp-wash` 浅印并抬起 3px；封面有内细线 + 底部 `rgba(0,0,0,0.2)` 墨晕，保证来源章在任何封面上都可读。
 - 斜体、彩色渐变、玻璃拟态：不用。
 
 ## 组件词汇
@@ -66,6 +68,7 @@
 
 - 默认 `--imp: 170ms cubic-bezier(.2,.85,.3,1)`；进场 `card-enter` 6px 升起淡入；页面进场 `page-enter` 仅透明度（不移动几何，避免指针错位）。
 - 签名动作：印章按压 `stamp-press`（260ms 带 1.4 回弹，唯一允许的过冲）+ 按下态微旋 -4°。
+- 卡片进场错峰：`--card-index` 由渲染层写入（0–11），`animation-delay` 按 32ms 递增；序号不参与卡片对账，列表复用时不会重放动画。
 - 骨架屏＝干胶呼吸（透明度/位移），不是流光。
 
 ## 三端映射

@@ -85,8 +85,12 @@
     "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
     "Liberation Mono", monospace;
+  /* 标题用衬线：目录卡是印出来的，书脊与标签上的字是刻的。界面里只有标题、
+     区块抬头和惊喜卡的文案用它，正文与元数据保持无衬线/等宽，避免整页发软。 */
+  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", Georgia,
+    "Times New Roman", serif;
 
-  --fs-display: 25px;
+  --fs-display: 28px;
   --fs-h2: 21px;
   --fs-h3: 16.5px;
   --fs-title: 15.5px;
@@ -121,6 +125,14 @@
   --lift: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
   --lift-hi: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
   --lift-pressed: inset 0 1px 2px rgba(31, 38, 46, 0.16);
+  /* 卡片边缘：纸切口的那道高光。比阴影便宜，但一眼就把卡片从台面上"抬"起来。 */
+  --card-edge: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  /* 台面的印刷网点：9px 点阵，密度低到只在侧光下显形 */
+  --desk-grain: radial-gradient(circle at 1px 1px, rgba(31, 38, 46, 0.055) 1px, transparent 0);
+  --desk-grain-size: 9px 9px;
+  /* 印章色的浅洗：区块抬头、选中导航、惊喜卡的底纹用它，永远是很薄的一层 */
+  --stamp-wash: linear-gradient(180deg, var(--stamp-soft), transparent 78%);
+  --rule-fade: linear-gradient(90deg, var(--rule-strong), var(--rule) 40%, transparent);
 
   /* —— motion: impressions, not transitions —— */
   --imp: 170ms cubic-bezier(0.2, 0.85, 0.3, 1);
@@ -177,6 +189,7 @@
 
   --lift: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
   --lift-hi: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
+  --card-edge: inset 0 1px 0 rgba(255, 253, 246, 0.75);
 }
 
 /* —— 青苔 green-grey stock, weathered brass, a moss-green stamp. —— */

@@ -533,6 +533,12 @@ class MBTI:
     dimensions: dict[str, MBTIDimension] = field(default_factory=dict)
     confidence: float = 0.0
     inferred_from: list[str] = field(default_factory=list)
+    # 第五维度（16Personalities 的 A/T）。系统推断只用四维，用户自测结果可能带
+    # "-A"/"-T"，展示层把它当作类型后缀，不参与四维轴计算。
+    identity: str = ""
+    # True = 这一版来自用户自测（覆盖层），不是模型从行为里推断的。展示层据此把
+    # 「人格推断」说成「你自测」，避免把用户自己的结论标成 AI 的猜测。
+    declared: bool = False
 
 
 @dataclass
@@ -859,7 +865,8 @@ class OnionProfile:
             parts.append(f"## 核心特质\n{', '.join(self.core.core_traits)}")
         if self.core.mbti.type:
             mbti = self.core.mbti
-            parts.append(f"## MBTI\n{mbti.type} (置信度: {mbti.confidence:.0%})")
+            suffix = f"-{mbti.identity}" if mbti.identity else ""
+            parts.append(f"## MBTI\n{mbti.type}{suffix} (置信度: {mbti.confidence:.0%})")
         if self.values_layer.values:
             parts.append(f"## 价值观\n{', '.join(self.values_layer.values)}")
         if self.values_layer.motivational_drivers:
@@ -928,6 +935,8 @@ def _mbti_to_dict(mbti: MBTI) -> dict[str, object]:
         "dimensions": {k: _mbti_dimension_to_dict(v) for k, v in mbti.dimensions.items()},
         "confidence": mbti.confidence,
         "inferred_from": mbti.inferred_from,
+        "identity": mbti.identity,
+        "declared": mbti.declared,
     }
 
 
@@ -943,6 +952,8 @@ def _mbti_from_dict(raw: object) -> MBTI:
         dimensions=dims,
         confidence=_as_float(data.get("confidence", 0.0), 0.0),
         inferred_from=_as_str_list(data.get("inferred_from")),
+        identity=str(data.get("identity", "") or "").strip().upper()[:1],
+        declared=bool(data.get("declared", False)),
     )
 
 

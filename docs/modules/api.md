@@ -216,6 +216,19 @@ result，再经过后端身份门禁转换统一事件和账号分区 Node affin
 - **缓存**：`storage.text_translation_cache` 的 `text_translations` 表按源文本哈希存取（见 `storage.md`），同一段话在托盘、内容库与惊喜卡之间共享一次翻译；命中时 `cached=true` 且不发生任何 LLM 调用。
 - **身份**：缓存键是文本本身（归一化空白后 sha256），与 `bvid` / `item_key` 无关，因此重渲染、换批与跨端复用都命中同一条。
 
+## 画像编辑端点（`POST /api/profile/edit`）
+
+`ProfileEditIn` 的 `target` 支持洋葱字段路径（`core.core_traits` 等）、兴趣极性（`likes` / `dislikes`），以及**唯一的结构化字段** `core.mbti`：
+
+| 字段 | 语义 |
+|---|---|
+| `value` | 文本 / 标量 / 列表类目标的取值 |
+| `mbti` | `core.mbti` 专用：`{type, identity, dimensions, confidence, source}`，`dimensions` 键为 `EI/SN/TF/JP`、值为主导极强度（0-1，INFJ 的 I 54% → `{"EI": 0.54}`），缺省维度按 0.6 记 |
+
+- `op="set"` 写入用户自测结果（覆盖推断值并固定，后续 core layer 重建不覆盖），`op="reset"` 回到系统推断；非法类型（非四字母、字母与位次不符）或非法第五维度（非 A/T）由归约器抛 `ProfileEditError` → HTTP 422。
+- 响应与其它编辑一致：返回 `{ok, target, op, edit_state}`，`edit_state.fields["core.mbti"]` 是 `{type: "mbti", pinned, value, ai_suggestion}`，`ai_suggestion` 只在固定值与当前推断类型不同时给出。
+- `/api/profile-summary` 的 `mbti` 增加 `identity`（第五维度后缀）与 `declared`（是否来自自测），桌面与移动据此把卡片标成「你自测 / INFJ-A」而不是「人格推断」。
+
 ## 推荐反馈端点
 
 ### 推荐输出与 dislike 的即时一致性

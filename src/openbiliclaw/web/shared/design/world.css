@@ -866,15 +866,35 @@
   background: var(--card);
   border: 1px solid var(--rule);
   border-radius: var(--r-card);
-  box-shadow: var(--lift);
+  /* 纸边的切口高光 + 抬起：卡片是压在台面上的纸，不是浮在空中的方框 */
+  box-shadow: var(--card-edge), var(--lift);
   animation: card-enter var(--imp-slow) both;
+  /* 同一批卡片按序落下（--card-index 由渲染层写入），而不是整片同时出现 */
+  animation-delay: calc(var(--card-index, 0) * 32ms);
   transition: transform var(--imp), box-shadow var(--imp), border-color var(--imp);
+  will-change: transform;
 }
 
 .video-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   border-color: var(--rule-strong);
-  box-shadow: var(--lift-hi);
+  box-shadow: var(--card-edge), var(--lift-hi);
+}
+
+/* 悬停时卡角压出一枚浅印：目录馆里"你在看这张卡"的记号，不用金色描边 */
+.video-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+  background: var(--stamp-wash);
+  opacity: 0;
+  transition: opacity var(--imp);
+  pointer-events: none;
+}
+
+.video-card:hover::before {
+  opacity: 1;
 }
 
 /* the punched hole: seen items are filed away */
@@ -963,6 +983,12 @@
   overflow-wrap: anywhere;
 }
 
+/* 批注：为什么推给你。默认尽量给全 —— 池里的批注大多 80-150 字，卡片下方的留白
+   足够放下；只有真超过 10 行的长批注才截断，并在右下角印一个「展开全文」。
+   截断必须落在 .reason-text 上：把 -webkit-box 放在 .reason 上时，里面的
+   pre-wrap 子元素让行数推算失效，浏览器只按容器高度硬裁 —— 于是第 11 行被切成
+   半行字（截图里那道锯齿），而且 .is-expanded（JS 点击时加的类）当时根本没有样式，
+   点了也展不开。 */
 .reason {
   position: relative;
   margin: 0;
@@ -973,10 +999,51 @@
   background: var(--card-sunk);
   border-left: 2px solid var(--stamp);
   border-radius: 0 1px 1px 0;
+}
+
+.reason .reason-text {
   display: -webkit-box;
-  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
   overflow: hidden;
+}
+
+.reason.is-expanded .reason-text {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+}
+
+/* 只有被截断的批注才挂提示；它同时盖住最后一行被切断的字脚 */
+.reason.is-clampable:not(.is-expanded)::after {
+  content: "展开全文 ⌄";
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  padding-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--track-label);
+  color: var(--stamp-deep);
+  background: linear-gradient(90deg, transparent, var(--card-sunk) 24%);
+}
+
+.reason.is-clampable.is-expanded::after {
+  content: "收起 ⌃";
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  padding-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--track-label);
+  color: var(--ink-3);
+  background: var(--card-sunk);
+}
+
+.reason:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .card-actions,
@@ -1024,10 +1091,13 @@
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
   gap: var(--s5);
   padding: var(--s5);
-  background: var(--card-hi);
+  /* 当天的头条：比普通卡多一层印章浅洗 + 更深的版口，一眼分得出主次 */
+  background-color: var(--card-hi);
+  background-image: var(--stamp-wash);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-card);
-  box-shadow: var(--lift-hi);
+  box-shadow: var(--card-edge), var(--lift-hi);
+  animation: card-enter var(--imp-slow) both;
 }
 
 /* the catalog's red "featured" tab, cut into the top edge */
@@ -1213,6 +1283,65 @@
   display: none;
 }
 
+/* ── 托盘卡片的内联输入：默认收起 ──
+   以前这个 input 一直摆在操作行里（86×26 的空盒子，标签还要靠 placeholder 才看得见），
+   而唯一能打开它的「聊一聊」按钮被上面的 display:none 一起藏了 —— 于是那一格既没有
+   文字也没有作用。现在入口是一个带图标的「聊一句」按钮：按下才展开输入框 + 返回 + 发送，
+   并让出反馈图标行。 */
+.card-actions .comment-field,
+.card-actions .composer-cancel {
+  display: none;
+}
+
+.card-actions .chat-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 和印章按钮同一尺寸：30px 方，图标 15px，点起来不挤 */
+  flex: none;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.card-actions .chat-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+
+.card-actions .chat-action-send,
+.card-actions .chat-action.is-send .chat-action-open {
+  display: none;
+}
+
+.card-actions .chat-action.is-send .chat-action-send {
+  display: block;
+}
+
+.card-actions.is-composing .comment-field {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.card-actions.is-composing .composer-cancel {
+  display: inline-flex;
+}
+
+.card-actions.is-composing .card-feedback-icons {
+  display: none;
+}
+
+/* 惊喜卡的「聊一聊」默认就要露出来（它是入口）；进了输入态才换成发送键 */
+.delight-main-actions .chat-action {
+  display: inline-flex;
+}
+
 .delight-actions.is-composing .composer-cancel,
 .delight-actions.is-composing .chat-action {
   display: inline-flex;
@@ -1382,8 +1511,29 @@
 .content-page-head h2,
 .profile-page-head h2,
 .content-library-page-head h2 {
+  font-family: var(--font-display);
   font-size: var(--fs-h2);
+  font-weight: 700;
+  letter-spacing: 0.004em;
   margin: 3px 0 4px;
+}
+
+/* 抬头下面的印刷线：从墨色渐隐到透明，比一条实线更像目录页的版口 */
+.content-page-head,
+.section-head {
+  border-bottom: 0;
+  position: relative;
+}
+
+.content-page-head::after,
+.section-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--rule-fade);
 }
 
 .section-head p,

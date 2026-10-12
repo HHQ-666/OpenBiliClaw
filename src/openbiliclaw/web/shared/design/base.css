@@ -25,10 +25,12 @@ body {
   line-height: var(--lh-body);
   color: var(--ink);
   background-color: var(--desk);
-  /* the desk under the light: one soft pool, then flat stock */
+  /* the desk under the light: one soft pool, the printed dot grid, then flat stock */
   background-image:
     radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.5), transparent 60%),
+    var(--desk-grain),
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 320px);
+  background-size: auto, var(--desk-grain-size), auto;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -45,9 +47,11 @@ h2,
 h3,
 h4 {
   margin: 0;
+  /* 标题走衬线：目录卡的书脊字。字号越大越明显，正文一点不受影响。 */
+  font-family: var(--font-display);
   font-weight: 700;
   line-height: var(--lh-tight);
-  letter-spacing: var(--track-title);
+  letter-spacing: -0.01em;
   color: var(--ink);
   text-wrap: balance;
 }

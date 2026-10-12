@@ -1200,11 +1200,17 @@ class MBTIDimensionOut(BaseModel):
 
 
 class MBTIOut(BaseModel):
-    """MBTI personality type with dimensional breakdown."""
+    """MBTI personality type with dimensional breakdown.
+
+    ``identity`` 是 16Personalities 的第五维度后缀（-A/-T）；``declared`` 表示这一版
+    来自用户自测而不是推断，前端据此把卡片标成「你自测的结果」。
+    """
 
     type: str = ""
+    identity: str = ""
     dimensions: dict[str, MBTIDimensionOut] = Field(default_factory=dict)
     confidence: float = 0.0
+    declared: bool = False
 
 
 class InterestSpecificOut(BaseModel):
@@ -1589,6 +1595,22 @@ class InsightFeedbackResponse(BaseModel):
     confidence: float = 0.0
 
 
+class ProfileMbtiIn(BaseModel):
+    """自测 MBTI：四字母类型 + 四维「主导极」强度 + 可选的第五维度。
+
+    ``dimensions`` 的键是 ``EI`` / ``SN`` / ``TF`` / ``JP``，值是主导极的强度
+    （0-1，INFJ 的 I 54% 就是 ``{"EI": 0.54}``）；缺省维度按 0.6 记。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: StrictStr = Field(max_length=5)
+    identity: str = ""
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    confidence: float = 1.0
+    source: str = ""
+
+
 class ProfileEditIn(BaseModel):
     """One user edit to the AI-generated profile overlay.
 
@@ -1596,6 +1618,8 @@ class ProfileEditIn(BaseModel):
     interest polarity (``likes`` / ``dislikes``). ``op`` ∈
     {set, add, remove, reset}. ``parent`` targets a specific under an
     interest domain; ``weight`` pins an interest domain's weight.
+    ``core.mbti`` is the one structured target and carries ``mbti`` instead
+    of ``value``.
     """
 
     target: str
@@ -1603,6 +1627,7 @@ class ProfileEditIn(BaseModel):
     value: str | float | None = None
     parent: str = ""
     weight: float | None = None
+    mbti: ProfileMbtiIn | None = None
 
 
 class WatchLaterAddIn(BaseModel):

@@ -292,7 +292,11 @@ function renderMBTI(mbti) {
         <span style="width:28px;font-size:11px">${esc(d.right)}</span>
       </div>`;
   }
-  return `<div class="mbti-type">${esc(display.type)}${display.confidence_label ? `<span style="font-size:11px;font-weight:500;color:var(--text-muted);margin-left:8px">${esc(display.confidence_label)}</span>` : ""}</div>${dimsHtml ? `<div class="mbti-dims">${dimsHtml}</div>` : ""}`;
+  const mbtiType = `${display.type}${display.identity ? `-${display.identity}` : ""}`;
+  const typeNote = display.declared
+    ? "你自测"
+    : display.confidence_label;
+  return `<div class="mbti-type">${esc(mbtiType)}${typeNote ? `<span style="font-size:11px;font-weight:500;color:var(--text-muted);margin-left:8px">${esc(typeNote)}</span>` : ""}</div>${dimsHtml ? `<div class="mbti-dims">${dimsHtml}</div>` : ""}`;
 }
 
 // ── Interest Tree ────────────────────────────────────────────
