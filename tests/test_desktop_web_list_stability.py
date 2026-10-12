@@ -36,7 +36,8 @@ def test_recommendation_grid_is_rendered_incrementally() -> None:
     assert "cached.html === html" in sync
     assert "cached.id === item.id" in sync
     assert "cached.node.parentNode === grid" in sync
-    assert "createRecommendationCard(item, html)" in sync
+    # 建卡时把位置也传进去（进场错峰用），它不参与复用判据。
+    assert "createRecommendationCard(item, html, index)" in sync
     # 位置对账用 insertBefore 就地挪，不重建。
     assert "grid.insertBefore(node, target);" in sync
     # 加载中的骨架占位归 appendMore 管，重绘不能顺手抹掉，且必须留在真实卡片后面。

@@ -81,7 +81,10 @@ class LinuxdoDiscoveryProducer:
     daily_feed_budget: int = 0
     daily_creator_budget: int = 0
     daily_related_budget: int = 0
-    wait_seconds: float = 180.0
+    # 扩展一次只跑一条 linux.do 任务（开一个 tab、串行取数再回传），排队中的任务
+    # 只是在等前面那条做完；窗口太短会把「排到了但还没轮到」的任务判成 stale_pending，
+    # 结果回传时行已经作废，取回的帖子全被丢掉（实测 180s 下多数分支都这样死掉）。
+    wait_seconds: float = 900.0
     poll_interval_seconds: float = 0.5
     max_items_per_keyword: int = 20
     max_seed_count: int = 5
@@ -364,6 +367,8 @@ class LinuxdoDiscoveryProducer:
         expire = getattr(self.task_queue, "expire_stale_pending", None)
         if callable(expire):
             with suppress(Exception):
+                # 同类型里还没有被认领的老任务才算超时：扩展串行执行，正在排队的那条
+                # 只是在等前一条（认领后的任务状态是 in_progress，本来就不在这个范围）。
                 expire((task_type,), older_than_seconds=max(60.0, self.wait_seconds))
         task_payload = dict(payload)
         task_payload.setdefault(

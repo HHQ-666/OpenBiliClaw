@@ -203,12 +203,14 @@
   "life_stage": "探索期",
   "mbti": {
     "confidence": 0.4,
+    "declared": false,
     "dimensions": {
       "EI": {
         "pole": "E",
         "strength": 0.6
       }
     },
+    "identity": "",
     "inferred_from": [
       "少量早期行为"
     ],

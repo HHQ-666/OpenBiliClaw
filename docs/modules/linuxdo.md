@@ -36,6 +36,16 @@ flowchart LR
 
 扩展通过 `authenticatedFetch` 访问后端任务端点，因此本机默认路径与启用 device-key 的自托管路径共享同一认证契约。普通 Linux.do 页面会启动 `linuxdoAdapter` 的统一行为 collector；任务 tab 使用稳定 query marker `?openbiliclaw_linuxdo_task=1`，content script 看到该标记后只安装 task executor、不启动普通行为采集，避免一次 discovery/bootstrap 被误记为用户浏览事件。为兼容旧任务 tab，识别逻辑仍接受旧 hash marker，但 dispatcher 不再生成它：真实 E2E 证明 Discourse SPA 会在 `document_idle` 前清除 hash。
 
+## 排队窗口与扩展吞吐（2026-10-12）
+
+扩展**一次只执行一条** linux.do 任务：开一个真实标签页、串行取数、再把裁剪结果回传，单条常见要几分钟。生产者这一侧的 `wait_seconds`（默认 **900s**，原先 180s）同时承担两件事：等待扩展认领的上限，以及「同类型更老的任务判 `stale_pending`」的阈值。窗口短于扩展一轮的实际耗时，会让排队中的任务在被认领前就被判超时；扩展随后回传的结果因行已作废而被丢弃（`retained_count=0`），表现为「任务在跑、帖子也抓到了，但候选池里一条都没有」。
+
+排查要点：
+
+- `linuxdo_tasks` 里成片的 `{"error": "stale_pending"}` = 窗口问题（本机 2026-10-09 一批 48 条全是它）。
+- 已认领的任务状态是 `in_progress`（带 `claim_token`），`expire_stale_pending` 只回收 `pending`，所以「正在跑」的任务不会被这条规则误杀。
+- 扩展侧：`chrome.storage.session` 里的 runner 行（`openbiliclaw_linuxdo_task_runner`）会让 `pollNextTask()` 在任务真正结束前一直早退；该行只在任务截止时间到期后自愈，重载扩展或重启浏览器可立即清除。若观察到其它来源都在轮询、只有 linux.do 的 `next-task` 为 0 次，就是这种卡住状态。
+
 ## 五种 discovery 模式
 
 `[sources.linuxdo].source_modes` 可从下列五种只读分支中选择：
