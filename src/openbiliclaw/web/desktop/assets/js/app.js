@@ -4962,11 +4962,13 @@ ${savedCardFeedbackBarHtml(listKind)}
     function recommendationStats(item) {
       const segments = [];
       const sourceRank = Math.trunc(Number(item.source_rank) || 0);
-      if (item.view_count > 0) segments.push(`▶ ${formatCountCn(item.view_count)}`);
-      if (item.like_count > 0) segments.push(`👍 ${formatCountCn(item.like_count)}`);
-      if (item.comment_count > 0) segments.push(`💬 ${formatCountCn(item.comment_count)}`);
-      if (item.share_count > 0) segments.push(`🔁 ${formatCountCn(item.share_count)}`);
-      if (item.favorite_count > 0) segments.push(`⭐ ${formatCountCn(item.favorite_count)}`);
+      // 与手机端 view-models.js 同一套等宽中文标签：彩色 emoji 破坏「只有印章是
+      // 彩色」这条世界规则，也让元数据行看起来像模板输出。
+      if (item.view_count > 0) segments.push(`播放 ${formatCountCn(item.view_count)}`);
+      if (item.like_count > 0) segments.push(`点赞 ${formatCountCn(item.like_count)}`);
+      if (item.comment_count > 0) segments.push(`评论 ${formatCountCn(item.comment_count)}`);
+      if (item.share_count > 0) segments.push(`分享 ${formatCountCn(item.share_count)}`);
+      if (item.favorite_count > 0) segments.push(`收藏 ${formatCountCn(item.favorite_count)}`);
       if (item.danmaku_count > 0) segments.push(`弹幕 ${formatCountCn(item.danmaku_count)}`);
       if (item.rating_score > 0) segments.push(`评分 ${item.rating_score.toFixed(1)}`);
       if (item.rating_count > 0) segments.push(`${formatCountCn(item.rating_count)} 人评分`);
@@ -5007,27 +5009,25 @@ ${savedCardFeedbackBarHtml(listKind)}
     };
 
     // Shared recommendation-card feedback action bar markup.
+    // 印章一排不再用「/」分隔：分隔符既占宽度又让整排像调试输出。图标统一
+    // 1.7 描边 + 圆角端点，五个章在一行里必须能在 280px 卡宽内放下。
     function cardFeedbackBarHtml() {
       return `          <div class="card-actions" aria-label="推荐反馈操作">
             <div class="card-feedback-icons" aria-label="喜欢或不感兴趣">
               <button class="feedback-icon-btn" data-action="like" type="button" aria-label="喜欢" title="喜欢">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M7 10v10"/><path d="M15 5.2 14 10h5.4a1.8 1.8 0 0 1 1.7 2.2l-1.5 6A2.4 2.4 0 0 1 17.3 20H7"/><path d="M7 10l4.5-5.3A2 2 0 0 1 15 6v4"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5.4a3 3 0 0 0-3-3l-4 8.6V21h11.1a2 2 0 0 0 2-1.7l1.4-8.6a2 2 0 0 0-2-2.3H14Z"/><path d="M7 21H4.4A1.4 1.4 0 0 1 3 19.6v-6.2A1.4 1.4 0 0 1 4.4 12H7"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn" data-action="dislike" type="button" aria-label="不感兴趣" title="不感兴趣">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M17 14V4"/><path d="M9 18.8 10 14H4.6a1.8 1.8 0 0 1-1.7-2.2l1.5-6A2.4 2.4 0 0 1 6.7 4H17"/><path d="M17 14l-4.5 5.3A2 2 0 0 1 9 18v-4"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v3.6a3 3 0 0 0 3 3l4-8.6V3H5.9a2 2 0 0 0-2 1.7L2.5 13.3a2 2 0 0 0 2 2.3H10Z"/><path d="M17 12h2.6A1.4 1.4 0 0 0 21 10.6V4.4A1.4 1.4 0 0 0 19.6 3H17"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn" data-action="dismiss" type="button" aria-label="忽略" title="忽略">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M9.84 9.91A3 3 0 0 0 12 15c.82 0 1.57-.33 2.11-.87M6.5 6.65A10.45 10.45 0 0 0 2.46 12C3.73 16.06 7.52 19 12 19c1.99 0 3.84-.58 5.4-1.58M11 5.05c.33-.03.66-.05 1-.05 4.48 0 8.27 2.94 9.54 7a10.5 10.5 0 0 1-1.19 2.5"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M6 6l12 12"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn watch-later-btn" data-action="watch-later" type="button" aria-label="稍后再看" title="稍后再看" aria-pressed="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 1.9"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.2 1.9"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn favorite-btn" data-action="favorite" type="button" aria-label="收藏" title="收藏" aria-pressed="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.65 5.37 5.93.86-4.29 4.18 1.01 5.9L12 17.1l-5.31 2.8 1.01-5.9L3.41 9.83l5.93-.86z"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.65l-5.1 2.65.97-5.68L3.75 9.6l5.7-.83L12 3.6Z"/></svg>
               </button>
             </div>
             <div class="comment-field"><input placeholder="想围绕这条聊什么？" aria-label="想围绕这条聊什么？"></div>
@@ -5393,8 +5393,8 @@ ${cardFeedbackBarHtml()}`;
           ? '<button class="small-btn" id="retryEmptyRecommendations" type="button">重新加载</button>'
           : "";
         renderedRecommendationCards.clear();
-        // 空态也是一张卡位：用与其它页面一致的图标 + 文案结构，别让整屏只剩一行字。
-        grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon" aria-hidden="true">🗂</div><div class="empty-state-text">${message}${retry}</div></div>`;
+        // 空态也是一张卡位：画出来的空槽标记，不用 emoji（emoji 一眼就是模板货）。
+        grid.innerHTML = `<div class="empty-state"><span class="empty-state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h13v11h-13z"/><path d="M6.5 4.5h13v11"/><path d="M6.5 11h7"/></svg></span><span class="empty-state-text">${message}${retry}</span></div>`;
         $("#retryEmptyRecommendations")?.addEventListener("click", restartDesktopFailedRecoveries);
         return;
       }

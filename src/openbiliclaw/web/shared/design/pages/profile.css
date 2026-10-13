@@ -11,6 +11,17 @@
 /* the record sheet is one column, never a tray of tiles */
 .profile-page-list { grid-template-columns: minmax(0, 1fr); }
 
+/* 浏览态与编辑态同一张纸：整页一张大卡，分区靠「标题 + 下划线」区分，
+   不再卡里套卡（三格并排的框卡让每个分区都只剩一小条可用宽度）。 */
+.profile-page-list {
+  gap: var(--s5);
+  padding: var(--s5);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift);
+}
+
 /* edit mode is ONE sheet of card stock: the form is ruled inside it,
    never boxed field by field (the phone view is its own root) */
 .profile-page-list:has(> .edit-field),
@@ -114,21 +125,34 @@
 }
 
 /* ── layer plates (desktop renderer) ────────────────────────── */
-/* a layer is a tray of record cards under one brass drawer plate */
+/* a layer is one ruled section of the big sheet: the label is the section
+   heading (title + underline), and its record cards flow left→right across
+   the full sheet width instead of sitting in fixed 280px tiles. */
 .profile-layer {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--s4);
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s5);
 }
 .profile-layer-label {
-  grid-column: 1 / -1;
-  justify-self: start;
-  padding: 3px 9px;
+  flex: 1 1 100%;
+  padding: 0 0 6px;
   color: var(--brass);
-  background: var(--brass-soft);
-  border: 1px solid var(--brass-edge);
-  border-radius: var(--r-ctl);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+/* inside the big sheet a record card is a ruled column, not a card on a card */
+.profile-page-list .profile-item {
+  flex: 1 1 300px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* ── stamped labels ─────────────────────────────────────────── */

@@ -501,16 +501,18 @@ export function formatCountCn(n) {
   return String(value);
 }
 
-// Build the "▶ … · 👍 … · 💬 … · ⭐ … · 弹幕 …" stats line. Only counts
-// > 0 appear; when nothing qualifies the result is "" (render nothing).
+// Build the "播放 … · 点赞 … · 评论 … · 收藏 … · 弹幕 …" stats line. Only counts
+// > 0 appear; when nothing qualifies the result is "" (render nothing). The
+// labels are Chinese words, not emoji: the catalog prints its metadata in mono
+// ink, and colour belongs to the stamp alone (DESIGN.md 色彩 / 不变量 1).
 export function recommendationStats(item) {
   const segments = [];
   const sourceRank = Math.trunc(Number(item?.source_rank) || 0);
-  if (item?.view_count > 0) segments.push(`▶ ${formatCountCn(item.view_count)}`);
-  if (item?.like_count > 0) segments.push(`👍 ${formatCountCn(item.like_count)}`);
-  if (item?.comment_count > 0) segments.push(`💬 ${formatCountCn(item.comment_count)}`);
-  if (item?.share_count > 0) segments.push(`🔁 ${formatCountCn(item.share_count)}`);
-  if (item?.favorite_count > 0) segments.push(`⭐ ${formatCountCn(item.favorite_count)}`);
+  if (item?.view_count > 0) segments.push(`播放 ${formatCountCn(item.view_count)}`);
+  if (item?.like_count > 0) segments.push(`点赞 ${formatCountCn(item.like_count)}`);
+  if (item?.comment_count > 0) segments.push(`评论 ${formatCountCn(item.comment_count)}`);
+  if (item?.share_count > 0) segments.push(`分享 ${formatCountCn(item.share_count)}`);
+  if (item?.favorite_count > 0) segments.push(`收藏 ${formatCountCn(item.favorite_count)}`);
   if (item?.danmaku_count > 0) segments.push(`弹幕 ${formatCountCn(item.danmaku_count)}`);
   if (item?.rating_score > 0) segments.push(`评分 ${Number(item.rating_score).toFixed(1)}`);
   if (item?.rating_count > 0) segments.push(`${formatCountCn(item.rating_count)} 人评分`);

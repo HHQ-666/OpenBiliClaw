@@ -141,7 +141,8 @@
 
   /* —— layout —— */
   --rail-w: 268px;
-  --recommendation-grid-max: 1180px;
+  /* 与 desktop.css 的内容区上限同值：加载更多哨兵要跟卡盘同宽 */
+  --recommendation-grid-max: 1680px;
   --sidenote-w: 300px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);

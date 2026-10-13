@@ -730,9 +730,11 @@
 .delight-feedback-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
+/* 印章平时是「未盖章」的空白：只有墨色图标，没有盒子；hover 才浮出纸片，
+   按下才是章落下。一整排描边方块既吃宽度又让卡片底部像工具条。 */
 .feedback-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -741,25 +743,25 @@
   height: 30px;
   flex: none;
   color: var(--ink-2);
-  background: var(--card-hi);
-  border: 1px solid var(--rule);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--r-ctl);
   transition: background-color var(--imp), border-color var(--imp), color var(--imp),
     transform var(--imp-stamp), box-shadow var(--imp);
 }
 
 .feedback-icon-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   stroke-width: 1.7;
   fill: none;
   stroke: currentColor;
 }
 
 .feedback-icon-btn:hover {
-  border-color: var(--rule-strong);
+  border-color: var(--rule);
   color: var(--ink);
-  background: var(--card-sunk);
+  background: var(--card-hi);
 }
 
 /* pressed = the stamp came down */
@@ -1057,6 +1059,9 @@
 
 .card-actions {
   justify-content: space-between;
+  /* 窄卡（280px 轨道）也要能装下一整排章：允许换行而不是横向溢出 */
+  flex-wrap: wrap;
+  row-gap: var(--s2);
   border-top: 1px solid var(--rule-soft);
   padding-top: 9px;
 }
@@ -2232,6 +2237,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 这两个签是按钮，不是可换行的文本：没有 nowrap 时 CJK 标签会被 flex 压成
+     一字一行（「口味伙伴」竖着排），整条会话栏就散了。 */
+  flex: none;
+  white-space: nowrap;
   padding: 4px 9px;
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -2267,9 +2276,12 @@
     linear-gradient(var(--desk-line) 1px, transparent 1px) 0 0 / 100% 32px;
 }
 
+/* 对话要读得出「谁在说话」：发言者用一行等宽小签标在气泡上方，两侧留白不同，
+   这样一眼就是往来，而不是两列同宽的表格。 */
 .chat-bubble,
 .dialogue-turn {
-  max-width: 76ch;
+  position: relative;
+  max-width: min(68ch, 100%);
   padding: 11px 14px;
   font-size: 13.5px;
   line-height: 1.75;
@@ -2279,6 +2291,23 @@
   border-radius: 1px;
 }
 
+.chat-bubble.agent,
+.chat-bubble.assistant,
+.dialogue-turn.assistant {
+  border-left-color: var(--stamp);
+}
+
+.chat-bubble.agent::before,
+.chat-bubble.assistant::before {
+  content: "阿B";
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  color: var(--stamp-deep);
+}
+
 .chat-bubble.user,
 .dialogue-turn.user {
   margin-left: auto;
@@ -2286,9 +2315,15 @@
   border-left-color: var(--brass-hi);
 }
 
-.chat-bubble.assistant,
-.dialogue-turn.assistant {
-  border-left-color: var(--stamp);
+.chat-bubble.user::before {
+  content: "你";
+  display: block;
+  margin-bottom: 5px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-label);
+  color: var(--ink-3);
 }
 
 .chat-bubble.thinking,
@@ -2476,17 +2511,25 @@
 .empty-state {
   padding: var(--s7) var(--s5);
   text-align: center;
-  background: var(--card-sunk);
-  border: 1px dashed var(--rule-strong);
+  background: transparent;
+  border: 1px solid var(--rule);
   border-radius: var(--r-card);
 }
 
 .empty-state-icon {
+  display: inline-flex;
   font-size: 22px;
   color: var(--ink-3);
 }
 
+.empty-state-icon svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.4;
+}
+
 .empty-state-text {
+  display: block;
   margin-top: var(--s2);
   font-size: 13px;
   color: var(--ink-2);

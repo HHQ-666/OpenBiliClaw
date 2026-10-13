@@ -106,7 +106,7 @@ def test_recommendation_and_saved_surfaces_recognize_weibo_identity() -> None:
     assert 'weibo: "微博"' in desktop_js
     assert '"post"' in desktop_js
     assert "share_count: Number(item?.share_count ?? 0) || 0" in desktop_js
-    assert "🔁 " in desktop_js
+    assert "分享 " in desktop_js
     assert "const savedCoverClass = recommendationCoverClass(item)" in desktop_js
     assert "${recommendationMediaHtml(item)}" in desktop_js
     assert '.platform[data-platform="weibo"]' in desktop_css

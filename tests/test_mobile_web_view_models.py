@@ -554,7 +554,7 @@ class TestMobileWebViewModels:
             assert.equal(getSourceLabel(post.source_platform), "微博");
             assert.equal(buildContentUrl(post), "https://m.weibo.cn/detail/5023456789012345");
             assert.equal(getRecommendationCardKind(post).kind, "text");
-            assert.match(recommendationStats(post), /🔁 321/);
+            assert.match(recommendationStats(post), /分享 321/);
             assert.equal(
               normalizeSourcePlatform({ content_url: "https://weibo.com/u/123" }),
               "weibo",

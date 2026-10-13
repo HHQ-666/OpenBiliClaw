@@ -1,6 +1,6 @@
 """Static regression tests for the mobile web engagement-stats row.
 
-The stats row (▶ views · 👍 likes · 💬 comments · 🔁 shares · ⭐ favorites · 弹幕 danmaku)
+The stats row (播放 views · 点赞 likes · 评论 comments · 分享 shares · 收藏 favorites · 弹幕 danmaku)
 must render on both recommendation cards and the delight tray, mirroring the
 desktop web surface. These are byte-level source contracts, not runtime tests.
 """
@@ -46,11 +46,11 @@ def test_view_models_exposes_stats_formatter() -> None:
     assert "亿" in js
     assert "万" in js
     # Every engagement segment, gated on > 0, joined with " · ".
-    assert "▶ " in js
-    assert "👍 " in js
-    assert "💬 " in js
-    assert "🔁 " in js
-    assert "⭐ " in js
+    assert "播放 " in js
+    assert "点赞 " in js
+    assert "评论 " in js
+    assert "分享 " in js
+    assert "收藏 " in js
     assert "弹幕 " in js
     assert 'segments.join(" · ")' in js
     assert "formatCountCn(item.source_rank)" not in js

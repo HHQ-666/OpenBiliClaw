@@ -60,7 +60,10 @@
 .history-page,
 .chat-page,
 .settings-page {
-  max-width: 1180px;
+  /* 宽屏不再留两条空白边：内容区跟着视口长，到 1680px 才居中停住。
+     正文类区块自己收行宽（画像散文 66ch、对话气泡 68ch），所以变宽不会
+     把阅读变成扫报纸。 */
+  max-width: min(1680px, 100%);
   margin: 0 auto;
   width: 100%;
 }
