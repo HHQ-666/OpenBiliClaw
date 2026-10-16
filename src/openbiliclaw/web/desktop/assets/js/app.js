@@ -259,6 +259,26 @@
     const PLATFORM_COUNT_UNKNOWN_LABEL = "库存待读取";
     const platformLabel = { bilibili: "B 站", youtube: "YouTube", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
     const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "douyin", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
+    const PLATFORM_BRAND_ICONS = {
+      bilibili: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.81 4.65h.85c1.51 0 2.77.84 3.3 2.05.33.75.39 1.6.39 2.47v7.54c0 .87-.06 1.72-.39 2.47-.53 1.21-1.79 2.05-3.3 2.05H5.33c-1.51 0-2.77-.84-3.3-2.05-.33-.75-.39-1.6-.39-2.47V9.17c0-.87.06-1.72.39-2.47.53-1.21 1.79-2.05 3.3-2.05h.85L4.85 2.67a.8.8 0 0 1 .24-.92.78.78 0 0 1 .91-.02l3.24 2.92h5.52l3.24-2.92a.78.78 0 0 1 .91.02.8.8 0 0 1 .24.92L17.81 4.65zm-10.48 5.68c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25zm9.34 0c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25z"/></svg>',
+      github: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>',
+      linuxdo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C9.5 2 7.5 4 7.5 6.5c0 1.6.8 3.1 2 4-2.8 1.4-4.5 4.1-4.5 7.5 0 1 .8 2 2.5 2.5 1.5.5 3.5.5 5 .5s3.5 0 5-.5c1.7-.5 2.5-1.5 2.5-2.5 0-3.4-1.7-6.1-4.5-7.5 1.2-.9 2-2.4 2-4C16.5 4 14.5 2 12 2zm-1.8 4.2c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm3.6 0c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm-1.8 3.3c1 0 1.7.5 1.7 1.2h-3.4c0-.7.7-1.2 1.7-1.2z"/></svg>',
+      zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.3 4C4.6 4 4 4.6 4 5.3v9.4C4 15.4 4.6 16 5.3 16h3.2v3.6c0 .4.5.6.8.3L13 16h5.7c.7 0 1.3-.6 1.3-1.3V5.3C20 4.6 19.4 4 18.7 4H5.3zm4 2.8h5.4c.4 0 .7.3.7.7v4.4c0 .4-.3.7-.7.7H9.3a.7.7 0 0 1-.7-.7V7.5c0-.4.3-.7.7-.7z"/></svg>',
+      douyin: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.7 7.2a4.8 4.8 0 0 1-3.2-2.1V15a4.7 4.7 0 1 1-4.7-4.7c.4 0 .8.1 1.2.2v2.8a2 2 0 1 0 1 1.7V2.5h2.8c.2 1.8 1.4 3.3 2.9 3.8v.9z"/></svg>',
+      xiaohongshu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.5 13.8c-.3.4-.8.7-1.4.7-.7 0-1.2-.4-1.6-.9l-.5-.7-.5.7c-.4.5-.9.9-1.6.9-.6 0-1.1-.3-1.4-.7-.4-.5-.5-1.2-.3-1.9l.7-2.3H8.5c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h1.8l.5-1.8c.1-.4.5-.7.9-.7s.7.3.9.7l.4 1.8h2.3c.4 0 .7.3.7.7s-.3.7-.7.7h-1.9l.7 2.3c.2.7.1 1.4-.3 1.9z"/></svg>',
+      weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.1 4c-4.4 0-8 2.8-8 6.2 0 4.2 5.5 7.8 11.2 7.8 1.8 0 3.3-.4 4.5-1.1 2.9.9 5.2.2 5.2.2s-.9-1.4-.7-2.7c1.1-1.3 1.7-2.8 1.7-4.2 0-3.4-3.6-6.2-8-6.2h-5.9zm1.1 10.3c-2.8 0-5.1-1.8-5.1-4s2.3-4 5.1-4 5.1 1.8 5.1 4-2.3 4-5.1 4zm8.6-8c-.3-.2-.7-.1-.9.2-.2.3-.1.7.2.9.9.6 1.4 1.5 1.4 2.6 0 .4.3.7.7.7s.7-.3.7-.7c0-1.6-.8-3-2.1-3.7z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.6 7.2c-.2-.9-.9-1.6-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4c-.9.2-1.6.9-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8c.2.9.9 1.6 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3L10 15z"/></svg>',
+      twitter: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.2 3h2.9l-6.3 7.2 7.4 9.8h-5.8l-4.5-5.9-5.2 5.9H3.8l6.7-7.7L3.4 3h6l4.1 5.4L18.2 3zm-1 15.3h1.6L7.1 4.6H5.4l11.8 13.7z"/></svg>',
+      reddit: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5.7 10.7a2 2 0 0 1 .3 1c0 2.2-2.7 4-6 4s-6-1.8-6-4a2 2 0 0 1 .3-1 1.7 1.7 0 0 1-.3-1 1.8 1.8 0 0 1 3-1.3 7.4 7.4 0 0 1 3.5-.9l.7-3.3 2.3.5a1.4 1.4 0 1 1 1.3 1.8l-1.8-.4-.5 2.3a7.4 7.4 0 0 1 3.5.9 1.8 1.8 0 0 1 3 1.3 1.7 1.7 0 0 1-.3 1.1zm-7.7 2.3c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1zm4 0c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1z"/></svg>',
+      bangumi: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8.5 7h4a3 3 0 0 1 0 6H9m0 0h4a3 3 0 0 1 0 6H8.5V7z" fill="none" stroke="#fff" stroke-width="2"/></svg>',
+      v2ex: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 9 4 6 4-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+      fallback: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>'
+    };
+    function platformLogoSvg(value) {
+      const slug = canonicalPlatformSlug(value);
+      return PLATFORM_BRAND_ICONS[slug] || PLATFORM_BRAND_ICONS.fallback;
+    }
     const textCardContentTypes = new Set(["tweet", "thread", "answer", "article", "question", "post", "comment", "repository"]);
     // v0.3.118+: bilibili is selectable like every other source — default
     // checked (recommended) but no longer forced. At least one source must
@@ -3425,9 +3445,12 @@
         card.dataset.itemKey = item.item_key;
         const url = contentUrl(item);
         const savedCoverClass = recommendationCoverClass(item);
+        const savedPlatformRaw = item.source_platform || item.platform || "bilibili";
+        const savedPlatformSlug = canonicalPlatformSlug(savedPlatformRaw);
+        const savedPlatformTitle = `来自 ${platformName(savedPlatformRaw)}`;
         const coverContent = `
             ${recommendationMediaHtml(item)}
-            <span class="platform" data-platform="${escapeHtml(item.source_platform || item.platform || "bilibili")}">${escapeHtml(platformName(item.source_platform || item.platform))}</span>
+            <span class="platform" data-platform="${escapeHtml(savedPlatformSlug)}" title="${escapeHtml(savedPlatformTitle)}" aria-label="${escapeHtml(savedPlatformTitle)}">${platformLogoSvg(savedPlatformRaw)}</span>
           `;
         card.innerHTML = `
           ${url
@@ -5226,16 +5249,19 @@ ${savedCardFeedbackBarHtml(listKind)}
         ? `<span class="duration-badge">${escapeHtml(formatDuration(item.duration))}</span>`
         : "";
       const stats = recommendationStats(item);
+      const platformSlug = canonicalPlatformSlug(item.platform || "bilibili");
+      const platformTitle = `来自 ${platformName(item.platform)}`;
+      const platformBadge = `<span class="platform" data-platform="${escapeHtml(platformSlug)}" title="${escapeHtml(platformTitle)}" aria-label="${escapeHtml(platformTitle)}">${platformLogoSvg(item.platform)}</span>`;
       return `
           ${url
           ? `<a class="cover${recommendationCoverClass(item)}" data-platform="${escapeHtml(item.platform)}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="打开 ${escapeHtml(item.title)}">
             ${recommendationMediaHtml(item, index)}
-            <span class="platform" data-platform="${escapeHtml(item.platform || "bilibili")}">${escapeHtml(platformName(item.platform))}</span>
+            ${platformBadge}
             ${durationBadge}
           </a>`
           : `<button class="cover${recommendationCoverClass(item)}" data-platform="${escapeHtml(item.platform)}" type="button" aria-label="打开 ${escapeHtml(item.title)}">
             ${recommendationMediaHtml(item, index)}
-            <span class="platform" data-platform="${escapeHtml(item.platform || "bilibili")}">${escapeHtml(platformName(item.platform))}</span>
+            ${platformBadge}
             ${durationBadge}
           </button>`}
           <div>
