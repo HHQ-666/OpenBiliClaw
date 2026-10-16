@@ -3450,7 +3450,7 @@
         const savedPlatformTitle = `来自 ${platformName(savedPlatformRaw)}`;
         const coverContent = `
             ${recommendationMediaHtml(item)}
-            <span class="platform" data-platform="${escapeHtml(savedPlatformSlug)}" title="${escapeHtml(savedPlatformTitle)}" aria-label="${escapeHtml(savedPlatformTitle)}">${platformLogoSvg(savedPlatformRaw)}</span>
+            <span class="platform" data-platform="${escapeHtml(savedPlatformSlug)}" title="${escapeHtml(savedPlatformTitle)}" aria-label="${escapeHtml(savedPlatformTitle)}">${platformLogoSvg(savedPlatformRaw)}<span class="platform-name">${escapeHtml(platformName(savedPlatformRaw))}</span></span>
           `;
         card.innerHTML = `
           ${url
@@ -5251,7 +5251,7 @@ ${savedCardFeedbackBarHtml(listKind)}
       const stats = recommendationStats(item);
       const platformSlug = canonicalPlatformSlug(item.platform || "bilibili");
       const platformTitle = `来自 ${platformName(item.platform)}`;
-      const platformBadge = `<span class="platform" data-platform="${escapeHtml(platformSlug)}" title="${escapeHtml(platformTitle)}" aria-label="${escapeHtml(platformTitle)}">${platformLogoSvg(item.platform)}</span>`;
+      const platformBadge = `<span class="platform" data-platform="${escapeHtml(platformSlug)}" title="${escapeHtml(platformTitle)}" aria-label="${escapeHtml(platformTitle)}">${platformLogoSvg(item.platform)}<span class="platform-name">${escapeHtml(platformName(item.platform))}</span></span>`;
       return `
           ${url
           ? `<a class="cover${recommendationCoverClass(item)}" data-platform="${escapeHtml(item.platform)}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="打开 ${escapeHtml(item.title)}">

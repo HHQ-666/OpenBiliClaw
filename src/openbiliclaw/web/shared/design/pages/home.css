@@ -81,20 +81,22 @@
   left: 8px;
   bottom: 8px;
   z-index: 2;
-  width: 24px;
   height: 24px;
-  padding: 0;
+  padding: 0 8px 0 6px;
   border-radius: 9999px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: transform var(--imp);
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  transition: transform var(--imp), box-shadow var(--imp);
 }
 
 .video-card .cover .platform:hover {
-  transform: scale(1.1);
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
 .video-card .cover .platform svg {
@@ -104,19 +106,26 @@
   flex-shrink: 0;
 }
 
-.platform[data-platform="bilibili"] { background: #fb7299; color: #fff; border-color: transparent; }
-.platform[data-platform="zhihu"] { background: #0084ff; color: #fff; border-color: transparent; }
-.platform[data-platform="xiaohongshu"], .platform[data-platform="xhs"] { background: #ff2442; color: #fff; border-color: transparent; }
-.platform[data-platform="reddit"], .platform[data-platform="rd"] { background: #ff4500; color: #fff; border-color: transparent; }
-.platform[data-platform="weibo"], .platform[data-platform="wb"] { background: #e6162d; color: #fff; border-color: transparent; }
-.platform[data-platform="bangumi"], .platform[data-platform="bgm"] { background: #f09199; color: #fff; border-color: transparent; }
-.platform[data-platform="youtube"] { background: #ff0000; color: #fff; border-color: transparent; }
-.platform[data-platform="douyin"] { background: #161823; color: #fff; border-color: transparent; }
-.platform[data-platform="twitter"], .platform[data-platform="x"] { background: #000; color: #fff; border-color: transparent; }
-.platform[data-platform="github"], .platform[data-platform="gh"] { background: #24292e; color: #fff; border-color: transparent; }
-.platform[data-platform="linuxdo"], .platform[data-platform="linux.do"] { background: #1f2328; color: #f2a900; border-color: transparent; }
-.platform[data-platform="v2ex"], .platform[data-platform="v2"] { background: #333344; color: #fff; border-color: transparent; }
-.platform[data-platform="instagram"], .platform[data-platform="ig"] { background: #e1306c; color: #fff; border-color: transparent; }
+.video-card .cover .platform .platform-name {
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.2px;
+}
+
+.platform[data-platform="bilibili"] { background: #fb7299; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="zhihu"] { background: #0084ff; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="xiaohongshu"], .platform[data-platform="xhs"] { background: #ff2442; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="reddit"], .platform[data-platform="rd"] { background: #ff4500; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="weibo"], .platform[data-platform="wb"] { background: #e6162d; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="bangumi"], .platform[data-platform="bgm"] { background: #f09199; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="youtube"] { background: #ff0000; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="douyin"] { background: #161823; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.platform[data-platform="twitter"], .platform[data-platform="x"] { background: #000; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.platform[data-platform="github"], .platform[data-platform="gh"] { background: #24292e; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.platform[data-platform="linuxdo"], .platform[data-platform="linux.do"] { background: #1f2328; color: #f2a900; border-color: rgba(242, 169, 0, 0.35); }
+.platform[data-platform="v2ex"], .platform[data-platform="v2"] { background: #333344; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.platform[data-platform="instagram"], .platform[data-platform="ig"] { background: #e1306c; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
 
 .video-card .cover-actions {
   position: absolute;
