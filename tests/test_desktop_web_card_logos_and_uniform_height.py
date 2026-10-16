@@ -59,17 +59,19 @@ def test_desktop_covers_enforce_uniform_16_to_9_ratio_for_all_cards() -> None:
 
 
 def test_desktop_platform_badge_css_styling_and_colors() -> None:
-    """Platform badge is styled as an icon pill with brand background colors."""
+    """Platform badge is styled as a brand pill with SVG logo and label."""
     platform_base = _rule(".platform")
-    assert "width: 26px;" in platform_base
-    assert "height: 26px;" in platform_base
+    assert "height: 24px;" in platform_base
+    assert "padding: 0 8px 0 6px;" in platform_base
     assert "display: inline-flex;" in platform_base
     assert "align-items: center;" in platform_base
-    assert "justify-content: center;" in platform_base
+    assert "gap: 5px;" in platform_base
 
     platform_svg = _rule(".platform svg")
-    assert "width: 15px;" in platform_svg
-    assert "height: 15px;" in platform_svg
+    assert "width: 14px;" in platform_svg
+    assert "height: 14px;" in platform_svg
+
+    assert ".platform .platform-name" in APP_CSS
 
     # Platform colors must cover video and text platforms
     assert '.platform[data-platform="github"]' in APP_CSS
