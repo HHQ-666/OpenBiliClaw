@@ -697,7 +697,7 @@
     .delight.is-height-settling { transition: height 200ms ease; overflow: hidden; }
     .small-btn.ghost-danger { color: var(--danger); background: color-mix(in oklab, var(--danger), var(--surface) 92%); border-color: color-mix(in oklab, var(--danger), var(--border-soft) 70%); }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--recommendation-card-min)), var(--recommendation-card-max))); justify-content: center; gap: var(--space-4); max-width: var(--recommendation-grid-max); margin-inline: auto; }
-    .video-card { min-width: 0; display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: 22px; background: var(--accent-subtle); box-shadow: var(--elev-ring); transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), opacity var(--motion-base) var(--ease-standard); }
+    .video-card { min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: 22px; background: var(--accent-subtle); box-shadow: var(--elev-ring); box-sizing: border-box; height: 100%; transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), opacity var(--motion-base) var(--ease-standard); }
     .video-card:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--accent), 0 0 8px 3px color-mix(in oklab, var(--accent), transparent 40%); }
     .video-card.is-removing { opacity: 0; transform: translateY(6px) scale(0.98); pointer-events: none; }
     .cover { display: block; width: 100%; position: relative; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-lg); overflow: hidden; background: linear-gradient(135deg, var(--surface-warm), var(--accent-deep)); color: inherit; padding: 0; text-align: left; text-decoration: none; cursor: pointer; transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
@@ -723,8 +723,8 @@
     .skeleton-shimmer::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--surface), transparent 40%), transparent); animation: skeleton-sweep 1.4s var(--ease-standard) infinite; }
     @keyframes skeleton-sweep { to { transform: translateX(100%); } }
     @media (prefers-reduced-motion: reduce) { .skeleton-shimmer::after { animation: none; } }
-    .cover.is-text-card { display: flex; align-items: flex-start; justify-content: flex-start; min-height: 132px; padding: var(--space-3) calc(var(--space-3) + 76px) var(--space-3) var(--space-3); text-align: left; }
-    .cover.is-text-card.is-coverless { aspect-ratio: auto; min-height: 96px; max-height: 124px; }
+    .cover.is-text-card { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; aspect-ratio: 16 / 9; width: 100%; box-sizing: border-box; padding: var(--space-3) calc(var(--space-3) + 36px) var(--space-3) var(--space-3); text-align: left; }
+    .cover.is-text-card.is-coverless { aspect-ratio: 16 / 9; }
     /* issue #79 §2: glassmorphism backdrop for text cards that carry a cover —
        the blurred image unifies the look with photo cards, and a translucent
        scrim keeps the excerpt legible on top of any image. */
@@ -732,20 +732,26 @@
     .cover.is-text-card.has-backdrop .cover-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(18px) saturate(1.15); transform: scale(1.18); z-index: -2; }
     .cover.is-text-card.has-backdrop::before { content: ""; position: absolute; inset: 0; z-index: -1; background: color-mix(in oklab, var(--surface), transparent 22%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
     .cover.is-text-card.has-backdrop .cover-text { color: var(--fg); font-weight: 600; text-shadow: 0 1px 2px color-mix(in oklab, var(--surface), transparent 40%); }
-    .cover-text { margin: 0; color: var(--fg-2); font-size: var(--text-sm); line-height: 1.55; font-weight: 550; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+    .cover-text { margin: 0; color: var(--fg-2); font-size: var(--text-sm); line-height: 1.55; font-weight: 550; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
     .cover.is-coverless .cover-text { -webkit-line-clamp: 4; }
     .cover.is-text-card:not(.has-backdrop) { background: var(--surface); border: 1px solid var(--border-soft); color: var(--fg); }
     .cover.is-text-card:not(.has-backdrop) .cover-text { color: var(--fg); text-shadow: none; }
-    .platform { position: absolute; right: var(--space-2); top: var(--space-2); border-radius: var(--radius-pill); background: color-mix(in oklab, var(--fg), transparent 8%); color: var(--surface); padding: 4px 9px; font-size: 12px; }
+    .platform { position: absolute; right: var(--space-2); top: var(--space-2); width: 26px; height: 26px; border-radius: var(--radius-pill); background: color-mix(in oklab, var(--fg), transparent 8%); color: var(--surface); display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28); z-index: 2; transition: transform var(--motion-fast) var(--ease-standard); }
+    .platform:hover { transform: scale(1.1); }
+    .platform svg { width: 15px; height: 15px; display: block; flex-shrink: 0; }
     .platform[data-platform="bilibili"] { background: var(--platform-bilibili); color: var(--accent-on); }
     .platform[data-platform="zhihu"] { background: var(--platform-zhihu); color: var(--accent-on); }
-    .platform[data-platform="xiaohongshu"] { background: var(--platform-xiaohongshu); color: var(--accent-on); }
-    .platform[data-platform="reddit"] { background: var(--platform-reddit); color: var(--accent-on); }
-    .platform[data-platform="weibo"] { background: var(--platform-weibo); color: #fff; }
-    .platform[data-platform="bangumi"] { background: var(--platform-bangumi); color: #fff; }
+    .platform[data-platform="xiaohongshu"], .platform[data-platform="xhs"] { background: var(--platform-xiaohongshu); color: var(--accent-on); }
+    .platform[data-platform="reddit"], .platform[data-platform="rd"] { background: var(--platform-reddit); color: var(--accent-on); }
+    .platform[data-platform="weibo"], .platform[data-platform="wb"] { background: var(--platform-weibo); color: #fff; }
+    .platform[data-platform="bangumi"], .platform[data-platform="bgm"] { background: var(--platform-bangumi); color: #fff; }
     .platform[data-platform="youtube"] { background: var(--danger); color: var(--accent-on); }
-    .platform[data-platform="douyin"] { background: var(--fg); color: var(--surface); }
-    .platform[data-platform="twitter"] { background: var(--fg); color: var(--surface); }
+    .platform[data-platform="douyin"] { background: #161823; color: #fff; }
+    .platform[data-platform="twitter"], .platform[data-platform="x"] { background: #000; color: #fff; }
+    .platform[data-platform="github"], .platform[data-platform="gh"] { background: #24292e; color: #fff; }
+    .platform[data-platform="linuxdo"], .platform[data-platform="linux.do"] { background: #1f2328; color: #f2a900; }
+    .platform[data-platform="v2ex"], .platform[data-platform="v2"] { background: #333344; color: #fff; }
+    .platform[data-platform="instagram"], .platform[data-platform="ig"] { background: #e1306c; color: #fff; }
     .duration-badge { position: absolute; right: var(--space-2); bottom: var(--space-2); border-radius: var(--radius-pill); background: var(--overlay); color: var(--surface); padding: 3px 7px; font-size: 12px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
     .video-title { font-family: var(--font-body); font-weight: 650; font-size: var(--text-base); line-height: 1.35; margin: 0; color: var(--fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .video-meta { color: var(--muted); font-size: var(--text-sm); margin: 0; }
@@ -753,7 +759,7 @@
     .up-link { color: inherit; text-decoration: none; }
     .up-link:hover { color: var(--fg-2); text-decoration: underline; }
     .video-stats { color: var(--muted); font-size: var(--text-sm); margin: 4px 0 0; }
-    .reason { --reason-line-height: 1.5; --reason-lines: 4; color: var(--fg-2); font-size: var(--text-sm); line-height: var(--reason-line-height); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: color-mix(in oklab, var(--accent), transparent 70%); border: 1px solid var(--border); display: block; overflow: hidden; cursor: pointer; }
+    .reason { flex: 1 1 auto; --reason-line-height: 1.5; --reason-lines: 4; color: var(--fg-2); font-size: var(--text-sm); line-height: var(--reason-line-height); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: color-mix(in oklab, var(--accent), transparent 70%); border: 1px solid var(--border); display: block; overflow: hidden; cursor: pointer; }
     .reason-text { display: -webkit-box; -webkit-line-clamp: var(--reason-lines); -webkit-box-orient: vertical; max-height: calc(1em * var(--reason-line-height) * var(--reason-lines)); overflow: hidden; }
     .reason:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     .reason.is-expanded { overflow: visible; }
