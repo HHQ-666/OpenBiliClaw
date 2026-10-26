@@ -9526,6 +9526,12 @@ def create_app(
     ) -> tuple[RecommendationListResponse, float]:
         nonlocal first_page_topup_attempted_at, frontier_seed_last_at
 
+        # The channel now mixes fresh arXiv/HF papers with the platform videos
+        # users have been served before. A 40-row history window is dominated
+        # by the newest wire batch; read a wider window and let the classifier
+        # + franchise cap produce the visible 20.
+        history_limit = 120 if channel == AI_FRONTIER_CHANNEL else 40
+
         def _admission_min_score() -> float:
             runtime_config = getattr(ctx, "config", None) or config
             discovery_config = getattr(runtime_config, "discovery", None)
@@ -9556,7 +9562,7 @@ def create_app(
         # would leave gaps that other items further back in time would
         # have filled.
         rows = _filter_low_confidence(
-            ctx.database.get_recommendations(limit=40, exclude_processed=True)
+            ctx.database.get_recommendations(limit=history_limit, exclude_processed=True)
         )
         if channel == AI_FRONTIER_CHANNEL:
             rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]
@@ -9611,7 +9617,9 @@ def create_app(
                     else:
                         await ctx.recommendation_engine.serve(profile, limit=10)
                     rows = _filter_low_confidence(
-                        ctx.database.get_recommendations(limit=40, exclude_processed=True)
+                        ctx.database.get_recommendations(
+                            limit=history_limit, exclude_processed=True
+                        )
                     )
                     if channel == AI_FRONTIER_CHANNEL:
                         rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]

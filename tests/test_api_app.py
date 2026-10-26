@@ -6056,7 +6056,7 @@ class TestBackendAPI:
             def get_recommendations(
                 self, limit: int = 20, *, exclude_processed: bool = False
             ) -> list[dict[str, object]]:
-                assert limit == 40
+                assert limit in {40, 120}
                 assert exclude_processed is True
                 return [
                     {
