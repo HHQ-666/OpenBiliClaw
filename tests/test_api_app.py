@@ -6049,6 +6049,89 @@ class TestBackendAPI:
         assert data["items"][0]["up_mid"] == 112233
         assert_publication(data["items"][0])
 
+    def test_recommendations_ai_frontier_channel_filters_and_marks_rows(self) -> None:
+        from fastapi.testclient import TestClient
+
+        class FakeDatabase:
+            def get_recommendations(
+                self, limit: int = 20, *, exclude_processed: bool = False
+            ) -> list[dict[str, object]]:
+                assert limit == 40
+                assert exclude_processed is True
+                return [
+                    {
+                        "id": 21,
+                        "bvid": "BVF-FRONTIER",
+                        "title": "Gemini 4 Argon 正式发布，基准第一",
+                        "description": "1M 上下文，Agent 能力大幅提升。",
+                        "topic": "前沿模型",
+                        "source_platform": "bilibili",
+                        "content_type": "video",
+                        "franchise_key": "",
+                    },
+                    {
+                        "id": 22,
+                        "bvid": "BVF-COOKING",
+                        "title": "家常菜谱：青瓜酿肉",
+                        "description": "一口锅就能焖熟的家常菜。",
+                        "topic": "家常美食",
+                        "source_platform": "bilibili",
+                        "content_type": "video",
+                        "franchise_key": "",
+                    },
+                ]
+
+        client = TestClient(create_app(database=FakeDatabase()))
+
+        channel = client.get("/api/recommendations?channel=ai_frontier")
+        assert channel.status_code == 200, channel.text
+        channel_data = channel.json()
+        assert channel_data["channel"] == "ai_frontier"
+        assert [item["bvid"] for item in channel_data["items"]] == ["BVF-FRONTIER"]
+        assert channel_data["items"][0]["ai_frontier"] is True
+        assert channel_data["items"][0]["ai_frontier_score"] >= 6.0
+        assert "前沿模型" in channel_data["items"][0]["ai_frontier_tags"]
+        assert channel_data["ai_frontier_count"] == 1
+
+        # The one-second snapshot cache is channel-aware: a general read right
+        # after the channel read must not inherit the filtered list.
+        general = client.get("/api/recommendations")
+        assert general.status_code == 200
+        general_data = general.json()
+        assert {item["bvid"] for item in general_data["items"]} == {
+            "BVF-FRONTIER",
+            "BVF-COOKING",
+        }
+        assert general_data["channel"] == ""
+        assert general_data["ai_frontier_count"] == 1
+
+    def test_recommendations_rejects_unknown_channel(self) -> None:
+        from fastapi.testclient import TestClient
+
+        class FakeDatabase:
+            def get_recommendations(
+                self, limit: int = 20, *, exclude_processed: bool = False
+            ) -> list[dict[str, object]]:
+                return []
+
+        response = TestClient(create_app(database=FakeDatabase())).get(
+            "/api/recommendations?channel=not-a-channel"
+        )
+
+        assert response.status_code == 422
+        assert "channel" in response.text
+
+    def test_ai_frontier_channel_request_model_accepts_alias_and_rejects_unknown(self) -> None:
+        from pydantic import ValidationError
+
+        from openbiliclaw.api.models import RecommendationReshuffleIn
+
+        assert RecommendationReshuffleIn(channel="ai-frontier").channel == "ai_frontier"
+        assert RecommendationReshuffleIn(channel="AI_FRONTIER").channel == "ai_frontier"
+        assert RecommendationReshuffleIn(channel="").channel == ""
+        with pytest.raises(ValidationError):
+            RecommendationReshuffleIn(channel="not-a-channel")
+
     def test_recommendations_endpoint_exposes_fail_closed_github_source_metadata(
         self,
     ) -> None:
@@ -7423,10 +7506,16 @@ class TestBackendAPI:
                     "up_mid": 987654321,
                     "published_at": "2026-07-08T06:30:00Z",
                     "published_label": "3 days ago",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                 },
                 {
                     "id": 12,
                     "bvid": "BV1PLAIN",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                     "item_key": "bilibili:BV1PLAIN",
                     "title": "朴素对象",
                     "up_name": "UPB",
@@ -7739,6 +7828,9 @@ class TestBackendAPI:
                 {
                     "id": 22,
                     "bvid": "BV1NEXT",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                     "item_key": "bilibili:BV1NEXT",
                     "title": "下一批 1",
                     "up_name": "UPB",

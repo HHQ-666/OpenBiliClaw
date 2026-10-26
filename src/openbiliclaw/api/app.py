@@ -221,6 +221,10 @@ from openbiliclaw.discovery.temporal import (
     is_complete_temporal_evidence_marker,
 )
 from openbiliclaw.llm.base import safe_llm_failure_message
+from openbiliclaw.recommendation.frontier import (
+    AI_FRONTIER_CHANNEL,
+    assess_ai_frontier_row,
+)
 from openbiliclaw.recommendation_runtime import (
     RECOMMENDATION_PORT_ENV,
     RECOMMENDATION_SOCK_ENV,
@@ -2499,10 +2503,12 @@ def create_app(
     auto_replenishment_task: asyncio.Task[None] | None = None
     auto_replenishment_started_at = 0.0
     first_page_topup_attempted_at = 0.0
+    frontier_seed_last_at = 0.0
     recommendation_snapshot_cache: RecommendationListResponse | None = None
     recommendation_snapshot_cached_at = 0.0
     recommendation_snapshot_expires_at = 0.0
     recommendation_snapshot_dislike_digest = ""
+    recommendation_snapshot_channel = ""
     recommendation_snapshot_lock = asyncio.Lock()
     runtime_status_cache: RuntimeStatusResponse | None = None
     runtime_status_cached_at = 0.0
@@ -2513,10 +2519,12 @@ def create_app(
         nonlocal recommendation_snapshot_cache, recommendation_snapshot_cached_at
         nonlocal recommendation_snapshot_expires_at
         nonlocal recommendation_snapshot_dislike_digest
+        nonlocal recommendation_snapshot_channel
         recommendation_snapshot_cache = None
         recommendation_snapshot_cached_at = 0.0
         recommendation_snapshot_expires_at = 0.0
         recommendation_snapshot_dislike_digest = ""
+        recommendation_snapshot_channel = ""
 
     def _effective_recommendation_dislikes() -> tuple[list[str], str]:
         """Read the latest output-policy snapshot without waiting for rebuild."""
@@ -8561,46 +8569,63 @@ def create_app(
                 row = None
             return int(row.get("id", 0)) if row else 0
 
-        return [
-            RecommendationOut(
+        def out_for(item: Any) -> RecommendationOut:
+            content = item.content
+            assessment = assess_ai_frontier_row(
+                {
+                    "title": getattr(content, "title", ""),
+                    "body_text": getattr(content, "body_text", ""),
+                    "description": getattr(content, "description", ""),
+                    "topic": str(getattr(item, "topic_label", "") or ""),
+                    "tags": getattr(content, "tags", ()),
+                    "source_platform": getattr(content, "source_platform", ""),
+                    "content_type": getattr(content, "content_type", ""),
+                    "up_name": getattr(content, "up_name", ""),
+                    "author_name": getattr(content, "author_name", ""),
+                }
+            )
+            return RecommendationOut(
                 id=resolved_id_for(item),
-                bvid=str(item.content.bvid),
-                item_key=item_key_for(item.content),
-                title=str(item.content.title),
-                up_name=str(item.content.up_name),
-                cover_url=str(item.content.cover_url),
+                bvid=str(content.bvid),
+                item_key=item_key_for(content),
+                title=str(content.title),
+                up_name=str(content.up_name),
+                cover_url=str(content.cover_url),
                 expression=str(item.expression),
                 topic_label=str(item.topic_label),
                 presented=bool(item.presented),
                 feedback_type=str(getattr(item, "feedback_type", "") or ""),
-                content_id=str(getattr(item.content, "content_id", "") or item.content.bvid),
-                content_url=str(getattr(item.content, "content_url", "") or ""),
-                source_platform=str(getattr(item.content, "source_platform", "") or "bilibili"),
-                published_at=str(getattr(item.content, "published_at", "") or ""),
-                published_label=str(getattr(item.content, "published_label", "") or ""),
-                content_type=str(getattr(item.content, "content_type", "") or "video"),
-                body_text=str(getattr(item.content, "body_text", "") or ""),
+                content_id=str(getattr(content, "content_id", "") or content.bvid),
+                content_url=str(getattr(content, "content_url", "") or ""),
+                source_platform=str(getattr(content, "source_platform", "") or "bilibili"),
+                published_at=str(getattr(content, "published_at", "") or ""),
+                published_label=str(getattr(content, "published_label", "") or ""),
+                content_type=str(getattr(content, "content_type", "") or "video"),
+                body_text=str(getattr(content, "body_text", "") or ""),
                 source_metadata=_fail_closed_source_metadata(
-                    getattr(item.content, "source_metadata", {})
+                    getattr(content, "source_metadata", {})
                 ),
-                duration=int(getattr(item.content, "duration", 0) or 0),
-                view_count=int(getattr(item.content, "view_count", 0) or 0),
-                like_count=int(getattr(item.content, "like_count", 0) or 0),
-                danmaku_count=int(getattr(item.content, "danmaku_count", 0) or 0),
+                duration=int(getattr(content, "duration", 0) or 0),
+                view_count=int(getattr(content, "view_count", 0) or 0),
+                like_count=int(getattr(content, "like_count", 0) or 0),
+                danmaku_count=int(getattr(content, "danmaku_count", 0) or 0),
                 favorite_count=int(
-                    getattr(item.content, "favorite_count", 0)
-                    or getattr(item.content, "collect_count", 0)
+                    getattr(content, "favorite_count", 0)
+                    or getattr(content, "collect_count", 0)
                     or 0
                 ),
-                comment_count=int(getattr(item.content, "comment_count", 0) or 0),
-                share_count=int(getattr(item.content, "share_count", 0) or 0),
-                rating_score=float(getattr(item.content, "rating_score", 0.0) or 0.0),
-                rating_count=int(getattr(item.content, "rating_count", 0) or 0),
-                source_rank=int(getattr(item.content, "source_rank", 0) or 0),
-                up_mid=int(getattr(item.content, "up_mid", 0) or 0),
+                comment_count=int(getattr(content, "comment_count", 0) or 0),
+                share_count=int(getattr(content, "share_count", 0) or 0),
+                rating_score=float(getattr(content, "rating_score", 0.0) or 0.0),
+                rating_count=int(getattr(content, "rating_count", 0) or 0),
+                source_rank=int(getattr(content, "source_rank", 0) or 0),
+                up_mid=int(getattr(content, "up_mid", 0) or 0),
+                ai_frontier=assessment.is_frontier,
+                ai_frontier_score=assessment.score,
+                ai_frontier_tags=list(assessment.tags),
             )
-            for item in items
-        ]
+
+        return [out_for(item) for item in items]
 
     def _filter_recommendation_objects_for_latest_dislikes(items: list[Any]) -> list[Any]:
         """Recheck an in-flight serve batch at the final HTTP boundary."""
@@ -9492,8 +9517,9 @@ def create_app(
 
     async def _load_recommendations(
         disliked_topics: list[str] | None = None,
+        channel: str = "",
     ) -> tuple[RecommendationListResponse, float]:
-        nonlocal first_page_topup_attempted_at
+        nonlocal first_page_topup_attempted_at, frontier_seed_last_at
 
         def _admission_min_score() -> float:
             runtime_config = getattr(ctx, "config", None) or config
@@ -9527,6 +9553,8 @@ def create_app(
         rows = _filter_low_confidence(
             ctx.database.get_recommendations(limit=40, exclude_processed=True)
         )
+        if channel == AI_FRONTIER_CHANNEL:
+            rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]
 
         # Fresh-install bootstrap + thin-first-page top-up (issue #81):
         # ``recommendations`` table is the write-only history of items we've
@@ -9565,10 +9593,23 @@ def create_app(
                     first_page_topup_attempted_at = time.monotonic()
                     row_count_before = len(rows)
                     profile = await ctx.soul_engine.get_profile()
-                    await ctx.recommendation_engine.serve(profile, limit=10)
+                    if channel:
+                        # Channel-aware top-up: a general serve would write
+                        # non-frontier rows the channel immediately filters
+                        # out again, burning history slots for nothing.
+                        try:
+                            await ctx.recommendation_engine.serve(
+                                profile, limit=10, channel=channel
+                            )
+                        except TypeError:
+                            await ctx.recommendation_engine.serve(profile, limit=10)
+                    else:
+                        await ctx.recommendation_engine.serve(profile, limit=10)
                     rows = _filter_low_confidence(
                         ctx.database.get_recommendations(limit=40, exclude_processed=True)
                     )
+                    if channel == AI_FRONTIER_CHANNEL:
+                        rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]
                     await _publish_pool_status_snapshot()
                     logger.info(
                         "GET /api/recommendations top-up: history had %d "
@@ -9578,6 +9619,29 @@ def create_app(
                         len(rows),
                     )
 
+        if channel == AI_FRONTIER_CHANNEL and len(rows) < 5 and not _init_active_now():
+            # The channel is a narrow view; a healthy general pool can still
+            # leave it dry. Seed the normal keyword store with the curated
+            # frontier pack (throttled), then wake the existing background
+            # replenishment. The fetch/eval pipeline stays exactly the same.
+            if time.monotonic() - frontier_seed_last_at >= 1800:
+                with suppress(Exception):
+                    profile = await ctx.soul_engine.get_profile()
+                    from openbiliclaw.discovery.frontier_seed import seed_frontier_keywords
+                    from openbiliclaw.discovery.keyword_digest import profile_kw_digest
+
+                    runtime_config = getattr(ctx, "config", None) or config
+                    seeded = await asyncio.to_thread(
+                        seed_frontier_keywords,
+                        ctx.database,
+                        profile_kw_digest(profile),
+                        sources=getattr(runtime_config, "sources", None),
+                    )
+                    frontier_seed_last_at = time.monotonic()
+                    logger.info("AI frontier channel seeded %d keyword(s)", seeded)
+            with suppress(Exception):
+                await _trigger_replenishment_if_needed(force=True)
+
         if disliked_topics:
             from openbiliclaw.recommendation.exclusion import filter_recommendation_rows
 
@@ -9585,47 +9649,54 @@ def create_app(
         rows, snapshot_expires_at = _recommendation_snapshot_rows_and_expiry(rows)
         rows = _cap_by_franchise(rows, max_per_franchise=2)[:20]
 
+        def _out_from_row(row: dict[str, Any]) -> RecommendationOut:
+            assessment = assess_ai_frontier_row(row)
+            return RecommendationOut(
+                id=int(row["id"]),
+                bvid=str(row.get("bvid", "")),
+                item_key=str(row.get("item_key", "")),
+                title=str(row.get("title", "")),
+                up_name=str(row.get("up_name", "")),
+                cover_url=str(row.get("cover_url", "")),
+                expression=str(row.get("expression", "")),
+                topic_label=str(row.get("topic", "")),
+                presented=bool(row.get("presented", 0)),
+                feedback_type=str(row.get("feedback_type", "") or ""),
+                content_id=str(row.get("content_id", "") or row.get("bvid", "")),
+                content_url=str(row.get("content_url", "") or ""),
+                source_platform=str(row.get("source_platform", "") or "bilibili"),
+                published_at=str(row.get("published_at", "") or ""),
+                published_label=str(row.get("published_label", "") or ""),
+                content_type=str(row.get("content_type", "") or "video"),
+                body_text=str(row.get("body_text", "") or ""),
+                source_metadata=_fail_closed_source_metadata(row.get("source_metadata", {})),
+                duration=int(row.get("duration", 0) or 0),
+                view_count=int(row.get("view_count", 0) or 0),
+                like_count=int(row.get("like_count", 0) or 0),
+                danmaku_count=int(row.get("danmaku_count", 0) or 0),
+                favorite_count=int(
+                    row.get("favorite_count", 0) or row.get("collect_count", 0) or 0
+                ),
+                comment_count=int(row.get("comment_count", 0) or 0),
+                share_count=int(row.get("share_count", 0) or 0),
+                rating_score=float(row.get("rating_score", 0.0) or 0.0),
+                rating_count=int(row.get("rating_count", 0) or 0),
+                source_rank=int(row.get("source_rank", 0) or 0),
+                up_mid=int(row.get("up_mid", 0) or 0),
+                ai_frontier=assessment.is_frontier,
+                ai_frontier_score=assessment.score,
+                ai_frontier_tags=list(assessment.tags),
+            )
+
+        items = [_out_from_row(row) for row in rows]
         return RecommendationListResponse(
-            items=[
-                RecommendationOut(
-                    id=int(row["id"]),
-                    bvid=str(row.get("bvid", "")),
-                    item_key=str(row.get("item_key", "")),
-                    title=str(row.get("title", "")),
-                    up_name=str(row.get("up_name", "")),
-                    cover_url=str(row.get("cover_url", "")),
-                    expression=str(row.get("expression", "")),
-                    topic_label=str(row.get("topic", "")),
-                    presented=bool(row.get("presented", 0)),
-                    feedback_type=str(row.get("feedback_type", "") or ""),
-                    content_id=str(row.get("content_id", "") or row.get("bvid", "")),
-                    content_url=str(row.get("content_url", "") or ""),
-                    source_platform=str(row.get("source_platform", "") or "bilibili"),
-                    published_at=str(row.get("published_at", "") or ""),
-                    published_label=str(row.get("published_label", "") or ""),
-                    content_type=str(row.get("content_type", "") or "video"),
-                    body_text=str(row.get("body_text", "") or ""),
-                    source_metadata=_fail_closed_source_metadata(row.get("source_metadata", {})),
-                    duration=int(row.get("duration", 0) or 0),
-                    view_count=int(row.get("view_count", 0) or 0),
-                    like_count=int(row.get("like_count", 0) or 0),
-                    danmaku_count=int(row.get("danmaku_count", 0) or 0),
-                    favorite_count=int(
-                        row.get("favorite_count", 0) or row.get("collect_count", 0) or 0
-                    ),
-                    comment_count=int(row.get("comment_count", 0) or 0),
-                    share_count=int(row.get("share_count", 0) or 0),
-                    rating_score=float(row.get("rating_score", 0.0) or 0.0),
-                    rating_count=int(row.get("rating_count", 0) or 0),
-                    source_rank=int(row.get("source_rank", 0) or 0),
-                    up_mid=int(row.get("up_mid", 0) or 0),
-                )
-                for row in rows
-            ]
+            items=items,
+            channel=channel,
+            ai_frontier_count=sum(1 for item in items if item.ai_frontier),
         ), snapshot_expires_at
 
     @app.get("/api/recommendations", response_model=RecommendationListResponse)
-    async def recommendations() -> RecommendationListResponse:
+    async def recommendations(channel: str = "") -> RecommendationListResponse:
         """Return one coalesced recommendation snapshot.
 
         Restored browser sessions can contain dozens of stale dashboard tabs.
@@ -9637,6 +9708,18 @@ def create_app(
         nonlocal recommendation_snapshot_cache, recommendation_snapshot_cached_at
         nonlocal recommendation_snapshot_expires_at
         nonlocal recommendation_snapshot_dislike_digest
+        nonlocal recommendation_snapshot_channel
+
+        normalized_channel = str(channel or "").strip().lower().replace("-", "_")
+        if normalized_channel not in {"", AI_FRONTIER_CHANNEL}:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"unsupported channel {normalized_channel!r}; "
+                    f"expected {AI_FRONTIER_CHANNEL!r} or an empty string"
+                ),
+            )
+        channel = normalized_channel
 
         now = time.monotonic()
         disliked_topics, dislike_digest = _effective_recommendation_dislikes()
@@ -9645,6 +9728,7 @@ def create_app(
             and now - recommendation_snapshot_cached_at < _RECOMMENDATION_SNAPSHOT_TTL_SECONDS
             and now < recommendation_snapshot_expires_at
             and recommendation_snapshot_dislike_digest == dislike_digest
+            and recommendation_snapshot_channel == channel
         ):
             return recommendation_snapshot_cache.model_copy(deep=True)
 
@@ -9656,17 +9740,23 @@ def create_app(
                 and now - recommendation_snapshot_cached_at < _RECOMMENDATION_SNAPSHOT_TTL_SECONDS
                 and now < recommendation_snapshot_expires_at
                 and recommendation_snapshot_dislike_digest == dislike_digest
+                and recommendation_snapshot_channel == channel
             ):
                 return recommendation_snapshot_cache.model_copy(deep=True)
-            snapshot, snapshot_expires_at = await _load_recommendations(disliked_topics)
+            snapshot, snapshot_expires_at = await _load_recommendations(
+                disliked_topics, channel=channel
+            )
             latest_topics, latest_digest = _effective_recommendation_dislikes()
             if latest_digest != dislike_digest:
-                snapshot, snapshot_expires_at = await _load_recommendations(latest_topics)
+                snapshot, snapshot_expires_at = await _load_recommendations(
+                    latest_topics, channel=channel
+                )
                 dislike_digest = latest_digest
             recommendation_snapshot_cache = snapshot.model_copy(deep=True)
             recommendation_snapshot_cached_at = time.monotonic()
             recommendation_snapshot_expires_at = snapshot_expires_at
             recommendation_snapshot_dislike_digest = dislike_digest
+            recommendation_snapshot_channel = channel
             return snapshot
 
     def _content_history_item(row: dict[str, Any]) -> ContentHistoryItemOut:
@@ -10614,15 +10704,18 @@ def create_app(
         source_platform: str,
         items: list[Any],
         limit: int,
+        channel: str = "",
     ) -> bool:
-        """Whether a platform-scoped request under-delivered.
+        """Whether a platform/channel-scoped request under-delivered.
 
-        A short scoped batch is the only signal that one platform ran dry
-        while the pool as a whole looks healthy, so it wakes the existing
-        replenishment entry point. This only requests a background refresh —
-        no discovery runs inside the HTTP request, and nothing here promises
-        the platform is refilled by the time the response returns.
+        A short scoped batch is the only signal that one platform or channel
+        ran dry while the pool as a whole looks healthy, so it wakes the
+        existing replenishment entry point. This only requests a background
+        refresh — no discovery runs inside the HTTP request, and nothing here
+        promises the scope is refilled by the time the response returns.
         """
+        if str(channel or "").strip():
+            return len(items) < max(0, int(limit))
         if not str(source_platform or "").strip():
             return False
         return len(items) < max(0, int(limit))
@@ -10695,7 +10788,10 @@ def create_app(
             )
         )
         source_platform = payload.source_platform if payload is not None else ""
+        channel = payload.channel if payload is not None else ""
         scope_kwargs = _platform_scope_kwargs(source_platform)
+        if channel:
+            scope_kwargs["channel"] = channel
         if callable(result_fn):
             serve_result = await result_fn(
                 profile=profile,
@@ -10747,7 +10843,8 @@ def create_app(
         _schedule_exact_pool_status_snapshot()
         available_after = counts_after.get("available")
         await _trigger_replenishment_if_needed(
-            force=available_after == 0 or _scoped_batch_came_up_short(source_platform, items, 10),
+            force=available_after == 0
+            or _scoped_batch_came_up_short(source_platform, items, 10, channel=channel),
             available_count=available_after,
         )
         pool_status = await _read_recommendation_pool_status()
@@ -10797,6 +10894,8 @@ def create_app(
             return RecommendationAppendResponse(items=[], has_more=False)
         profile_ms = (time.perf_counter() - profile_started) * 1000.0
         scope_kwargs = _platform_scope_kwargs(payload.source_platform)
+        if payload.channel:
+            scope_kwargs["channel"] = payload.channel
         if callable(result_fn):
             serve_result = await result_fn(
                 profile=profile,
@@ -10822,7 +10921,9 @@ def create_app(
         await _trigger_replenishment_if_needed(
             force=(
                 available_after == 0
-                or _scoped_batch_came_up_short(payload.source_platform, items, 10)
+                or _scoped_batch_came_up_short(
+                    payload.source_platform, items, 10, channel=payload.channel
+                )
             ),
             available_count=available_after,
         )

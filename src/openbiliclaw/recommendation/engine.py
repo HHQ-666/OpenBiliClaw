@@ -39,6 +39,10 @@ from openbiliclaw.llm.json_utils import (
 )
 from openbiliclaw.llm.prompt_cache import PromptLayerRenderCache, profile_prompt_layers
 from openbiliclaw.llm.task_options import without_core_memory_kwargs
+from openbiliclaw.recommendation.frontier import (
+    AI_FRONTIER_CHANNEL,
+    assess_ai_frontier_content,
+)
 from openbiliclaw.saved_sync.identity import content_storage_key
 from openbiliclaw.soul.tone import ToneProfile, build_tone_profile
 from openbiliclaw.sources.platforms import normalize_source_platform, source_family
@@ -689,6 +693,7 @@ class RecommendationEngine:
         excluded_bvids: frozenset[str] = frozenset(),
         expression_mode: Literal["realtime", "precomputed"] = "precomputed",
         source_platform: str = "",
+        channel: str = "",
     ) -> list[Recommendation]:
         """Serve recommendations while preserving the legacy list API."""
         result = await self.serve_with_result(
@@ -697,6 +702,7 @@ class RecommendationEngine:
             excluded_bvids=excluded_bvids,
             expression_mode=expression_mode,
             source_platform=source_platform,
+            channel=channel,
         )
         return result.items
 
@@ -708,8 +714,14 @@ class RecommendationEngine:
         excluded_bvids: frozenset[str] = frozenset(),
         expression_mode: Literal["realtime", "precomputed"] = "precomputed",
         source_platform: str = "",
+        channel: str = "",
     ) -> ServeResult:
-        """Serve one serialized batch with inventory/timing metadata."""
+        """Serve one serialized batch with inventory/timing metadata.
+
+        ``channel="ai_frontier"`` narrows the candidate set to the AI-frontier
+        classifier before the curator ranks it. The general feed is unchanged
+        for every other value.
+        """
         async with self._serve_lock:
             return await self._serve_with_result_unlocked(
                 profile,
@@ -717,6 +729,7 @@ class RecommendationEngine:
                 excluded_bvids=excluded_bvids,
                 expression_mode=expression_mode,
                 source_platform=source_platform,
+                channel=channel,
             )
 
     def _enforce_platform_scope(
@@ -760,6 +773,30 @@ class RecommendationEngine:
             )
         return kept
 
+    @staticmethod
+    def _filter_ai_frontier_candidates(
+        candidates: list[DiscoveredContent],
+        scores: dict[str, float],
+    ) -> list[DiscoveredContent]:
+        """Keep only AI-frontier candidates and record their scores.
+
+        ``scores`` is filled in place with ``scoring_key -> frontier score`` so
+        the ranking stage can add a small channel bonus without re-classifying
+        the same item.
+        """
+        kept: list[DiscoveredContent] = []
+        for item in candidates:
+            assessment = assess_ai_frontier_content(item)
+            if not assessment.is_frontier:
+                continue
+            kept.append(item)
+            scores[item.scoring_key] = assessment.score
+        # The classifier score is a better ordering within the channel than
+        # the pool's general relevance order; the curator still applies MMR
+        # and its own amplification guard afterwards.
+        kept.sort(key=lambda item: -scores.get(item.scoring_key, 0.0))
+        return kept
+
     async def _serve_with_result_unlocked(
         self,
         profile: SoulProfile,
@@ -768,6 +805,7 @@ class RecommendationEngine:
         excluded_bvids: frozenset[str],
         expression_mode: Literal["realtime", "precomputed"],
         source_platform: str = "",
+        channel: str = "",
     ) -> ServeResult:
         """Unified recommendation entry point — always picks from the pool.
 
@@ -788,8 +826,15 @@ class RecommendationEngine:
         """
         label = "realtime" if expression_mode == "realtime" else "pool"
         scope = normalize_source_platform(source_platform)
+        channel_filter = channel == AI_FRONTIER_CHANNEL
         multiplier = 4 if excluded_bvids else 3
         candidate_limit = max(limit * multiplier, 40) + len(excluded_bvids)
+        if channel_filter:
+            # The classifier is intentionally selective; a normal 40-row
+            # window may contain only one or two frontier items. Read a wide
+            # slice of the servable pool and let the classifier narrow it.
+            candidate_limit = max(limit * 20, 400)
+        frontier_scores: dict[str, float] = {}
         pool_snapshot_started = time.perf_counter()
         snapshot: Any | None = None
         curator_snapshot: tuple[list[dict[str, object]], list[dict[str, object]]] | None = None
@@ -861,6 +906,16 @@ class RecommendationEngine:
                 after_exclude_count = 0
                 after_disliked_count = 0
                 after_viewed_count = 0
+        if channel_filter:
+            before_channel = len(candidates)
+            candidates = self._filter_ai_frontier_candidates(candidates, frontier_scores)
+            after_viewed_count = len(candidates)
+            logger.info(
+                "serve(channel=%s) kept %d/%d frontier candidate(s)",
+                channel,
+                after_viewed_count,
+                before_channel,
+            )
         before_temporal_count = len(candidates)
         candidates = self._exclude_temporally_stale_candidates_for_serve(candidates)
         after_temporal_count = len(candidates)
@@ -1014,6 +1069,14 @@ class RecommendationEngine:
         # while a single-platform batch keeps its absolute signal. No-op when combined_bonus is
         # empty (all signals off / no centroids) — ranking stays byte-identical.
         combined_bonus = self._normalize_bonus_per_platform(candidates, combined_bonus)
+        if channel_filter and frontier_scores:
+            # Narrow tie-breaker only: the classifier decides membership, and
+            # the curator still owns relevance, MMR and fatigue. Cap the bonus
+            # so a high-scoring but off-taste item cannot dominate the batch.
+            for scoring_key, frontier_score in frontier_scores.items():
+                combined_bonus[scoring_key] = (
+                    combined_bonus.get(scoring_key, 0.0) + min(frontier_score, 12.0) * 0.04
+                )
 
         (
             ranked,
@@ -4309,6 +4372,7 @@ class RecommendationEngine:
         excluded_bvids: list[str] | None = None,
         limit: int = 5,
         source_platform: str = "",
+        channel: str = "",
     ) -> list[Recommendation]:
         """Instantly pick a new batch from the discovery pool.
 
@@ -4321,6 +4385,7 @@ class RecommendationEngine:
             excluded_bvids=excluded_bvids,
             limit=limit,
             source_platform=source_platform,
+            channel=channel,
         )
         return result.items
 
@@ -4331,6 +4396,7 @@ class RecommendationEngine:
         excluded_bvids: list[str] | None = None,
         limit: int = 5,
         source_platform: str = "",
+        channel: str = "",
     ) -> ServeResult:
         """Return a reshuffle batch with post-commit inventory metadata."""
         excluded = frozenset(
@@ -4342,6 +4408,7 @@ class RecommendationEngine:
             excluded_bvids=excluded,
             expression_mode="precomputed",
             source_platform=source_platform,
+            channel=channel,
         )
 
     async def append_recommendations(
@@ -4351,6 +4418,7 @@ class RecommendationEngine:
         excluded_bvids: list[str],
         limit: int = 10,
         source_platform: str = "",
+        channel: str = "",
     ) -> list[Recommendation]:
         """Append another page of recommendations from the discovery pool.
 
@@ -4361,6 +4429,7 @@ class RecommendationEngine:
             excluded_bvids=excluded_bvids,
             limit=limit,
             source_platform=source_platform,
+            channel=channel,
         )
         return result.items
 
@@ -4371,6 +4440,7 @@ class RecommendationEngine:
         excluded_bvids: list[str],
         limit: int = 10,
         source_platform: str = "",
+        channel: str = "",
     ) -> ServeResult:
         """Return an appended page with post-commit inventory metadata."""
         excluded = frozenset(b.strip() for b in excluded_bvids if b and b.strip())
@@ -4380,6 +4450,7 @@ class RecommendationEngine:
             excluded_bvids=excluded,
             expression_mode="precomputed",
             source_platform=source_platform,
+            channel=channel,
         )
 
     async def generate_personal_topic(

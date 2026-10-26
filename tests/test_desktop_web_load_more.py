@@ -120,9 +120,13 @@ def test_scoped_reshuffle_and_append_send_canonical_platform() -> None:
     append = _function_body(app_js, "appendMore")
 
     for body in (reshuffle, append):
-        assert "const requestPlatform = activePlatformSlug();" in body
+        # Capture both scopes before the request: the AI-frontier channel is
+        # not a platform, so a channel request must not send source_platform.
+        assert 'const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";' in body
+        assert 'const requestPlatform = requestChannel ? "" : activePlatformSlug();' in body
         # 「全部」不带 source_platform：旧后端 / 旧契约的请求形状必须保持不变。
         assert "if (requestPlatform) requestBody.source_platform = requestPlatform;" in body
+        assert "if (requestChannel) requestBody.channel = requestChannel;" in body
         assert "excluded_bvids" in body
 
     slug_fn = _function_body(app_js, "platformSlugForFilterLabel")
@@ -162,7 +166,9 @@ def test_scoped_response_handling_uses_request_start_scope() -> None:
     append = _function_body(app_js, "appendMore")
 
     for body in (reshuffle, append):
-        capture = body.index("const requestPlatform = activePlatformSlug();")
+        capture = body.index(
+            'const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";'
+        )
         request = body.index("await requestJson")
         assert capture < request
         after_response = body[request:]

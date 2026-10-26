@@ -38,6 +38,8 @@ A local-first AI discovery agent that learns your taste across Bilibili, Xiaohon
 |---|---|---|
 | Bilibili / Xiaohongshu / Douyin / YouTube / X / Zhihu / Reddit / Linux.do / Bangumi / V2EX / Weibo / GitHub / Instagram (experimental) / Web | Data stays in your local SQLite by default | Likes, dislikes, and chat feedback shape future recommendations |
 
+> 🆕 **AI Frontier channel**: the Desktop Web recommendation page now has an "AI Frontier" tab that aggregates frontier model releases, papers, open weights, and benchmarks across platforms. Classification runs in the local backend; candidates still go through the same discovery / eval / feedback pipeline, and the channel seeds curated keywords when it runs dry instead of filling up with marketing tutorials.
+
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/cdfjfkdjjhdaccbldipkjhpibnfbiamg"><b>Install the browser extension</b></a>
   ·

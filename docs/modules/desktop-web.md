@@ -36,6 +36,7 @@ LLM 实例设置页可选择 `cheaperinference`（Cheaper Inference），新实�
 | 纸张（配色）选择 | ✅ | 设置 → 前端相关设置新增「纸张」单选：素白（默认，冷中性白纸＋钢制五金＋靛蓝印）、暖纸（原目录馆米色纸＋黄铜＋印章红）、青苔（灰绿纸＋旧铜＋苔绿印）。`data-palette` 由 `obc.palette` 写入，样式是 `tokens.css` 的 `:root[data-palette=...]` 区块；每张纸自带默认印章色相，只有用户显式挑过色相（`obc.themeHue`）才写行内 `--hue-primary`，`跟随纸张` 一键回到纸张默认。桌面与移动共用同一份 localStorage，两端都不再闪默认纸 |
 | 卡片原文中文化 | ✅ | 卡片照抄来源原文，非中文来源（X / Reddit / GitHub）由 `shared/text-localize.js` 在渲染后换成中文：`localizeWithin(root)` 扫描标题与摘要文本节点，`POST /api/translate-texts` 批量取译文后就地改写，原文留在 `title` 悬浮提示。只重写文本、不参与卡片对账、不阻塞首屏；失败或 `pending` 时继续显示原文（每个元素最多重试 2 次）。托盘、惊喜卡、内容库、历史四处接在同一入口 |
 | 长文剪报封顶 | ✅ | 无图长文（X 推文 / 知乎 / Reddit）的封面槽是有界剪报：桌面 `max-height: 176px` ＋摘要 6 行截断，手机 `132px` ＋ 5 行。此前该槽无上限，一条 2000 字推文能把卡片撑到 ~1400px，并因网格行拉伸把同排卡片一起拉高 |
+| AI 前沿频道 Tab | ✅ | 推荐筛选行在「全部」后新增「AI 前沿」chip；首次选中按需请求 `GET /api/recommendations?channel=ai_frontier`，频道卡片独立于 `state.videos` 缓存，切回来源 Tab 时原推荐列表原样保留。频道内换一批 / 加载更多在请求体带 `channel=ai_frontier`，不发 `source_platform`；分类与供给由后端 `recommendation/frontier.py` + `discovery/frontier_seed.py` 完成，前端不猜关键词 |
 
 接口：`GET /api/chat/personas` 获取目录，`PATCH /api/chat/sessions/{id}` 保存 persona，
 会话列表/详情中的 `metadata.persona` 是唯一持久来源。目录不可用时仅风格入口降级，

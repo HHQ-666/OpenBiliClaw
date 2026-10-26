@@ -2,6 +2,14 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：AI 前沿频道（feat/ai-frontier-channel，2026-10-26）
+
+- PC Web 推荐筛选行在「全部」后新增「AI 前沿」频道 chip。首次选中按需请求 `GET /api/recommendations?channel=ai_frontier`，频道卡片独立于普通推荐列表缓存；频道内「换一批」「加载更多」分别以 `channel=ai_frontier` 调用既有 reshuffle / append，不发 `source_platform`。切回来源 Tab 时普通列表原样保留。
+- 新增 `recommendation/frontier.py`：纯文本、确定性的 AI 前沿分类器。版本化模型名 + 发布/评测/论文/推理工程锚点加分；营销、教程、泛 AI 评论、仅“使用模型”的工具仓库降权/封顶。输出 `ai_frontier / ai_frontier_score / ai_frontier_tags`，不新增 LLM 调用。`serve / reshuffle / append`（含 `*_with_result`）新增默认空 keyword-only `channel`；频道读取窗口扩到 `max(limit*20, 400)`，命中候选带一个上限 0.48 的排序 tie-breaker，其余 curator / MMR / feedback / 持久化逻辑不变。
+- `GET /api/recommendations` 支持 `channel=ai_frontier` 并返回 `channel` / `ai_frontier_count`；`POST /reshuffle` / `/append` 的 body 支持 `channel`；未知 channel 返回 422。省略 `channel` 时旧请求/响应形状保持兼容。
+- 新增 `discovery/frontier_seed.py`：频道命中不足 5 条时，按 30 分钟节流向正常 `discovery_keywords` 插入一组平台化策展词（模型发布、benchmark、open weights、agent、inference 等），使用当前画像 digest 并写 `source_interest="AI 前沿"` 溯源；仍由既有 keyword fetch → producer → eval → admission 链路补货，`sources.<platform>.enabled=false` 不注入。
+- 验证：`tests/test_recommendation_frontier.py` 9 项、`tests/test_frontier_seed.py` 7 项、`tests/test_recommendation_engine.py` + frontier 175 项、`tests/test_api_app.py` 622 项、`tests/test_desktop_web_platform_recommendations_e2e.py` 4 项通过；`ruff check` / `ruff format --check` 与改动文件的 `mypy` 通过。真实候选池临时副本跑通 `serve(channel="ai_frontier")`；分类器按当前池子返回的供给量取决于用户已看/未看库存，频道见底时由 seed + 既有补货链路继续填充。
+
 ## 未发布：私人卡片目录馆 —— 三端界面重构（feat/ui-redesign）
 
 - **提示条不再堆积**：旧实现里只有最底下那条会启动倒计时（`_reposition` 的 `first` 分支），叠在上面的每一条都永远等不到计时器 —— 补货重试几轮后右下角就挂了一列永不消失的提示（用户截图里十几条「已加载更多推荐」「候选池暂时没有新内容」）。现在每条创建即计时，同文案 20 秒内只出现一次，同时最多挂 3 条；同时删掉纯告知型提示：「已加载更多推荐」、主题/纸张/色相切换、开关类设置（界面本身已经变了，不需要再说一遍）。

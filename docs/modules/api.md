@@ -235,8 +235,8 @@ result，再经过后端身份门禁转换统一事件和账号分区 Node affin
 
 | 方法与路径 | 状态 | 契约 |
 |---|---|---|
-| `GET /api/recommendations` | ✅ | 只读未处理历史；1 秒 snapshot 只有在 TTL 与 effective dislike digest 都未变化时复用。加载期间 dislike 变化会按新快照重读，再在 franchise cap 前过滤。 |
-| `POST /api/recommendations/reshuffle` / `append` | ✅ | serve 使用带 flat-preference overlay 的画像，完成后在 HTTP 序列化前再读一次最新 effective dislikes，关闭请求进行中的偏好竞态。 |
+| `GET /api/recommendations` | ✅ | 只读未处理历史；1 秒 snapshot 只有在 TTL、effective dislike digest 与 `channel` 都未变化时复用。加载期间 dislike 变化会按新快照重读，再在 franchise cap 前过滤。可选 `channel=ai_frontier` 只返回 AI 前沿分类命中的行；不足 5 条时限频注入策展关键词并唤醒补货。响应新增 `channel` / `ai_frontier_count`，每个 item 新增 `ai_frontier / ai_frontier_score / ai_frontier_tags`；未知 channel 返回 422。 |
+| `POST /api/recommendations/reshuffle` / `append` | ✅ | serve 使用带 flat-preference overlay 的画像，完成后在 HTTP 序列化前再读一次最新 effective dislikes，关闭请求进行中的偏好竞态。body 可选 `channel`（目前仅 `ai_frontier`）；频道请求通常不带 `source_platform`，两者都由 API 契约校验。 |
 | `GET /api/notifications/pending` | ✅ | 单条候选在返回前按最新 dislike 复核；模糊命中时不使用多卡窗口的“全灭恢复”保护。 |
 | profile edit / `POST /api/feedback` | ✅ | durable edit 或单卡反馈 projection 完成后立即失效 recommendation snapshot；单卡反馈仍由 `exclude_processed` 同步隐藏。 |
 
@@ -444,6 +444,7 @@ popup、移动 Web 与桌面 Web 只有 durable 对话中的假设卡片保留 c
 | 已实现能力 | 接口 |
 | --- | --- |
 | 卡片与库存一起返回 | `POST /api/recommendations/reshuffle`、`POST /api/recommendations/append` 在已有字段旁新增可空 `pool_status`；库存读取失败为 null，旧客户端可忽略该字段。 |
+| AI 前沿频道字段 | `GET /api/recommendations?channel=ai_frontier` 的 `channel` / `ai_frontier_count` 与 item 级 `ai_frontier*` 都是附加字段，旧客户端可忽略；`POST /reshuffle` / `/append` 的 `channel` 默认空，省略时请求形状与旧版逐字一致。 |
 | 库存读取版本 | `GET /api/recommendations/platform-availability` 新增 `pool_status_version`，和 mutation / `refresh.pool_updated` 共用读取开始时的 Unix 毫秒版本。 |
 | 跨进程广播 | socket 代理把成功响应库存桥接到主 API 的事件总线，补货变动由单个 app-owned 观察任务同步。 |
 

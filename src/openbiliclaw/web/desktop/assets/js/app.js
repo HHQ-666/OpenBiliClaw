@@ -102,9 +102,16 @@
     const CHAT_SCROLL_BOTTOM_TOLERANCE_PX = 48;
     let hasOpenedDialogueChatPage = false;
 
+    const AI_FRONTIER_FILTER = "AI 前沿";
+    const AI_FRONTIER_CHANNEL = "ai_frontier";
     const state = {
       query: "",
       filter: "全部",
+      // The AI-frontier channel is a separate server-side view over the same
+      // pool. Keep its cards out of state.videos so switching back to "全部"
+      // never loses the general feed, and vice versa.
+      channelVideos: [],
+      channelLoading: false,
       activeFeedback: null,
       profile: null,
       editingProfile: false,
@@ -1488,6 +1495,11 @@
         presented: Boolean(item?.presented),
         feedback_type: String(item?.feedback_type ?? item?.feedback ?? ""),
         pool_status: String(item?.pool_status ?? item?.status ?? ""),
+        ai_frontier: Boolean(item?.ai_frontier),
+        ai_frontier_score: Number(item?.ai_frontier_score ?? 0) || 0,
+        ai_frontier_tags: Array.isArray(item?.ai_frontier_tags)
+          ? item.ai_frontier_tags.map((tag) => String(tag)).filter(Boolean)
+          : [],
         reason: decodeHtmlEntities(item?.expression ?? item?.reason ?? "后端暂未返回解释。")
       };
     }
@@ -3928,13 +3940,23 @@ ${savedCardFeedbackBarHtml(listKind)}
     function platformSlugForFilterLabel(label) {
       const name = String(label || "").trim();
       if (!name || name === "全部") return "";
+      if (name === AI_FRONTIER_FILTER) return "";
       const known = sourceFilterDefinitions.find((source) => source.label === name);
       if (known) return known.key;
       return canonicalPlatformSlug(name);
     }
 
+    function isAiFrontierFilter() {
+      return state.filter === AI_FRONTIER_FILTER;
+    }
+
     function activePlatformSlug() {
+      if (isAiFrontierFilter()) return "";
       return platformSlugForFilterLabel(state.filter);
+    }
+
+    function activeFeedItems() {
+      return isAiFrontierFilter() ? state.channelVideos : state.videos;
     }
 
     // 返回该平台「可立即推荐」的剩余数量；null = 未知（尚无成功快照）。
@@ -4019,11 +4041,22 @@ ${savedCardFeedbackBarHtml(listKind)}
       }
       const sources = sourceFilterOrder.filter((name) => sourceSet.has(name));
       const otherSources = [...sourceSet].filter((name) => !sourceFilterOrder.includes(name)).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
-      return ["全部", ...sources, ...otherSources];
+      // The AI-frontier channel is always available, even when its current
+      // view is empty: the empty state is the entry point for "补货".
+      return ["全部", AI_FRONTIER_FILTER, ...sources, ...otherSources];
     }
 
     function filteredVideos() {
       const q = state.query.trim().toLowerCase();
+      if (isAiFrontierFilter()) {
+        return state.channelVideos.filter((item) => {
+          const queryOk = !q || [item.title, item.up, item.topic, item.reason]
+            .join(" ")
+            .toLowerCase()
+            .includes(q);
+          return queryOk;
+        });
+      }
       return state.videos.filter((item) => {
         const label = platformName(item.platform);
         const filterOk = state.filter === "全部" || state.filter === label;
@@ -4327,10 +4360,11 @@ ${savedCardFeedbackBarHtml(listKind)}
         ? state.runtimeStatus?.pool_available_count > 0
         : scopedAvailable > 0;
       if (!hasStock) return "pool-empty";
-      const exhaustedAt = emptyAppendInventory.get(activePlatformSlug());
+      const appendScopeKey = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : activePlatformSlug();
+      const exhaustedAt = emptyAppendInventory.get(appendScopeKey);
       const available = scopedAvailable ?? state.runtimeStatus?.pool_available_count ?? 0;
       if (exhaustedAt !== undefined && available <= exhaustedAt) return "awaiting-refill";
-      emptyAppendInventory.delete(activePlatformSlug());
+      emptyAppendInventory.delete(appendScopeKey);
       const homePage = $("#homePage");
       if (!homePage || homePage.hidden) return "not-home";
       const loadMore = $("#loadMoreBtn");
@@ -4390,9 +4424,38 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     // 切换 Tab 只改变视图，不发任何推荐请求（设计文档 §5.2）。自动激活后 chip 会
     // 被重建，所以键盘路径需要把 focus 还给新的同名 chip。
+    async function loadAiFrontierChannel({ force = false } = {}) {
+      if (state.channelLoading) return;
+      if (!force && state.channelVideos.length) return;
+      state.channelLoading = true;
+      // Do NOT rebuild the chip row here: setActiveFilter() is also the
+      // keyboard-navigation path, and replacing the chips mid-request steals
+      // focus from the tab the user just arrowed onto. The final renderAll()
+      // updates the count; the empty state explains the in-flight load.
+      try {
+        const payload = await requestJsonStrict(
+          `${ENDPOINTS.recommendations}?channel=${encodeURIComponent(AI_FRONTIER_CHANNEL)}`,
+          { timeoutMs: 25000 }
+        );
+        state.channelVideos = normalizeRecommendationList(
+          Array.isArray(payload) ? payload : payload?.items
+        );
+      } catch {
+        if (!state.channelVideos.length) {
+          showToast("AI 前沿暂时加载失败，稍后再试");
+        }
+      } finally {
+        state.channelLoading = false;
+        renderAll();
+      }
+    }
+
     function setActiveFilter(name, { restoreFocus = false } = {}) {
       state.filter = name;
       renderAll();
+      if (name === AI_FRONTIER_FILTER) {
+        void loadAiFrontierChannel();
+      }
       if (!restoreFocus) return;
       const chips = Array.from(document.querySelectorAll("#filterRow .chip"));
       chips.find((chip) => chip.dataset.filter === name)?.focus();
@@ -4420,35 +4483,62 @@ ${savedCardFeedbackBarHtml(listKind)}
       row.replaceChildren(...filters.map((name, index) => {
         const btn = document.createElement("button");
         const selected = state.filter === name;
-        const slug = platformSlugForFilterLabel(name);
-        const count = platformAvailableCount(slug);
-        btn.className = `chip${selected ? " is-active" : ""}`;
+        const isChannel = name === AI_FRONTIER_FILTER;
+        const slug = isChannel ? "" : platformSlugForFilterLabel(name);
+        // Channel count is "how many cards this view has loaded", not the
+        // platform stock badge. It starts as "…" until the first channel
+        // request returns, so 0 never reads as "there is no AI content".
+        const count = isChannel ? state.channelVideos.length : platformAvailableCount(slug);
+        btn.className = `chip${selected ? " is-active" : ""}${isChannel ? " chip-channel" : ""}`;
         btn.type = "button";
         btn.dataset.filter = name;
         btn.dataset.platform = slug;
+        if (isChannel) btn.dataset.channel = AI_FRONTIER_CHANNEL;
         // role=tab + aria-selected：选中态不能只靠颜色表达，AT 也要能读到。
         btn.setAttribute("role", "tab");
         btn.setAttribute("aria-selected", selected ? "true" : "false");
         // 徽标是后端还能换的库存，不是这一屏的卡片数：0 常见于来源关着或补货
         // 还没回来，所以用 title/aria 说明它为什么会是 0（列表里已装入的卡片
         // 不会因为库存归零就消失，数字也就没必要跟着变）。
-        const countLabel = count === null
-          ? PLATFORM_COUNT_UNKNOWN_LABEL
-          : count > 0
-            ? `${count} 条可换`
-            : "暂时没有可换库存，后台补货中";
+        const countLabel = isChannel
+          ? state.channelLoading
+            ? "正在加载 AI 前沿"
+            : `本期 AI 前沿 ${count} 条`
+          : count === null
+            ? PLATFORM_COUNT_UNKNOWN_LABEL
+            : count > 0
+              ? `${count} 条可换`
+              : "暂时没有可换库存，后台补货中";
         btn.setAttribute("aria-label", `${name}，${countLabel}`);
-        btn.title = count === 0
-          ? `${name}暂时没有可换的新内容，后台会继续补货`
-          : `还能换 ${count === null ? "待读取" : count} 条`;
+        btn.title = isChannel
+          ? "AI 前沿频道：跨平台汇总前沿模型、论文、开源工程与视频"
+          : count === 0
+            ? `${name}暂时没有可换的新内容，后台会继续补货`
+            : `还能换 ${count === null ? "待读取" : count} 条`;
         btn.tabIndex = selected ? 0 : -1;
         const labelSpan = document.createElement("span");
         labelSpan.className = "chip-label";
         labelSpan.textContent = name;
         const countSpan = document.createElement("span");
         countSpan.className = "chip-count";
-        countSpan.dataset.state = count === null ? "unknown" : count > 0 ? "known" : "zero";
-        countSpan.textContent = count === null ? PLATFORM_COUNT_UNKNOWN_TEXT : String(count);
+        countSpan.dataset.state = isChannel
+          ? state.channelLoading
+            ? "unknown"
+            : count > 0
+              ? "known"
+              : "zero"
+          : count === null
+            ? "unknown"
+            : count > 0
+              ? "known"
+              : "zero";
+        countSpan.textContent = isChannel
+          ? state.channelLoading
+            ? "…"
+            : String(count)
+          : count === null
+            ? PLATFORM_COUNT_UNKNOWN_TEXT
+            : String(count);
         countSpan.setAttribute("aria-hidden", "true");
         btn.replaceChildren(labelSpan, countSpan);
         btn.addEventListener("click", () => setActiveFilter(name));
@@ -5387,13 +5477,19 @@ ${cardFeedbackBarHtml()}`;
         // 用的是同一份可推库存快照，不是 DOM 卡片数。
         const activePlatform = activePlatformSlug();
         const activePlatformCount = platformAvailableCount(activePlatform);
+        const activeItems = activeFeedItems();
         const loadFailed = desktopRecommendationLoadState === "failed" || desktopRecommendationLoadState === "failed-exhausted";
         const runtime = normalizeRuntimeStatus(state.runtimeStatus);
-        const discoveryFailure = !state.videos.length && !loadFailed && runtime?.manual_refresh_state !== "running"
+        const discoveryFailure = !activeItems.length && !loadFailed && runtime?.manual_refresh_state !== "running"
           && runtime?.pool_available_count === 0
           ? runtime.manual_refresh_state === "failed"
             ? runtime.manual_refresh_message || "内容发现未完成，请检查来源连接后重试内容发现。"
             : runtime.discovery_failure_message
+          : "";
+        const channelMessage = isAiFrontierFilter() && !loadFailed
+          ? state.channelLoading
+            ? "正在加载 AI 前沿…"
+            : "AI 前沿暂时没有新内容，后台会继续补货；也可以点「加载更多推荐」再找一批。"
           : "";
         const platformMessage = activePlatform && !loadFailed
           ? activePlatformCount === null
@@ -5406,9 +5502,11 @@ ${cardFeedbackBarHtml()}`;
           ? `没有找到包含“${escapeHtml(state.query.trim())}”的推荐。`
           : discoveryFailure
             ? escapeHtml(discoveryFailure)
+          : channelMessage
+            ? channelMessage
           : platformMessage
             ? platformMessage
-            : state.videos.length
+            : activeItems.length
               ? "当前筛选下没有推荐。"
               : desktopRecommendationLoadState === "failed"
                 ? "推荐加载失败，正在重试；这不代表候选池真的为空。"
@@ -9382,21 +9480,25 @@ ${cardFeedbackBarHtml()}`;
 
     async function reshuffle() {
       const reshuffleButton = $("#reshuffleBtn");
-      // 请求发出前捕获当时选中的平台：用户在请求期间切 Tab 不能把响应写进错误批次。
-      const requestPlatform = activePlatformSlug();
+      // 请求发出前捕获当时选中的平台/频道：用户在请求期间切 Tab 不能把响应写进错误批次。
+      const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";
+      const requestPlatform = requestChannel ? "" : activePlatformSlug();
       // 当前可见卡片始终是本次换一批的排除集；平台定向时覆盖该平台
       // 本会话已加载的全部内容（不止可见的那些）。
       const visibleForExclusion = filteredVideos().filter((item) => item?.id != null);
       const visibleKeys = new Set(visibleForExclusion.map((item) => recommendationKey(item)));
-      const scopedForExclusion = requestPlatform
-        ? state.videos.filter((item) => item?.id != null && recommendationPlatformSlug(item) === requestPlatform)
-        : visibleForExclusion;
+      const scopedForExclusion = requestChannel
+        ? state.channelVideos.filter((item) => item?.id != null)
+        : requestPlatform
+          ? state.videos.filter((item) => item?.id != null && recommendationPlatformSlug(item) === requestPlatform)
+          : visibleForExclusion;
       if (reshuffleButton) reshuffleButton.disabled = true;
       try {
         const excludedBvids = scopedForExclusion.map((item) => item.bvid).filter(Boolean);
         const requestBody = { excluded_bvids: excludedBvids };
         // "全部" 不带 source_platform：旧客户端 / 兼容路径的请求形状保持不变。
         if (requestPlatform) requestBody.source_platform = requestPlatform;
+        if (requestChannel) requestBody.channel = requestChannel;
         const payload = await requestJson(ENDPOINTS.reshuffle, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -9409,11 +9511,14 @@ ${cardFeedbackBarHtml()}`;
         // 后端返回空数组时保留现有卡片，不制造空屏。
         if (fresh.length) {
           recommendationListVersion += 1;
-          state.videos = requestPlatform ? replacePlatformCards(state.videos, requestPlatform, fresh) : fresh;
+          state.channelVideos = requestChannel ? fresh : state.channelVideos;
+          if (!requestChannel) {
+            state.videos = requestPlatform ? replacePlatformCards(state.videos, requestPlatform, fresh) : fresh;
+          }
           renderAll();
-          showToast("已换一批推荐");
+          showToast(requestChannel ? "已换一批 AI 前沿" : "已换一批推荐");
         } else {
-          showToast("暂时没有更多新推荐了");
+          showToast(requestChannel ? "AI 前沿暂时没有更多新内容" : "暂时没有更多新推荐了");
         }
       } finally {
         schedulePlatformAvailabilityRefresh();
@@ -9425,7 +9530,7 @@ ${cardFeedbackBarHtml()}`;
     // 它负责唤醒后端已有的补货链路；只有自动续页会被库存 gate 拦下。
     function rememberEmptyAppend(platform) {
       const inventory = state.platformAvailability;
-      const available = platform
+      const available = platform && platform !== AI_FRONTIER_CHANNEL
         ? inventory?.by_platform?.[platform] ?? 0
         : inventory?.total_available ?? state.runtimeStatus?.pool_available_count ?? 0;
       emptyAppendInventory.set(platform, available);
@@ -9434,13 +9539,17 @@ ${cardFeedbackBarHtml()}`;
     async function appendMore() {
       if (appendMoreInFlight) return;
       appendMoreInFlight = true;
-      // 与换一批同理：捕获请求开始时的平台，响应到达时不再读 state.filter。
-      const requestPlatform = activePlatformSlug();
+      // 与换一批同理：捕获请求开始时的平台/频道，响应到达时不再读 state.filter。
+      const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";
+      const requestPlatform = requestChannel ? "" : activePlatformSlug();
+      const activeItems = requestChannel ? state.channelVideos : state.videos;
+      const appendScopeKey = requestPlatform || requestChannel;
       showAppendSkeletons();
       const listVersionAtRequest = recommendationListVersion;
       try {
-        const requestBody = { excluded_bvids: state.videos.map((v) => v.bvid) };
+        const requestBody = { excluded_bvids: activeItems.map((v) => v.bvid) };
         if (requestPlatform) requestBody.source_platform = requestPlatform;
+        if (requestChannel) requestBody.channel = requestChannel;
         const payload = await requestJson(ENDPOINTS.append, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) });
         if (!payload) {
           showToast("加载更多失败，请稍后重试");
@@ -9453,17 +9562,21 @@ ${cardFeedbackBarHtml()}`;
           const returned = normalizeRecommendationList(payload.items);
           if (requestPlatform && reportPlatformScopeLeak("加载更多", requestPlatform, returned)) return;
           // 按稳定 recommendation key 去重后再追加。
-          const loadedKeys = new Set(state.videos.map((item) => recommendationKey(item)));
+          const loadedKeys = new Set(activeItems.map((item) => recommendationKey(item)));
           const freshItems = returned.filter((item) => {
             const key = recommendationKey(item);
             if (!key || loadedKeys.has(key)) return false;
             loadedKeys.add(key);
             return true;
           });
-          if (freshItems.length) emptyAppendInventory.delete(requestPlatform);
-          else rememberEmptyAppend(requestPlatform);
+          if (freshItems.length) emptyAppendInventory.delete(appendScopeKey);
+          else rememberEmptyAppend(appendScopeKey);
           const appendCameUpShort = freshItems.length < APPEND_BATCH_SIZE;
-          state.videos = state.videos.concat(freshItems);
+          if (requestChannel) {
+            state.channelVideos = state.channelVideos.concat(freshItems);
+          } else {
+            state.videos = state.videos.concat(freshItems);
+          }
           renderAll();
           // Keep decoding off the interaction path: slow first-miss covers should
           // not delay the new recommendation cards from appearing.
@@ -9476,7 +9589,7 @@ ${cardFeedbackBarHtml()}`;
             showToast(`这批内容都已反馈过，后台正在补货，${retryHint}`);
           }
         } else {
-          rememberEmptyAppend(requestPlatform);
+          rememberEmptyAppend(appendScopeKey);
           // 列表空态里已经写了同一句「后台会继续补货」；再弹一条 toast 就是同一句话
           // 说两遍。只有列表还在（只是这批没新货）时才用 toast 补一句。
           if (!$("#videoGrid .empty-state")) {

@@ -41,6 +41,8 @@
 |---|---|---|
 | B 站 / 小红书 / 抖音 / YouTube / X / 知乎 / Reddit / Linux.do / Bangumi / V2EX / 微博 / GitHub / Instagram（实验性） / Web | 数据默认留在本机 SQLite | 喜欢、不感兴趣、聊天反馈都会改变后续推荐 |
 
+> 🆕 **AI 前沿频道**：桌面 Web 推荐页新增「AI 前沿」Tab，跨平台聚合前沿模型发布、论文、开源权重与 benchmark。分类在本地后端完成，候选仍走同一套发现 / 评估 / 反馈链路；频道见底时会自动用策展关键词补货，不把营销教程混进来。
+
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/cdfjfkdjjhdaccbldipkjhpibnfbiamg"><b>安装浏览器插件</b></a>
   ·

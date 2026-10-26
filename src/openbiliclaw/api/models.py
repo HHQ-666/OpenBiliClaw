@@ -22,6 +22,7 @@ from pydantic import (
 
 from openbiliclaw.agent.persona import validate_chat_persona
 from openbiliclaw.api.source_auth.contract import SourceAuthContract, SourceCapabilityAuth
+from openbiliclaw.recommendation.frontier import AI_FRONTIER_CHANNEL
 from openbiliclaw.saved_sync.identity import canonical_source_platform, make_item_key
 from openbiliclaw.sources.platforms import CANONICAL_SOURCE_FAMILIES, normalize_source_platform
 
@@ -283,12 +284,20 @@ class RecommendationOut(BaseModel):
     rating_count: int = 0
     source_rank: int = 0
     up_mid: int = 0
+    # AI-frontier channel (additive). The classifier runs at read time, so the
+    # same row can be a normal feed card and an AI-frontier card; clients use
+    # these fields for the channel chip and the per-card explanation tooltip.
+    ai_frontier: bool = False
+    ai_frontier_score: float = 0.0
+    ai_frontier_tags: list[str] = Field(default_factory=list)
 
 
 class RecommendationListResponse(BaseModel):
     """Wrapper response for recommendation lists."""
 
     items: list[RecommendationOut]
+    channel: str = ""
+    ai_frontier_count: int = 0
 
 
 ContentHistoryCategory = Literal["clicked", "shown", "removed"]
@@ -368,6 +377,7 @@ class _PlatformScopedRecommendationIn(BaseModel):
 
     excluded_bvids: list[str] = Field(default_factory=list)
     source_platform: str = ""
+    channel: str = ""
 
     @field_validator("source_platform", mode="before")
     @classmethod
@@ -380,6 +390,18 @@ class _PlatformScopedRecommendationIn(BaseModel):
             supported = ", ".join(CANONICAL_SOURCE_FAMILIES)
             raise ValueError(f"unsupported source_platform {raw!r}; expected one of: {supported}")
         return canonical
+
+    @field_validator("channel", mode="before")
+    @classmethod
+    def _canonicalize_channel(cls, value: object) -> str:
+        raw = str(value or "").strip().lower().replace("-", "_")
+        if not raw:
+            return ""
+        if raw != AI_FRONTIER_CHANNEL:
+            raise ValueError(
+                f"unsupported channel {raw!r}; expected {AI_FRONTIER_CHANNEL!r} or an empty string"
+            )
+        return AI_FRONTIER_CHANNEL
 
 
 class RecommendationReshuffleIn(_PlatformScopedRecommendationIn):
