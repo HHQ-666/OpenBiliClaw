@@ -133,3 +133,15 @@ def test_row_and_content_wrappers_share_the_same_score() -> None:
 
 def test_channel_constant_is_stable_for_api_and_ui() -> None:
     assert AI_FRONTIER_CHANNEL == "ai_frontier"
+
+
+def test_arxiv_article_is_still_paper_like_for_scoring() -> None:
+    assessment = assess_ai_frontier(
+        title="A New Method for Long-Context Agents",
+        description="arXiv paper with 128K context and benchmark results.",
+        source_platform="arxiv",
+        content_type="article",
+    )
+
+    assert assessment.is_frontier
+    assert "论文研究" in assessment.tags

@@ -329,9 +329,11 @@ def ingest_frontier_wire(
                 source_platform=item.source_platform,
                 content_id=raw_content_id,
                 content_url=item.content_url,
-                content_type=(
-                    "paper" if item.source_platform in {"arxiv", "huggingface"} else "article"
-                ),
+                # Keep the wire on the long-established `article` text-card path. The
+                # classifier still treats arXiv/Hugging Face articles as paper-like,
+                # but a browser carrying a slightly older card renderer sees a
+                # readable excerpt instead of a blank cover slot.
+                content_type="article",
                 up_name=item.author_name,
                 author_name=item.author_name,
                 published_at=item.published_at,

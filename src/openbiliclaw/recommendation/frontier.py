@@ -296,6 +296,10 @@ def assess_ai_frontier(
     source = _normalize(source_platform).lower()
     ctype = _normalize(content_type).lower()
     author_text = _normalize(author).lower()
+    # The curated wire stores arXiv/Hugging Face rows as `article` so they
+    # always use the text-card renderer; they are still primary papers for
+    # scoring and tag purposes.
+    paper_like = ctype == "paper" or (ctype == "article" and source in {"arxiv", "huggingface"})
 
     # ── Model anchor ─────────────────────────────────────────────────────
     version_match = _MODEL_WITH_VERSION.search(combined)
@@ -359,7 +363,7 @@ def assess_ai_frontier(
     )
     if research_hit:
         if (
-            ctype == "paper"
+            paper_like
             or _near_model(combined, _RESEARCH, window=120)
             or _RESEARCH.search(title_text)
         ):
@@ -418,13 +422,13 @@ def assess_ai_frontier(
             score += 0.1
         if ctype == "repository":
             score += 0.3
-        elif ctype == "paper":
+        elif paper_like:
             score += 2.0
         elif ctype == "video":
             score += 0.2
     if author_text and any(name in author_text for name in _AUTHOR_PRIOR):
         score += 1.5
-    if ctype == "paper":
+    if paper_like:
         # A paper is a frontier artifact even when its title does not contain
         # the word "AI"; the source/type prior is the anchor here.
         score += 2.0
