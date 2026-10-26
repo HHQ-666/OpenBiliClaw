@@ -2,6 +2,11 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：AI 前沿雷达 chat skill（2026-10-26）
+
+- 新增内置 chat skill `ai-frontier-radar`（显示名「AI 前沿雷达」）：面向 AI 模型发布、论文、开源项目与视频的跨平台情报汇总。技能要求先取一手来源（官方博客、模型卡、定价页、许可证、arXiv、Hugging Face Daily Papers），再覆盖 Hacker News、Reddit、linux.do、V2EX、微博、B 站、YouTube；输出区分「已确认 / 官方未确认 / 传闻」，优先参数、上下文、价格、吞吐、许可证和基准测试条件，过滤无数据的宏观叙事与营销内容。工具白名单：`search_web` / `read_webpage` / `get_profile` / `read_memory` / `search_history` / `get_recommendations` / `query_discovery_pool` / `list_sources` / `save_item` / `submit_feedback`。
+- 桌面端 skill 选择器补充 📡 图标；`tests/test_agent_skills.py` 的内置白名单夹具同步新增该技能，`docs/modules/agent.md`、`docs/modules/api.md`、`docs/architecture.md` 的内置 skill 数量与清单同步更新为 5 个。
+
 ## v0.3.227：macOS 正式签名与 Instagram 实验性来源（2026-10-06）
 
 - 桌面卡片视觉体验优化：将推荐卡片与收藏卡片右上角的文字平台徽标升级为各平台专属品牌矢量 SVG 图标（支持 B 站、GitHub、Linux.do、知乎、抖音、小红书、微博、YouTube、X/Twitter、Reddit、Bangumi、V2EX、Instagram 等），增加品牌底色与无障碍 Tooltip；移除无图文字卡片的封面矮化限制，统一所有卡片封面区域为标准 16:9 比例，配合卡片内部弹性排版实现同一排卡片的封面、标题与底部操作栏整齐水平对齐。

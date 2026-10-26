@@ -625,6 +625,7 @@
     "taste-explorer": "🔍",
     "bangumi-advisor": "📺",
     "system-steward": "🛠️",
+    "ai-frontier-radar": "📡",
   };
 
   function skillIcon(name) {
