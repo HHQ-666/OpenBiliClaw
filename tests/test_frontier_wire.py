@@ -142,6 +142,8 @@ def test_ingest_writes_content_and_recommendation_rows() -> None:
     assert bvid == "arxiv:2610.12345"
     assert kwargs["source_platform"] == "arxiv"
     assert kwargs["content_type"] == "paper"
+    assert kwargs["content_id"] == "2610.12345"
+    assert kwargs["item_key"] == "arxiv:2610.12345"
     assert kwargs["pool_expression"] == "arXiv 最新论文。"
     assert kwargs["topic_group"] == "AI 前沿"
     assert db.recommendations[0]["bvid"] == "arxiv:2610.12345"

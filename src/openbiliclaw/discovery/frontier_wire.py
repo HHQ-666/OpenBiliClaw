@@ -315,7 +315,10 @@ def ingest_frontier_wire(
             if existing is not None:
                 skipped += 1
                 continue
-            item_key = make_item_key(item.source_platform, item.content_id, item.content_url)
+            raw_content_id = (
+                item.content_id.split(":", 1)[-1] if ":" in item.content_id else item.content_id
+            )
+            item_key = make_item_key(item.source_platform, raw_content_id, item.content_url)
             database.cache_content(
                 item.content_id,
                 item_key=item_key,
@@ -324,7 +327,7 @@ def ingest_frontier_wire(
                 body_text=item.body_text,
                 source="ai-frontier-wire",
                 source_platform=item.source_platform,
-                content_id=item.content_id,
+                content_id=raw_content_id,
                 content_url=item.content_url,
                 content_type=(
                     "paper" if item.source_platform in {"arxiv", "huggingface"} else "article"
