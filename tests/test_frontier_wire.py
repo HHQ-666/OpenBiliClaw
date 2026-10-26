@@ -9,6 +9,7 @@ from openbiliclaw.discovery.frontier_wire import (
     _arxiv_items,
     _hf_items,
     _hn_items,
+    _wire_topics,
     ingest_frontier_wire,
     wire_source_counts,
 )
@@ -33,7 +34,7 @@ HF_PAYLOAD = [
         "paper": {
             "id": "2610.12345",
             "title": "HF Daily Paper",
-            "summary": "A community-curated paper abstract.",
+            "summary": "A personalized recommendation paper with user history.",
             "authors": [{"name": "Carol"}, {"name": "Dave"}],
         },
         "publishedAt": "2026-10-20T00:00:00Z",
@@ -110,6 +111,7 @@ def test_hf_parser_builds_a_paper_wire_item() -> None:
     assert items[0].source_platform == "huggingface"
     assert items[0].content_url == "https://huggingface.co/papers/2610.12345"
     assert items[0].source_metadata["upvotes"] == 42
+    assert "推荐系统与个性化" in items[0].expression
 
 
 def test_hn_parser_filters_non_ai_titles_and_keeps_points() -> None:
@@ -175,3 +177,13 @@ def test_wire_source_counts() -> None:
     ]
 
     assert wire_source_counts(items) == {"arxiv": 2, "hackernews": 1}
+
+
+def test_wire_topics_are_deterministic_and_distinct() -> None:
+    assert _wire_topics("DuoLM personalized recommendation", "user history") == ["推荐系统与个性化"]
+    assert _wire_topics("DISC time-series dataset similarity", "forecasting") == ["时间序列与预测"]
+    assert _wire_topics("A generic title", "no known topic") == []
+    assert _wire_topics("SliderEdit++ image editing", "instruction-based editing")[:2] == [
+        "多模态与视觉生成",
+        "图像生成与编辑",
+    ]

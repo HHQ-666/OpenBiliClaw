@@ -14,6 +14,7 @@
 
 - 新增 `discovery/frontier_wire.py` 与 `POST /api/channels/ai-frontier/refresh`：从 arXiv（cs.AI/cs.CL/cs.LG）、Hugging Face Daily Papers、Hacker News（>100 分、近 14 天、技术词过滤）拉取高质量文章，单源失败不影响其它源，单次限频 10 分钟。文章写入正常 `content_cache` + `recommendations` 行，保留反馈、保存、分类器和三端卡片链路；重复 content_id 幂等跳过。该端点在 LLM registry 降级时仍可用。
 - 前端「加载更多 AI 前沿」改为调用策展文章源后合并频道列表；首次打开不足 3 条时自动补一次；按钮文案随 Tab 切换为「加载更多 AI 前沿」/「加载更多推荐」。
+- wire 推荐理由按摘要主题生成（推荐系统 / Agent / 多模态 / 强化学习 / 时间序列 / 安全伦理 / 推理优化等），不再所有 Hugging Face 卡片共用同一句模板；arXiv/HF 条目改用 `article` 文字卡路径，旧缓存下也优先显示摘要而不是空白封面。
 - 推荐页主筛选行下方新增内容类型二级筛选：仅当前列表同时存在两种以上类型时显示「全部 / 文章 / 视频 / 帖子 / 项目 / 其他」，计数随当前来源 / 频道 / 搜索词变化；切换只过滤本地视图，不发请求；支持方向键与重置筛选。
 - Linux.do 徽标改为官方三分色圆标，微博改为 Sina Weibo 官方 path；新增 arXiv / Hugging Face / Hacker News 的平台标签、徽标与配色。
 - 卡片译文覆盖 `.video-title` / `.cover-text` / 正文摘录 / 惊喜卡标题与摘要；标题优先进入翻译队列（避免长摘要占满首批），惊喜卡切条后 400ms 再补一次本地化，覆盖晚到的 DOM 写入。

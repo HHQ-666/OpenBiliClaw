@@ -92,6 +92,72 @@ def _iso(value: object) -> str:
     return parsed.astimezone(UTC).isoformat()
 
 
+_TOPIC_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"recommend|personaliz|ranking|user history", re.IGNORECASE), "推荐系统与个性化"),
+    (re.compile(r"multi[- ]?agent|agent(?:s|ic)?\b|智能体", re.IGNORECASE), "Agent 与多智能体"),
+    (
+        re.compile(r"multimodal|vision[- ]language|image|video generation", re.IGNORECASE),
+        "多模态与视觉生成",
+    ),
+    (re.compile(r"reinforcement|rlhf|rlvr|policy optimization", re.IGNORECASE), "强化学习"),
+    (re.compile(r"time[- ]series|forecast", re.IGNORECASE), "时间序列与预测"),
+    (re.compile(r"medical|clinical|ultrasound|health", re.IGNORECASE), "医学与健康 AI"),
+    (re.compile(r"retriev|\brag\b|knowledge base", re.IGNORECASE), "检索增强与知识库"),
+    (
+        re.compile(r"quantiz|inference|kv[- ]cache|throughput|latency", re.IGNORECASE),
+        "推理与部署优化",
+    ),
+    (
+        re.compile(r"robot|embodied|dexterous|manipulation|\bvla\b", re.IGNORECASE),
+        "具身智能与机器人",
+    ),
+    (re.compile(r"benchmark|evaluation|leaderboard", re.IGNORECASE), "评测与基准"),
+    (
+        re.compile(
+            r"detector|detection|safety|ethic|alignment|privacy|security",
+            re.IGNORECASE,
+        ),
+        "AI 安全与伦理",
+    ),
+    (re.compile(r"image editing|editing", re.IGNORECASE), "图像生成与编辑"),
+    (re.compile(r"world model|simulation", re.IGNORECASE), "世界模型与仿真"),
+    (re.compile(r"long[- ]context|context window|memory", re.IGNORECASE), "长上下文与记忆"),
+    (
+        re.compile(
+            r"\bcode\b|\bcoding\b|programming|software engineering",
+            re.IGNORECASE,
+        ),
+        "代码与软件工程",
+    ),
+    (re.compile(r"graph|structured knowledge", re.IGNORECASE), "结构化知识与图"),
+    (re.compile(r"speech|audio|music", re.IGNORECASE), "语音与音频"),
+)
+
+
+def _wire_topics(*texts: object, limit: int = 3) -> list[str]:
+    """Pick a few reader-facing Chinese topics from a wire item.
+
+    The recommendation reason must not be the same sentence for every paper.
+    A deterministic keyword pass is enough to differentiate the visible mix
+    (recommendation / agents / multimodal / RL / time-series / safety / …)
+    without adding another LLM call to the refresh path.
+    """
+    combined = " ".join(_clean(text) for text in texts)
+    topics: list[str] = []
+    for pattern, label in _TOPIC_RULES:
+        if label in topics:
+            continue
+        if pattern.search(combined):
+            topics.append(label)
+        if len(topics) >= limit:
+            break
+    return topics
+
+
+def _topic_phrase(topics: list[str]) -> str:
+    return "、".join(topics) if topics else "前沿方法与应用"
+
+
 def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
     root = ET.fromstring(payload)
     items: list[FrontierWireItem] = []
@@ -115,6 +181,7 @@ def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
             "cs.CL": "计算语言学",
             "cs.LG": "机器学习",
         }.get(category, "AI 研究")
+        topics = _wire_topics(title, summary)
         items.append(
             FrontierWireItem(
                 source_platform="arxiv",
@@ -128,8 +195,8 @@ def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
                 score=0.9,
                 topic_label=f"AI 前沿 · {category_label}",
                 expression=(
-                    f"arXiv 最新论文，方向是{category_label}。摘要已附在卡片里，"
-                    "适合先扫一遍方法和结论，再决定要不要细读。"
+                    f"arXiv {category_label}方向的新论文，聚焦{_topic_phrase(topics)}。"
+                    "摘要已附在卡片里，适合先看方法和实验结论。"
                 ),
                 source_metadata={"wire": "arxiv", "category": category, "authors": authors[:8]},
             )
@@ -156,6 +223,7 @@ def _hf_items(payload: object, limit: int) -> list[FrontierWireItem]:
             if isinstance(author, dict) and _clean(author.get("name"))
         ]
         upvotes = row.get("upvotes")
+        topics = _wire_topics(title, summary)
         items.append(
             FrontierWireItem(
                 source_platform="huggingface",
@@ -169,8 +237,8 @@ def _hf_items(payload: object, limit: int) -> list[FrontierWireItem]:
                 score=0.88,
                 topic_label="AI 前沿 · 论文",
                 expression=(
-                    "Hugging Face 今日热门论文，社区讨论度很高。摘要已附在卡片里，"
-                    "适合先看方法和结论，判断是否值得跟进。"
+                    f"Hugging Face 今日热门论文，聚焦{_topic_phrase(topics)}。"
+                    "摘要已附在卡片里，适合先看它解决了什么问题。"
                 ),
                 source_metadata={
                     "wire": "huggingface",
@@ -197,6 +265,7 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
         points = int(row.get("points") or 0)
         comments = int(row.get("num_comments") or 0)
         url = _clean(row.get("url")) or f"https://news.ycombinator.com/item?id={object_id}"
+        topics = _wire_topics(title)
         items.append(
             FrontierWireItem(
                 source_platform="hackernews",
@@ -213,8 +282,8 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
                 score=min(0.9, 0.75 + points / 10000.0),
                 topic_label="AI 前沿 · 社区",
                 expression=(
-                    f"Hacker News 工程社区热帖，{points} 分、{comments} 条讨论。"
-                    "适合看一线工程师在关心什么。"
+                    f"Hacker News 工程社区热帖，{points} 分、{comments} 条讨论，"
+                    f"主题是{_topic_phrase(topics)}。"
                 ),
                 source_metadata={
                     "wire": "hackernews",
