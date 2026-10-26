@@ -158,6 +158,25 @@ def _topic_phrase(topics: list[str]) -> str:
     return "、".join(topics) if topics else "前沿方法与应用"
 
 
+def _merge_topics(*groups: list[str], limit: int = 3) -> list[str]:
+    merged: list[str] = []
+    for group in groups:
+        for label in group:
+            if label not in merged:
+                merged.append(label)
+            if len(merged) >= limit:
+                return merged
+    return merged
+
+
+def _reason_variant(variants: tuple[str, ...], key: str) -> str:
+    """Deterministic template rotation so adjacent cards do not read alike."""
+    if not variants:
+        return ""
+    index = sum(ord(char) for char in key) % len(variants)
+    return variants[index]
+
+
 def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
     root = ET.fromstring(payload)
     items: list[FrontierWireItem] = []
@@ -181,7 +200,7 @@ def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
             "cs.CL": "计算语言学",
             "cs.LG": "机器学习",
         }.get(category, "AI 研究")
-        topics = _wire_topics(title, summary)
+        topics = _merge_topics(_wire_topics(title), _wire_topics(summary))
         items.append(
             FrontierWireItem(
                 source_platform="arxiv",
@@ -194,9 +213,16 @@ def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
                 tags=tuple(x for x in ("arXiv", category, category_label) if x),
                 score=0.9,
                 topic_label=f"AI 前沿 · {category_label}",
-                expression=(
-                    f"arXiv {category_label}方向的新论文，聚焦{_topic_phrase(topics)}。"
-                    "摘要已附在卡片里，适合先看方法和实验结论。"
+                expression=_reason_variant(
+                    (
+                        f"arXiv {category_label}方向的新论文，聚焦{_topic_phrase(topics)}。"
+                        "摘要已附在卡片里，适合先看方法和实验结论。",
+                        f"这篇 arXiv 论文讨论{_topic_phrase(topics)}，属于{category_label}方向；"
+                        "摘要已在卡片里，方便先扫结论。",
+                        f"arXiv 最新上传的{category_label}论文，主题是{_topic_phrase(topics)}；"
+                        "摘要附在卡片里，适合快速判断是否值得细读。",
+                    ),
+                    paper_id,
                 ),
                 source_metadata={"wire": "arxiv", "category": category, "authors": authors[:8]},
             )
@@ -223,7 +249,7 @@ def _hf_items(payload: object, limit: int) -> list[FrontierWireItem]:
             if isinstance(author, dict) and _clean(author.get("name"))
         ]
         upvotes = row.get("upvotes")
-        topics = _wire_topics(title, summary)
+        topics = _merge_topics(_wire_topics(title), _wire_topics(summary))
         items.append(
             FrontierWireItem(
                 source_platform="huggingface",
@@ -236,9 +262,16 @@ def _hf_items(payload: object, limit: int) -> list[FrontierWireItem]:
                 tags=("Hugging Face", "Daily Papers"),
                 score=0.88,
                 topic_label="AI 前沿 · 论文",
-                expression=(
-                    f"Hugging Face 今日热门论文，聚焦{_topic_phrase(topics)}。"
-                    "摘要已附在卡片里，适合先看它解决了什么问题。"
+                expression=_reason_variant(
+                    (
+                        f"Hugging Face 今日热门论文，聚焦{_topic_phrase(topics)}。"
+                        "摘要已附在卡片里，适合先看它解决了什么问题。",
+                        f"这篇 Hugging Face 论文讨论{_topic_phrase(topics)}，社区热度不错；"
+                        "摘要已在卡片里，方便先扫方法和结论。",
+                        f"Hugging Face 今日推荐的一篇论文，主题是{_topic_phrase(topics)}；"
+                        "摘要附在卡片里，适合快速判断是否值得细读。",
+                    ),
+                    paper_id,
                 ),
                 source_metadata={
                     "wire": "huggingface",
@@ -281,9 +314,14 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
                 tags=("Hacker News",),
                 score=min(0.9, 0.75 + points / 10000.0),
                 topic_label="AI 前沿 · 社区",
-                expression=(
-                    f"Hacker News 工程社区热帖，{points} 分、{comments} 条讨论，"
-                    f"主题是{_topic_phrase(topics)}。"
+                expression=_reason_variant(
+                    (
+                        f"Hacker News 工程社区热帖，{points} 分、{comments} 条讨论，"
+                        f"主题是{_topic_phrase(topics)}。",
+                        f"Hacker News 上讨论度不错的一帖，{points} 分、{comments} 条评论，"
+                        f"聚焦{_topic_phrase(topics)}。",
+                    ),
+                    object_id,
                 ),
                 source_metadata={
                     "wire": "hackernews",
