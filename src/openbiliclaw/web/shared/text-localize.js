@@ -50,18 +50,24 @@
   // Every place a surface prints source-verbatim text: the tray card and its
   // cover excerpt, the delight card, the library and history cards, on both
   // the desktop and the phone.
-  const TEXT_TARGETS = [
+  // Titles first: a full AI-frontier grid can carry 14 long English abstracts,
+// and if those fill the first backend batch the reader waits on the abstract
+// while the headline is still English. Headlines are what the card is scanned
+// by, so they enter the queue before excerpts.
+  const PRIORITY_TARGETS = [
     ".video-title",
-    ".cover-text",
     ".card-title",
-    ".card-cover-text",
     ".delight-title",
     ".delight-thumb-text",
+    "#delightTitle",
+  ].join(", ");
+  const SECONDARY_TARGETS = [
+    ".cover-text",
+    ".card-cover-text",
     ".delight-excerpt-text",
     ".body-text",
     ".excerpt-text",
     ".card-body",
-    "#delightTitle",
     "#delightExcerptText",
   ].join(", ");
 
@@ -177,21 +183,28 @@
     const scope = root || global.document;
     if (!scope || typeof scope.querySelectorAll !== "function") return;
 
-    scope.querySelectorAll(TEXT_TARGETS).forEach((element) => {
-      if (element.dataset.localizeApplied === "1") return;
-      const source = element.textContent || "";
-      if (!needsTranslation(source)) {
-        element.dataset.localizeApplied = "1";
-        return;
-      }
-      const cached = memo.get(collapse(source));
-      if (cached) {
-        paint(element, source, cached);
-        return;
-      }
-      if (queue.some((entry) => entry.element === element)) return;
-      enqueue(element, source);
-    });
+    const seen = new Set();
+    const scan = (selector) => {
+      scope.querySelectorAll(selector).forEach((element) => {
+        if (seen.has(element)) return;
+        seen.add(element);
+        if (element.dataset.localizeApplied === "1") return;
+        const source = element.textContent || "";
+        if (!needsTranslation(source)) {
+          element.dataset.localizeApplied = "1";
+          return;
+        }
+        const cached = memo.get(collapse(source));
+        if (cached) {
+          paint(element, source, cached);
+          return;
+        }
+        if (queue.some((entry) => entry.element === element)) return;
+        enqueue(element, source);
+      });
+    };
+    scan(PRIORITY_TARGETS);
+    scan(SECONDARY_TARGETS);
     if (queue.length) schedule();
   }
 
