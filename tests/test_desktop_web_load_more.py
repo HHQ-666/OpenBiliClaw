@@ -106,8 +106,11 @@ def test_auto_load_gate_uses_active_platform_inventory() -> None:
     # 平台库存未知（首次快照未成功 / 旧后端没有该接口）回退到全局库存，保持既有行为。
     assert "state.runtimeStatus?.pool_available_count > 0" in body
 
-    # 手动「加载更多」在库存为 0 时仍然可点：它负责唤醒后端已有的补货链路。
-    assert 'safeBind("#loadMoreBtn", "click", appendMore);' in app_js
+    # 手动「加载更多」在库存为 0 时仍然可点：AI 前沿走策展文章源，
+    # 其它 Tab 继续走原来的 append / 补货链路。
+    assert 'safeBind("#loadMoreBtn", "click", () => {' in app_js
+    assert "refreshAiFrontierWire();" in app_js
+    assert "void appendMore();" in app_js
     append_body = _function_body(app_js, "appendMore")
     assert "autoLoadBlockReason" not in append_body
     assert "pool_available_count" not in append_body

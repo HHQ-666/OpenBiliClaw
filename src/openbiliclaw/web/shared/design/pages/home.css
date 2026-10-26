@@ -120,6 +120,9 @@
 .platform[data-platform="weibo"], .platform[data-platform="wb"] { background: #e6162d; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
 .platform[data-platform="bangumi"], .platform[data-platform="bgm"] { background: #f09199; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
 .platform[data-platform="youtube"] { background: #ff0000; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="arxiv"] { background: #b31b1b; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.platform[data-platform="huggingface"], .platform[data-platform="hf"] { background: #ffd21e; color: #111; border-color: rgba(0, 0, 0, 0.18); }
+.platform[data-platform="hackernews"], .platform[data-platform="hn"] { background: #ff6600; color: #fff; border-color: rgba(255, 255, 255, 0.3); }
 .platform[data-platform="douyin"] { background: #161823; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
 .platform[data-platform="twitter"], .platform[data-platform="x"] { background: #000; color: #fff; border-color: rgba(255, 255, 255, 0.25); }
 .platform[data-platform="github"], .platform[data-platform="gh"] { background: #24292e; color: #fff; border-color: rgba(255, 255, 255, 0.25); }

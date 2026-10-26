@@ -107,6 +107,8 @@ class PlatformStub:
     def __init__(self) -> None:
         self.reshuffle_posts: list[dict[str, Any]] = []
         self.append_posts: list[dict[str, Any]] = []
+        self.wire_refresh_posts: list[dict[str, Any]] = []
+        self.wire_refresh_count = 0
         self.availability_reads = 0
         self.config_failures_remaining = 0
         self.lock = threading.Lock()
@@ -167,12 +169,14 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
             if path == "/api/recommendations":
                 query = parse_qs(urlsplit(self.path).query)
                 if query.get("channel", [""])[0] == "ai_frontier":
+                    with state.lock:
+                        count = 2 + min(state.wire_refresh_count, 2)
                     return _json_response(
                         self,
                         {
-                            "items": _frontier_page(),
+                            "items": [_frontier_card("F", index) for index in range(1, count + 1)],
                             "channel": "ai_frontier",
-                            "ai_frontier_count": 2,
+                            "ai_frontier_count": count,
                         },
                     )
                 return _json_response(self, {"items": _first_page()})
@@ -246,6 +250,21 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
                 payload = {}
             platform = str(payload.get("source_platform") or "")
             channel = str(payload.get("channel") or "")
+            if path == "/api/channels/ai-frontier/refresh":
+                with state.lock:
+                    state.wire_refresh_posts.append(payload)
+                    state.wire_refresh_count += 1
+                return _json_response(
+                    self,
+                    {
+                        "ok": True,
+                        "throttled": False,
+                        "fetched": 1,
+                        "inserted": 1,
+                        "skipped": 0,
+                        "failed": 0,
+                    },
+                )
             if path == "/api/recommendations/reshuffle":
                 with state.lock:
                     state.reshuffle_posts.append(payload)
@@ -627,7 +646,7 @@ def test_ai_frontier_channel_loads_and_scopes_requests(
     # ── 1. The channel gets its own server-side view ────────────────────
     _click_chip(chromium_page, "AI 前沿")
     _wait_for(
-        lambda: len(_visible_cards(chromium_page)) == 2,
+        lambda: len(_visible_cards(chromium_page)) >= 2,
         message="AI 前沿频道没有加载",
     )
     visible = _visible_cards(chromium_page)
@@ -646,16 +665,19 @@ def test_ai_frontier_channel_loads_and_scopes_requests(
         message="AI 前沿换一批后混入了非前沿卡片",
     )
 
-    # ── 3. 加载更多 stays inside the channel ────────────────────────────
+    # ── 3. 加载更多 AI 前沿 asks the curated article wire ────────────────
+    assert chromium_page.locator("#loadMoreBtn").inner_text() == "加载更多 AI 前沿"
+    baseline_refreshes = len(stub.wire_refresh_posts)
+    before_cards = len(_visible_cards(chromium_page))
     chromium_page.locator("#loadMoreBtn").click()
     _wait_for(
-        lambda: len(stub.append_posts) == 1,
-        message="AI 前沿加载更多没有发出请求",
+        lambda: len(stub.wire_refresh_posts) > baseline_refreshes,
+        message="AI 前沿加载更多没有请求策展文章源",
     )
-    assert stub.append_posts[-1]["channel"] == "ai_frontier"
-    assert "source_platform" not in stub.append_posts[-1]
+    assert "channel" not in stub.wire_refresh_posts[-1]
+    assert "source_platform" not in stub.wire_refresh_posts[-1]
     _wait_for(
-        lambda: len(_visible_cards(chromium_page)) >= 3,
+        lambda: len(_visible_cards(chromium_page)) > before_cards,
         message="AI 前沿加载更多没有追加卡片",
     )
 

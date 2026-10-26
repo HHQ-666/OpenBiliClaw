@@ -6132,6 +6132,65 @@ class TestBackendAPI:
         with pytest.raises(ValidationError):
             RecommendationReshuffleIn(channel="not-a-channel")
 
+    def test_ai_frontier_wire_refresh_endpoint_ingests_and_throttles(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from openbiliclaw.discovery import frontier_wire
+
+        class FakeDatabase:
+            def __init__(self) -> None:
+                import sqlite3
+
+                self.cached: list[tuple[str, dict[str, object]]] = []
+                self.recommendations: list[dict[str, object]] = []
+                self._conn = sqlite3.connect(":memory:", check_same_thread=False)
+                self._conn.row_factory = sqlite3.Row
+                self._conn.execute("CREATE TABLE content_cache (bvid TEXT PRIMARY KEY)")
+
+            @property
+            def conn(self) -> object:
+                return self._conn
+
+            def cache_content(self, bvid: str, **kwargs: object) -> None:
+                self.cached.append((bvid, kwargs))
+
+            def batch_insert_recommendations(self, items: list[dict[str, object]]) -> list[int]:
+                self.recommendations.extend(items)
+                return [1]
+
+        item = frontier_wire.FrontierWireItem(
+            source_platform="arxiv",
+            content_id="arxiv:2610.12345",
+            content_url="https://arxiv.org/abs/2610.12345",
+            title="A Paper",
+            body_text="An abstract.",
+            expression="arXiv 最新论文。",
+            topic_label="AI 前沿 · 人工智能",
+        )
+        monkeypatch.setattr(
+            frontier_wire,
+            "fetch_frontier_wire",
+            lambda **_kwargs: [item],
+        )
+        database = FakeDatabase()
+        client = TestClient(create_app(database=database))
+
+        first = client.post("/api/channels/ai-frontier/refresh")
+        assert first.status_code == 200, first.text
+        first_data = first.json()
+        assert first_data["ok"] is True
+        assert first_data["throttled"] is False
+        assert first_data["inserted"] == 1
+        assert first_data["sources"] == {"arxiv": 1}
+        assert database.recommendations[0]["bvid"] == "arxiv:2610.12345"
+
+        second = client.post("/api/channels/ai-frontier/refresh")
+        assert second.status_code == 200
+        assert second.json()["throttled"] is True
+        assert second.json()["inserted"] == 0
+
     def test_recommendations_endpoint_exposes_fail_closed_github_source_metadata(
         self,
     ) -> None:

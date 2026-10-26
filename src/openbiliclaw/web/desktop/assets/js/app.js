@@ -112,6 +112,7 @@
       // never loses the general feed, and vice versa.
       channelVideos: [],
       channelLoading: false,
+      channelWireTried: false,
       activeFeedback: null,
       profile: null,
       editingProfile: false,
@@ -251,6 +252,9 @@
       { key: "douyin", label: "抖音" },
       { key: "weibo", label: "微博" },
       { key: "youtube", label: "YouTube" },
+      { key: "arxiv", label: "arXiv" },
+      { key: "huggingface", label: "Hugging Face" },
+      { key: "hackernews", label: "Hacker News" },
       { key: "twitter", label: "X (Twitter)" },
       { key: "github", label: "GitHub" },
       { key: "zhihu", label: "知乎" },
@@ -264,21 +268,24 @@
     // 首次成功读到库存快照之前是"未知"，不能把还没读到伪装成 0。
     const PLATFORM_COUNT_UNKNOWN_TEXT = "—";
     const PLATFORM_COUNT_UNKNOWN_LABEL = "库存待读取";
-    const platformLabel = { bilibili: "B 站", youtube: "YouTube", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
-    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "douyin", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
+    const platformLabel = { bilibili: "B 站", youtube: "YouTube", arxiv: "arXiv", huggingface: "Hugging Face", hf: "Hugging Face", hackernews: "Hacker News", hn: "Hacker News", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
+    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "douyin", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", arxiv: "arxiv", huggingface: "huggingface", hf: "huggingface", hackernews: "hackernews", hn: "hackernews", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
     const PLATFORM_BRAND_ICONS = {
       bilibili: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.81 4.65h.85c1.51 0 2.77.84 3.3 2.05.33.75.39 1.6.39 2.47v7.54c0 .87-.06 1.72-.39 2.47-.53 1.21-1.79 2.05-3.3 2.05H5.33c-1.51 0-2.77-.84-3.3-2.05-.33-.75-.39-1.6-.39-2.47V9.17c0-.87.06-1.72.39-2.47.53-1.21 1.79-2.05 3.3-2.05h.85L4.85 2.67a.8.8 0 0 1 .24-.92.78.78 0 0 1 .91-.02l3.24 2.92h5.52l3.24-2.92a.78.78 0 0 1 .91.02.8.8 0 0 1 .24.92L17.81 4.65zm-10.48 5.68c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25zm9.34 0c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25z"/></svg>',
       github: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>',
-      linuxdo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C9.5 2 7.5 4 7.5 6.5c0 1.6.8 3.1 2 4-2.8 1.4-4.5 4.1-4.5 7.5 0 1 .8 2 2.5 2.5 1.5.5 3.5.5 5 .5s3.5 0 5-.5c1.7-.5 2.5-1.5 2.5-2.5 0-3.4-1.7-6.1-4.5-7.5 1.2-.9 2-2.4 2-4C16.5 4 14.5 2 12 2zm-1.8 4.2c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm3.6 0c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm-1.8 3.3c1 0 1.7.5 1.7 1.2h-3.4c0-.7.7-1.2 1.7-1.2z"/></svg>',
+      linuxdo: '<svg viewBox="0 0 24 24" aria-hidden="true"><g style="clip-path:circle(50% at 50% 50%)"><rect x="0" y="0" width="24" height="8" fill="#1c1c1e"/><rect x="0" y="8" width="24" height="8" fill="#f0f0f0"/><rect x="0" y="16" width="24" height="8" fill="#ffb003"/></g></svg>',
       zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.3 4C4.6 4 4 4.6 4 5.3v9.4C4 15.4 4.6 16 5.3 16h3.2v3.6c0 .4.5.6.8.3L13 16h5.7c.7 0 1.3-.6 1.3-1.3V5.3C20 4.6 19.4 4 18.7 4H5.3zm4 2.8h5.4c.4 0 .7.3.7.7v4.4c0 .4-.3.7-.7.7H9.3a.7.7 0 0 1-.7-.7V7.5c0-.4.3-.7.7-.7z"/></svg>',
       douyin: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.7 7.2a4.8 4.8 0 0 1-3.2-2.1V15a4.7 4.7 0 1 1-4.7-4.7c.4 0 .8.1 1.2.2v2.8a2 2 0 1 0 1 1.7V2.5h2.8c.2 1.8 1.4 3.3 2.9 3.8v.9z"/></svg>',
       xiaohongshu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.5 13.8c-.3.4-.8.7-1.4.7-.7 0-1.2-.4-1.6-.9l-.5-.7-.5.7c-.4.5-.9.9-1.6.9-.6 0-1.1-.3-1.4-.7-.4-.5-.5-1.2-.3-1.9l.7-2.3H8.5c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h1.8l.5-1.8c.1-.4.5-.7.9-.7s.7.3.9.7l.4 1.8h2.3c.4 0 .7.3.7.7s-.3.7-.7.7h-1.9l.7 2.3c.2.7.1 1.4-.3 1.9z"/></svg>',
-      weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.1 4c-4.4 0-8 2.8-8 6.2 0 4.2 5.5 7.8 11.2 7.8 1.8 0 3.3-.4 4.5-1.1 2.9.9 5.2.2 5.2.2s-.9-1.4-.7-2.7c1.1-1.3 1.7-2.8 1.7-4.2 0-3.4-3.6-6.2-8-6.2h-5.9zm1.1 10.3c-2.8 0-5.1-1.8-5.1-4s2.3-4 5.1-4 5.1 1.8 5.1 4-2.3 4-5.1 4zm8.6-8c-.3-.2-.7-.1-.9.2-.2.3-.1.7.2.9.9.6 1.4 1.5 1.4 2.6 0 .4.3.7.7.7s.7-.3.7-.7c0-1.6-.8-3-2.1-3.7z"/></svg>',
+      weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.737 5.439l-.002.004zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.18.601l.014-.028zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.57-.18-.405-.615.375-.977.42-1.804 0-2.404-.781-1.112-2.915-1.053-5.364-.03 0 0-.766.331-.571-.271.376-1.217.315-2.224-.27-2.809-1.338-1.337-4.869.045-7.888 3.08C1.309 10.87 0 13.273 0 15.348c0 3.981 5.099 6.395 10.086 6.395 6.536 0 10.888-3.801 10.888-6.82 0-1.822-1.547-2.854-2.915-3.284v.01zm1.908-5.092c-.766-.856-1.908-1.187-2.96-.962-.436.09-.706.511-.616.932.09.42.511.691.932.602.511-.105 1.067.044 1.442.465.376.421.466.977.316 1.473-.136.406.089.856.51.992.405.119.857-.105.992-.512.33-1.021.12-2.178-.646-3.035l.03.045zm2.418-2.195c-1.576-1.757-3.905-2.419-6.054-1.968-.496.104-.812.587-.706 1.081.104.496.586.813 1.082.707 1.532-.331 3.185.15 4.296 1.383 1.112 1.246 1.429 2.943.947 4.416-.165.48.106 1.007.586 1.157.479.165.991-.104 1.157-.586.675-2.088.241-4.478-1.338-6.235l.03.045z"/></svg>',
       youtube: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.6 7.2c-.2-.9-.9-1.6-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4c-.9.2-1.6.9-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8c.2.9.9 1.6 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3L10 15z"/></svg>',
       twitter: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.2 3h2.9l-6.3 7.2 7.4 9.8h-5.8l-4.5-5.9-5.2 5.9H3.8l6.7-7.7L3.4 3h6l4.1 5.4L18.2 3zm-1 15.3h1.6L7.1 4.6H5.4l11.8 13.7z"/></svg>',
       reddit: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5.7 10.7a2 2 0 0 1 .3 1c0 2.2-2.7 4-6 4s-6-1.8-6-4a2 2 0 0 1 .3-1 1.7 1.7 0 0 1-.3-1 1.8 1.8 0 0 1 3-1.3 7.4 7.4 0 0 1 3.5-.9l.7-3.3 2.3.5a1.4 1.4 0 1 1 1.3 1.8l-1.8-.4-.5 2.3a7.4 7.4 0 0 1 3.5.9 1.8 1.8 0 0 1 3 1.3 1.7 1.7 0 0 1-.3 1.1zm-7.7 2.3c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1zm4 0c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1z"/></svg>',
       bangumi: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8.5 7h4a3 3 0 0 1 0 6H9m0 0h4a3 3 0 0 1 0 6H8.5V7z" fill="none" stroke="#fff" stroke-width="2"/></svg>',
       v2ex: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 9 4 6 4-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      arxiv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7l5 5v12H6z"/><path d="M13 3.5v5h5"/><path d="M9 13h6M9 16.5h4"/></svg>',
+      huggingface: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M8.2 14.2c1.1 1.6 2.4 2.4 3.8 2.4s2.7-.8 3.8-2.4"/></svg>',
+      hackernews: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h2.3l2.7 5.1L14.7 5H17l-3.8 7.1V19h-2.4v-6.9z"/></svg>',
       instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
       fallback: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>'
     };
@@ -286,7 +293,7 @@
       const slug = canonicalPlatformSlug(value);
       return PLATFORM_BRAND_ICONS[slug] || PLATFORM_BRAND_ICONS.fallback;
     }
-    const textCardContentTypes = new Set(["tweet", "thread", "answer", "article", "question", "post", "comment", "repository"]);
+    const textCardContentTypes = new Set(["tweet", "thread", "answer", "article", "paper", "question", "post", "comment", "repository"]);
     // v0.3.118+: bilibili is selectable like every other source — default
     // checked (recommended) but no longer forced. At least one source must
     // stay checked to start.
@@ -4424,7 +4431,7 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     // 切换 Tab 只改变视图，不发任何推荐请求（设计文档 §5.2）。自动激活后 chip 会
     // 被重建，所以键盘路径需要把 focus 还给新的同名 chip。
-    async function loadAiFrontierChannel({ force = false } = {}) {
+    async function loadAiFrontierChannel({ force = false, merge = false } = {}) {
       if (state.channelLoading) return;
       if (!force && state.channelVideos.length) return;
       state.channelLoading = true;
@@ -4437,9 +4444,17 @@ ${savedCardFeedbackBarHtml(listKind)}
           `${ENDPOINTS.recommendations}?channel=${encodeURIComponent(AI_FRONTIER_CHANNEL)}`,
           { timeoutMs: 25000 }
         );
-        state.channelVideos = normalizeRecommendationList(
+        const next = normalizeRecommendationList(
           Array.isArray(payload) ? payload : payload?.items
         );
+        if (merge) {
+          const seen = new Set(state.channelVideos.map((item) => recommendationKey(item)));
+          state.channelVideos = state.channelVideos.concat(
+            next.filter((item) => !seen.has(recommendationKey(item)))
+          );
+        } else {
+          state.channelVideos = next;
+        }
       } catch {
         if (!state.channelVideos.length) {
           showToast("AI 前沿暂时加载失败，稍后再试");
@@ -4447,7 +4462,49 @@ ${savedCardFeedbackBarHtml(listKind)}
       } finally {
         state.channelLoading = false;
         renderAll();
+        // A narrow channel can legitimately start with one or two items. Pull
+        // the curated article wire once per page session instead of making the
+        // reader discover the button first.
+        if (!force && state.channelVideos.length < 3 && !state.channelWireTried) {
+          state.channelWireTried = true;
+          void refreshAiFrontierWire();
+        }
       }
+    }
+
+    async function refreshAiFrontierWire() {
+      const button = $("#loadMoreBtn");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "正在找更多 AI 前沿…";
+      }
+      try {
+        const result = await requestJson("/channels/ai-frontier/refresh", {
+          method: "POST",
+          timeoutMs: 30000,
+        });
+        if (!result?.ok) {
+          showToast("AI 前沿补货失败，稍后再试");
+          return;
+        }
+        await loadAiFrontierChannel({ force: true, merge: true });
+        if (Number(result.inserted) > 0) {
+          showToast(`已补充 ${Number(result.inserted)} 条 AI 前沿内容`);
+        } else {
+          showToast(result.throttled ? "刚刚找过一批，稍后再试" : "暂时没有新的高质量内容");
+        }
+      } catch {
+        showToast("AI 前沿补货失败，稍后再试");
+      } finally {
+        if (button) button.disabled = false;
+        updateLoadMoreLabel();
+      }
+    }
+
+    function updateLoadMoreLabel() {
+      const button = $("#loadMoreBtn");
+      if (!button) return;
+      button.textContent = isAiFrontierFilter() ? "加载更多 AI 前沿" : "加载更多推荐";
     }
 
     function setActiveFilter(name, { restoreFocus = false } = {}) {
@@ -5471,6 +5528,7 @@ ${cardFeedbackBarHtml()}`;
       }
       const loadMore = $("#loadMoreBtn");
       if (loadMore) loadMore.hidden = false;
+      updateLoadMoreLabel();
       const items = filteredVideos();
       if (!items.length) {
         // 平台 Tab 的空态要区分「本会话还没装入」和「该平台暂时没有新候选」，
@@ -5489,7 +5547,7 @@ ${cardFeedbackBarHtml()}`;
         const channelMessage = isAiFrontierFilter() && !loadFailed
           ? state.channelLoading
             ? "正在加载 AI 前沿…"
-            : "AI 前沿暂时没有新内容，后台会继续补货；也可以点「加载更多推荐」再找一批。"
+            : "AI 前沿暂时没有新内容，后台会继续补货；也可以点「加载更多 AI 前沿」再找一批。"
           : "";
         const platformMessage = activePlatform && !loadFailed
           ? activePlatformCount === null
@@ -9593,7 +9651,11 @@ ${cardFeedbackBarHtml()}`;
           // 列表空态里已经写了同一句「后台会继续补货」；再弹一条 toast 就是同一句话
           // 说两遍。只有列表还在（只是这批没新货）时才用 toast 补一句。
           if (!$("#videoGrid .empty-state")) {
-            showToast(`候选池暂时没有新内容，已请求后台补货，${retryHint}`);
+            showToast(
+              requestChannel
+                ? "AI 前沿暂时没有更多内容，点「加载更多 AI 前沿」再找一批"
+                : `候选池暂时没有新内容，已请求后台补货，${retryHint}`
+            );
           }
         }
       } finally {
@@ -11884,6 +11946,12 @@ ${cardFeedbackBarHtml()}`;
         if ($("#delightStatus")) $("#delightStatus").textContent = state.delight.response_message || "";
         // 惊喜卡的标题 / 正文同样照抄原文，切到这一条时补中文。
         localizeCardText($("#delightBanner") || document);
+        // The excerpt/title can be replaced one frame after the banner is
+        // swapped; a second pass catches that late DOM write without
+        // blocking the first paint.
+        window.setTimeout(() => {
+          localizeCardText($("#delightBanner") || document);
+        }, 400);
         if (copy) copy.classList.remove("is-exiting");
         if (thumb) thumb.classList.remove("is-exiting");
         // 用 requestAnimationFrame 手动驱动高度动画（避免 CSS transition 启动时序问题）
@@ -13767,7 +13835,13 @@ ${cardFeedbackBarHtml()}`;
     window.addEventListener("scroll", scheduleAutoLoadCheck, { passive: true });
     window.addEventListener("resize", scheduleAutoLoadCheck);
     safeBind("#reshuffleBtn", "click", reshuffle);
-    safeBind("#loadMoreBtn", "click", appendMore);
+    safeBind("#loadMoreBtn", "click", () => {
+      if (isAiFrontierFilter()) {
+        void refreshAiFrontierWire();
+        return;
+      }
+      void appendMore();
+    });
     ensureDelightThumbAnchor();
     safeBind("#delightThumb", "click", () => respondDelight(state.delight, "view"));
     safeBind("#delightThumb", "auxclick", (event) => {

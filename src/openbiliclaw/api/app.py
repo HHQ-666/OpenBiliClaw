@@ -2504,6 +2504,7 @@ def create_app(
     auto_replenishment_started_at = 0.0
     first_page_topup_attempted_at = 0.0
     frontier_seed_last_at = 0.0
+    frontier_wire_last_at = 0.0
     recommendation_snapshot_cache: RecommendationListResponse | None = None
     recommendation_snapshot_cached_at = 0.0
     recommendation_snapshot_expires_at = 0.0
@@ -2812,6 +2813,10 @@ def create_app(
             or path == "/api/health"
             or path == "/api/runtime-status"
             or (path == "/api/content-history" and method == "GET")
+            # The curated article wire is LLM-independent: it only fetches
+            # public feeds and writes deterministic copy, so it remains
+            # usable while the chat/eval registry is being repaired.
+            or (path == "/api/channels/ai-frontier/refresh" and method == "POST")
             or path == "/favicon.ico"
             or path == "/api/autostart-status"
             or path == "/api/autostart/apply"
@@ -9758,6 +9763,55 @@ def create_app(
             recommendation_snapshot_dislike_digest = dislike_digest
             recommendation_snapshot_channel = channel
             return snapshot
+
+    @app.post("/api/channels/ai-frontier/refresh")
+    async def refresh_ai_frontier_channel() -> dict[str, Any]:
+        """Pull the curated high-quality article wire into the local pool.
+
+        This is the explicit "加载更多 AI 前沿" action. It is throttled so a
+        double click cannot hammer arXiv/Hugging Face/Hacker News; the caller
+        then re-reads ``GET /api/recommendations?channel=ai_frontier``.
+        """
+        nonlocal frontier_wire_last_at
+
+        if time.monotonic() - frontier_wire_last_at < 600:
+            return {
+                "ok": True,
+                "throttled": True,
+                "fetched": 0,
+                "inserted": 0,
+                "skipped": 0,
+                "failed": 0,
+                "retry_after_seconds": max(
+                    0, int(600 - (time.monotonic() - frontier_wire_last_at))
+                ),
+            }
+        from openbiliclaw.discovery.frontier_wire import (
+            fetch_frontier_wire,
+            ingest_frontier_wire,
+        )
+
+        try:
+            items = await asyncio.wait_for(
+                asyncio.to_thread(fetch_frontier_wire),
+                timeout=25,
+            )
+            result = await asyncio.to_thread(ingest_frontier_wire, ctx.database, items)
+        except Exception as exc:
+            logger.warning("AI frontier wire refresh failed: %s", exc)
+            return {"ok": False, "error": "wire_refresh_failed"}
+        frontier_wire_last_at = time.monotonic()
+        _invalidate_recommendation_snapshot()
+        return {
+            "ok": True,
+            "throttled": False,
+            "retry_after_seconds": 600,
+            "sources": {
+                platform: sum(1 for item in items if item.source_platform == platform)
+                for platform in {item.source_platform for item in items}
+            },
+            **result,
+        }
 
     def _content_history_item(row: dict[str, Any]) -> ContentHistoryItemOut:
         source_platform = _normalize_source_platform(

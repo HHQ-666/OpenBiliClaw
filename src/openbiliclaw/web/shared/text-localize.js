@@ -57,6 +57,10 @@
     ".card-cover-text",
     ".delight-title",
     ".delight-thumb-text",
+    ".delight-excerpt-text",
+    ".body-text",
+    ".excerpt-text",
+    ".card-body",
     "#delightTitle",
     "#delightExcerptText",
   ].join(", ");

@@ -10,6 +10,14 @@
 - 新增 `discovery/frontier_seed.py`：频道命中不足 5 条时，按 30 分钟节流向正常 `discovery_keywords` 插入一组平台化策展词（模型发布、benchmark、open weights、agent、inference 等），使用当前画像 digest 并写 `source_interest="AI 前沿"` 溯源；仍由既有 keyword fetch → producer → eval → admission 链路补货，`sources.<platform>.enabled=false` 不注入。
 - 验证：`tests/test_recommendation_frontier.py` 9 项、`tests/test_frontier_seed.py` 7 项、`tests/test_recommendation_engine.py` + frontier 175 项、`tests/test_api_app.py` 622 项、`tests/test_desktop_web_platform_recommendations_e2e.py` 4 项通过；`ruff check` / `ruff format --check` 与改动文件的 `mypy` 通过。真实候选池临时副本跑通 `serve(channel="ai_frontier")`；分类器按当前池子返回的供给量取决于用户已看/未看库存，频道见底时由 seed + 既有补货链路继续填充。
 
+### AI 前沿频道增强（feat/ai-frontier-polish，2026-10-26）
+
+- 新增 `discovery/frontier_wire.py` 与 `POST /api/channels/ai-frontier/refresh`：从 arXiv（cs.AI/cs.CL/cs.LG）、Hugging Face Daily Papers、Hacker News（>100 分、近 14 天、技术词过滤）拉取高质量文章，单源失败不影响其它源，单次限频 10 分钟。文章写入正常 `content_cache` + `recommendations` 行，保留反馈、保存、分类器和三端卡片链路；重复 content_id 幂等跳过。该端点在 LLM registry 降级时仍可用。
+- 前端「加载更多 AI 前沿」改为调用策展文章源后合并频道列表；首次打开不足 3 条时自动补一次；按钮文案随 Tab 切换为「加载更多 AI 前沿」/「加载更多推荐」。
+- Linux.do 徽标改为官方三分色圆标，微博改为 Sina Weibo 官方 path；新增 arXiv / Hugging Face / Hacker News 的平台标签、徽标与配色。
+- 卡片译文覆盖 `.video-title` / `.cover-text` / 正文摘录 / 惊喜卡标题与摘要；惊喜卡切条后 400ms 再补一次本地化，覆盖晚到的 DOM 写入。
+- 验证：`tests/test_frontier_wire.py` 6 项、`tests/test_api_app.py` 新增 refresh 端点与降级模式可用性、`tests/test_desktop_web_platform_recommendations_e2e.py` 覆盖自动补货与「加载更多 AI 前沿」，`tests/test_desktop_web_load_more.py` / `tests/test_mobile_recommend_consistency.py` 同步；真实网络抓取 arXiv/HF/HN 并以临时库跑通频道文章。
+
 ## 未发布：私人卡片目录馆 —— 三端界面重构（feat/ui-redesign）
 
 - **提示条不再堆积**：旧实现里只有最底下那条会启动倒计时（`_reposition` 的 `first` 分支），叠在上面的每一条都永远等不到计时器 —— 补货重试几轮后右下角就挂了一列永不消失的提示（用户截图里十几条「已加载更多推荐」「候选池暂时没有新内容」）。现在每条创建即计时，同文案 20 秒内只出现一次，同时最多挂 3 条；同时删掉纯告知型提示：「已加载更多推荐」、主题/纸张/色相切换、开关类设置（界面本身已经变了，不需要再说一遍）。
