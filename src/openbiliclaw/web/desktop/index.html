@@ -199,6 +199,8 @@
           </div>
           <!-- chip 由 renderFilters 渲染成 role=tab（含 instagram、aria-selected 与库存计数） -->
           <div class="filter-row" id="filterRow" role="tablist" aria-label="推荐平台与库存"></div>
+          <!-- 内容类型二级筛选：仅当当前列表同时存在文章 / 视频 / 帖子等类型时由 renderTypeFilters 显示 -->
+          <div class="filter-row type-filter-row" id="typeFilterRow" role="tablist" aria-label="内容类型" hidden></div>
           <!-- 徽标语义说明：数字是后端还能换的库存，不是这一屏的卡片数；0 常见于
                来源没开或补货还没回来，所以顺手说清它为什么会涨。 -->
           <p class="filter-legend">平台后的数字＝还能换的数量，后台补货后会涨</p>

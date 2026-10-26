@@ -222,3 +222,19 @@ def test_reshuffle_invalidates_inflight_append_responses() -> None:
     assert "const listVersionAtRequest = recommendationListVersion;" in append
     assert "if (listVersionAtRequest !== recommendationListVersion) return;" in append
     assert "recommendationListVersion += 1;" in snapshot
+
+
+def test_content_type_filter_is_rendered_only_for_mixed_lists() -> None:
+    app_js = _read(APP_JS)
+    index_html = _read(INDEX_HTML)
+
+    assert 'id="typeFilterRow"' in index_html
+    assert 'aria-label="内容类型"' in index_html
+    assert "const TYPE_FILTER_ORDER" in app_js
+    assert "function contentTypeGroup(" in app_js
+    assert "function recommendationBaseItems(" in app_js
+    assert "function renderTypeFilters(" in app_js
+    assert "renderFilters, renderTypeFilters, renderVideos" in app_js
+    assert "if (groups.length <= 1)" in app_js
+    assert 'state.typeFilter = "全部"' in app_js
+    assert 'if (state.typeFilter === "全部") return items;' in app_js

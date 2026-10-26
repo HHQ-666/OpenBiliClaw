@@ -1427,6 +1427,23 @@
   flex: none;
 }
 
+/* Secondary content-type row: same stamp language, one weight down. */
+.filter-row.type-filter-row {
+  margin: calc(var(--s4) * -1) 0 var(--s4);
+  border-bottom: 0;
+  gap: 2px;
+}
+
+.filter-row.type-filter-row .chip {
+  padding: 4px 9px;
+  font-size: 10.5px;
+  border-bottom-width: 1px;
+}
+
+.filter-row.type-filter-row .chip .chip-count {
+  font-size: 9.5px;
+}
+
 /* a guide-card tab: mono label, count in superscript, stamp underline when live */
 .filter-row .chip,
 .content-library-tab,

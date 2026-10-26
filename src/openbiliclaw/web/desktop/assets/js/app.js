@@ -104,9 +104,13 @@
 
     const AI_FRONTIER_FILTER = "AI 前沿";
     const AI_FRONTIER_CHANNEL = "ai_frontier";
+    // Secondary content-type filter. It is rendered only when the current
+    // source/channel view actually contains more than one group.
+    const TYPE_FILTER_ORDER = ["文章", "视频", "帖子", "项目", "其他"];
     const state = {
       query: "",
       filter: "全部",
+      typeFilter: "全部",
       // The AI-frontier channel is a separate server-side view over the same
       // pool. Keep its cards out of state.videos so switching back to "全部"
       // never loses the general feed, and vice versa.
@@ -4053,23 +4057,46 @@ ${savedCardFeedbackBarHtml(listKind)}
       return ["全部", AI_FRONTIER_FILTER, ...sources, ...otherSources];
     }
 
-    function filteredVideos() {
+    function contentTypeGroup(item) {
+      const type = String(item?.content_type || "").toLowerCase();
+      if (type === "video" || Number(item?.duration) > 0) return "视频";
+      if (type === "paper" || type === "article") return "文章";
+      if (["tweet", "thread", "answer", "question", "post", "comment"].includes(type)) return "帖子";
+      if (type === "repository") return "项目";
+      return "其他";
+    }
+
+    // The items visible in the current primary scope (全部 / 来源 Tab / AI 前沿)
+    // after the search query, but before the content-type filter. Type chips and
+    // the grid both derive from here so their counts cannot drift.
+    function recommendationBaseItems() {
       const q = state.query.trim().toLowerCase();
-      if (isAiFrontierFilter()) {
-        return state.channelVideos.filter((item) => {
-          const queryOk = !q || [item.title, item.up, item.topic, item.reason]
-            .join(" ")
-            .toLowerCase()
-            .includes(q);
-          return queryOk;
-        });
-      }
-      return state.videos.filter((item) => {
+      const inChannel = isAiFrontierFilter();
+      const sourceItems = inChannel ? state.channelVideos : state.videos;
+      return sourceItems.filter((item) => {
         const label = platformName(item.platform);
-        const filterOk = state.filter === "全部" || state.filter === label;
-        const queryOk = !q || [item.title, item.up, item.topic, item.reason, label].join(" ").toLowerCase().includes(q);
+        const filterOk = inChannel || state.filter === "全部" || state.filter === label;
+        const queryOk = !q || [item.title, item.up, item.topic, item.reason, label]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
         return filterOk && queryOk;
       });
+    }
+
+    function typeFilterCounts(items) {
+      const counts = {};
+      for (const item of items) {
+        const group = contentTypeGroup(item);
+        counts[group] = (counts[group] || 0) + 1;
+      }
+      return counts;
+    }
+
+    function filteredVideos() {
+      const items = recommendationBaseItems();
+      if (state.typeFilter === "全部") return items;
+      return items.filter((item) => contentTypeGroup(item) === state.typeFilter);
     }
 
     function normalizeThemeMode(value) {
@@ -4611,7 +4638,82 @@ ${savedCardFeedbackBarHtml(listKind)}
         restored?.focus({ preventScroll: true });
       }
       const resetButton = $("#resetFiltersBtn");
-      if (resetButton) resetButton.hidden = state.filter === "全部" && !String(state.query || "").trim();
+      if (resetButton) {
+        resetButton.hidden =
+          state.filter === "全部" &&
+          state.typeFilter === "全部" &&
+          !String(state.query || "").trim();
+      }
+    }
+
+    function setActiveTypeFilter(name, { restoreFocus = false } = {}) {
+      state.typeFilter = name;
+      renderAll();
+      if (!restoreFocus) return;
+      const chips = Array.from(document.querySelectorAll("#typeFilterRow .chip"));
+      chips.find((chip) => chip.dataset.typeFilter === name)?.focus();
+    }
+
+    function handleTypeFilterKeydown(event, filters, index) {
+      const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      let next = index;
+      if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = filters.length - 1;
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + filters.length) % filters.length;
+      else next = (index + 1) % filters.length;
+      setActiveTypeFilter(filters[next], { restoreFocus: true });
+    }
+
+    function renderTypeFilters() {
+      const row = $("#typeFilterRow");
+      if (!row) return;
+      const base = recommendationBaseItems();
+      const counts = typeFilterCounts(base);
+      const groups = TYPE_FILTER_ORDER.filter((name) => (counts[name] || 0) > 0);
+      if (groups.length <= 1) {
+        row.hidden = true;
+        row.replaceChildren();
+        state.typeFilter = "全部";
+        return;
+      }
+      row.hidden = false;
+      const filters = ["全部", ...groups];
+      if (!filters.includes(state.typeFilter)) state.typeFilter = "全部";
+      const focusedType = row.contains(document.activeElement)
+        ? String(document.activeElement.dataset.typeFilter || "")
+        : "";
+      row.replaceChildren(...filters.map((name, index) => {
+        const btn = document.createElement("button");
+        const selected = state.typeFilter === name;
+        const count = name === "全部" ? base.length : counts[name] || 0;
+        btn.className = `chip${selected ? " is-active" : ""}`;
+        btn.type = "button";
+        btn.dataset.typeFilter = name;
+        btn.setAttribute("role", "tab");
+        btn.setAttribute("aria-selected", selected ? "true" : "false");
+        btn.setAttribute("aria-label", `${name}，${count} 条`);
+        btn.tabIndex = selected ? 0 : -1;
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "chip-label";
+        labelSpan.textContent = name;
+        const countSpan = document.createElement("span");
+        countSpan.className = "chip-count";
+        countSpan.dataset.state = count > 0 ? "known" : "zero";
+        countSpan.textContent = String(count);
+        countSpan.setAttribute("aria-hidden", "true");
+        btn.replaceChildren(labelSpan, countSpan);
+        btn.addEventListener("click", () => setActiveTypeFilter(name));
+        btn.addEventListener("keydown", (event) => handleTypeFilterKeydown(event, filters, index));
+        return btn;
+      }));
+      if (focusedType) {
+        const chips = Array.from(row.querySelectorAll(".chip"));
+        const restored = chips.find((chip) => chip.dataset.typeFilter === focusedType)
+          || chips.find((chip) => chip.dataset.typeFilter === state.typeFilter);
+        restored?.focus({ preventScroll: true });
+      }
     }
 
     function normalizeImageUrl(value) {
@@ -5544,6 +5646,9 @@ ${cardFeedbackBarHtml()}`;
             ? runtime.manual_refresh_message || "内容发现未完成，请检查来源连接后重试内容发现。"
             : runtime.discovery_failure_message
           : "";
+        const typeMessage = state.typeFilter !== "全部"
+          ? `当前「${escapeHtml(state.typeFilter)}」筛选下没有内容，切换「全部」看看。`
+          : "";
         const channelMessage = isAiFrontierFilter() && !loadFailed
           ? state.channelLoading
             ? "正在加载 AI 前沿…"
@@ -5560,6 +5665,8 @@ ${cardFeedbackBarHtml()}`;
           ? `没有找到包含“${escapeHtml(state.query.trim())}”的推荐。`
           : discoveryFailure
             ? escapeHtml(discoveryFailure)
+          : typeMessage
+            ? typeMessage
           : channelMessage
             ? channelMessage
           : platformMessage
@@ -12497,6 +12604,7 @@ ${cardFeedbackBarHtml()}`;
       function applyInitialRecommendations(items) {
         applyDesktopRecommendationSnapshot(items, { replace: replaceRecommendations });
         renderFilters();
+        renderTypeFilters();
         renderVideos();
         scheduleAutoLoadCheck();
       }
@@ -12709,7 +12817,7 @@ ${cardFeedbackBarHtml()}`;
     // preserveVideos：跳过推荐网格这一步。给「高频后台事件顺手带起来的重绘」用，
     // 它们只想刷新头部 / 库存 / 侧栏，不该碰用户正在浏览的列表。
     function renderAll({ preserveVideos = false } = {}) {
-      const steps = [renderFilters, renderVideos, syncSourceMetric, renderRail, renderProfileDetails, renderMessages, renderChat, renderPoolStatus];
+      const steps = [renderFilters, renderTypeFilters, renderVideos, syncSourceMetric, renderRail, renderProfileDetails, renderMessages, renderChat, renderPoolStatus];
       for (const step of steps) {
         if (preserveVideos && step === renderVideos) continue;
         try { step(); } catch (error) { showFatal(error, step.name || "渲染"); }
@@ -13860,7 +13968,7 @@ ${cardFeedbackBarHtml()}`;
     safeBind("#delightCommentInput", "blur", (event) => {
       autoCollapseComposer(document.querySelector(".delight-main-actions"), event, closeDelightComposer);
     });
-    safeBind("#resetFiltersBtn", "click", () => { state.query = ""; state.filter = "全部"; const input = $("#searchInput"); if (input) input.value = ""; renderAll(); });
+    safeBind("#resetFiltersBtn", "click", () => { state.query = ""; state.filter = "全部"; state.typeFilter = "全部"; const input = $("#searchInput"); if (input) input.value = ""; renderAll(); });
     safeBind("#searchInput", "input", (event) => { state.query = event.target.value || ""; renderAll(); });
     safeBind("#searchForm", "submit", (event) => { event.preventDefault(); state.query = $("#searchInput")?.value || ""; renderAll(); });
     window.addEventListener("resize", scheduleActivityRailHeightSync);

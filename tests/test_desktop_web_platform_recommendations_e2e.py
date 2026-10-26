@@ -90,6 +90,7 @@ def _frontier_card(batch: str, index: int) -> dict[str, Any]:
     card.update(
         {
             "title": f"Gemini 4 Argon 前沿评测 {batch}{index}",
+            "content_type": "video",
             "ai_frontier": True,
             "ai_frontier_score": 12.0,
             "ai_frontier_tags": ["前沿模型"],
@@ -99,8 +100,22 @@ def _frontier_card(batch: str, index: int) -> dict[str, Any]:
     return card
 
 
+def _frontier_paper() -> dict[str, Any]:
+    card = _frontier_card("P", 1)
+    card.update(
+        {
+            "source_platform": "huggingface",
+            "content_type": "paper",
+            "duration": 0,
+            "title": "Gemini 4 Argon 前沿评测：多模态论文",
+            "up_name": "Hugging Face",
+        }
+    )
+    return card
+
+
 def _frontier_page() -> list[dict[str, Any]]:
-    return [_frontier_card("F", 1), _frontier_card("F", 2)]
+    return [_frontier_card("F", 1), _frontier_card("F", 2), _frontier_paper()]
 
 
 class PlatformStub:
@@ -171,12 +186,15 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
                 if query.get("channel", [""])[0] == "ai_frontier":
                     with state.lock:
                         count = 2 + min(state.wire_refresh_count, 2)
+                    items = [_frontier_card("F", index) for index in range(1, count + 1)] + [
+                        _frontier_paper()
+                    ]
                     return _json_response(
                         self,
                         {
-                            "items": [_frontier_card("F", index) for index in range(1, count + 1)],
+                            "items": items,
                             "channel": "ai_frontier",
-                            "ai_frontier_count": count,
+                            "ai_frontier_count": len(items),
                         },
                     )
                 return _json_response(self, {"items": _first_page()})
@@ -397,6 +415,20 @@ def _visible_cards(page: Page) -> list[dict[str, str]]:
 
 def _click_chip(page: Page, label: str) -> None:
     page.locator(f'#filterRow .chip[data-filter="{label}"]').click()
+
+
+def _type_chips(page: Page) -> list[dict[str, str]]:
+    return page.evaluate(
+        """() => Array.from(document.querySelectorAll('#typeFilterRow .chip')).map((chip) => ({
+          type: chip.dataset.typeFilter || '',
+          count: chip.querySelector('.chip-count')?.textContent || '',
+          selected: chip.getAttribute('aria-selected') || '',
+        }))"""
+    )
+
+
+def _click_type(page: Page, label: str) -> None:
+    page.locator(f'#typeFilterRow .chip[data-type-filter="{label}"]').click()
 
 
 def test_platform_tabs_scope_recommendation_requests_in_chromium(
