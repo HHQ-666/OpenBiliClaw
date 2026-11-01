@@ -1179,6 +1179,45 @@ class CognitionUpdateSummary(BaseModel):
     created_at: str = ""
 
 
+class DigestChannelResultOut(BaseModel):
+    """One push channel's per-issue delivery outcome."""
+
+    channel: str
+    ok: bool
+    detail: str = ""
+
+
+class DigestIssueOut(BaseModel):
+    """Archive row of one daily digest (list view)."""
+
+    id: int
+    digest_date: str
+    created_at: str
+    title: str
+    item_count: int
+    delivery: list[DigestChannelResultOut] = Field(default_factory=list)
+
+
+class DigestIssueDetailOut(DigestIssueOut):
+    """Full digest issue including the structured payload for web rendering."""
+
+    body_text: str = ""
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class DigestIssueListOut(BaseModel):
+    issues: list[DigestIssueOut] = Field(default_factory=list)
+
+
+class DigestRunNowOut(BaseModel):
+    """Result of a manual digest build+send trigger."""
+
+    created: bool
+    issue: DigestIssueDetailOut | None = None
+    delivery: list[DigestChannelResultOut] = Field(default_factory=list)
+    message: str = ""
+
+
 class SpeculativeSpecificOut(BaseModel):
     """A narrow topic within a speculative domain."""
 
@@ -2821,6 +2860,42 @@ class SavedSyncConfigUpdateIn(BaseModel):
         return value
 
 
+class DigestConfigOut(BaseModel):
+    enabled: bool = False
+    send_time: str = "09:00"
+    top_n: int = 10
+    include_delight: bool = True
+    include_cognition: bool = True
+    webhook_url: str = ""
+    bark_url: str = ""
+
+
+class DigestConfigUpdateIn(BaseModel):
+    enabled: StrictBool | None = None
+    send_time: str | None = None
+    top_n: int | None = None
+    include_delight: StrictBool | None = None
+    include_cognition: StrictBool | None = None
+    webhook_url: str | None = None
+    bark_url: str | None = None
+
+    @field_validator(
+        "enabled",
+        "send_time",
+        "top_n",
+        "include_delight",
+        "include_cognition",
+        "webhook_url",
+        "bark_url",
+        mode="before",
+    )
+    @classmethod
+    def reject_explicit_null_fields(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("digest fields must not be null; omit the field instead")
+        return value
+
+
 class AutostartStatusOut(BaseModel):
     supported: bool
     enabled: bool
@@ -2859,6 +2934,7 @@ class ConfigResponse(BaseModel):
     discovery: DiscoveryConfigOut = Field(default_factory=DiscoveryConfigOut)
     autostart: AutostartConfigOut = Field(default_factory=AutostartConfigOut)
     saved_sync: SavedSyncConfigOut = Field(default_factory=SavedSyncConfigOut)
+    digest: DigestConfigOut = Field(default_factory=DigestConfigOut)
     tailnet: TailnetConfigOut = Field(default_factory=TailnetConfigOut)
     storage: StorageConfigOut = Field(default_factory=StorageConfigOut)
     logging: LoggingConfigOut = Field(default_factory=LoggingConfigOut)
@@ -2880,6 +2956,7 @@ class ConfigUpdateIn(BaseModel):
     scheduler: dict[str, object] | None = None
     discovery: dict[str, object] | None = None
     saved_sync: SavedSyncConfigUpdateIn | None = None
+    digest: DigestConfigUpdateIn | None = None
     tailnet: TailnetConfigUpdateIn | None = None
     storage: dict[str, object] | None = None
     logging: dict[str, object] | None = None
@@ -2890,6 +2967,13 @@ class ConfigUpdateIn(BaseModel):
     def reject_explicit_null_saved_sync(cls, value: object) -> object:
         if value is None:
             raise ValueError("saved_sync must be an object")
+        return value
+
+    @field_validator("digest", mode="before")
+    @classmethod
+    def reject_explicit_null_digest(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("digest must be an object")
         return value
 
 

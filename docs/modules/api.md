@@ -485,3 +485,10 @@ scheme 归一化的前提是入口能算出外部有效 host：反向代理保�
 `POST /api/chat/stream` 对 durable turn 在执行 lease 内重新读取状态：已完成/失败只重放；新回复也在 lease 内提交完成，防止 GET 触发的后台恢复与 SSE 重复摄取链接/学习。缺失 turn 或消息、会话等身份冲突提前拒绝。该保证覆盖并发与已完成请求重试，不扩展为任意中途取消的副作用 exactly-once 保证。
 
 服务未就绪等 lease 准入错误仍转换为 SSE 错误说明，未执行的 durable turn 保持 pending，不在未获得执行权时标成 completed。
+
+### 每日日报端点（Daily Digest）
+
+- `GET /api/digest`：获取最近日报列表归档，默认按日期倒序返回至多 14 期，包含日期、标题、内容条数和渠道投递结果状态。
+- `GET /api/digest/latest`：获取最新一期日报的完整结构化详情（含 top_picks / delight / cognition payload 与 plain-text 渲染正文）。没有日报时返回 404。
+- `GET /api/digest/{digest_id}`：按 ID 获取单期日报详情。
+- `POST /api/digest/run-now`：立即生成并推送当期日报（忽略每日定时门控，适合设置页测试与手动补发）。若当日已有记录则原地幂等更新，返回创建结果、详情和各渠道推送回执。池子为空时返回 `created: false` 与友好提示。

@@ -310,6 +310,76 @@
   gap: var(--s3);
 }
 
+/* daily digest archive: date tabs + rendered sections */
+.digest-dialog-date-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.digest-date-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.digest-date-chip[aria-selected="true"] {
+  color: var(--stamp-deep);
+  border-color: var(--stamp);
+  background: var(--stamp-soft);
+}
+
+.digest-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.digest-section-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 0 0 var(--s2);
+}
+
+.digest-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2) 0;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.digest-item:last-child {
+  border-bottom: none;
+}
+
+.digest-item-title {
+  font-size: 13.5px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.digest-item-title:hover {
+  color: var(--stamp-deep);
+}
+
+.digest-item-reason {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.digest-empty-note {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 .llm-instance-id-hint,
 .llm-field-help {
   font-family: var(--font-mono);

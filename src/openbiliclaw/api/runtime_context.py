@@ -1722,6 +1722,16 @@ class RuntimeContext:
             kick=_kick_source_incremental,
         )
 
+        from openbiliclaw.runtime.digest import DigestScheduler
+
+        new_digest_scheduler = DigestScheduler(
+            self.database,
+            self.memory_manager,
+            check_interval_seconds=int(
+                getattr(new_config.scheduler, "refresh_check_interval_seconds", 60)
+            ),
+        )
+
         new_runtime_controller = ContinuousRefreshController(
             memory_manager=self.memory_manager,
             database=self.database,
@@ -1732,6 +1742,7 @@ class RuntimeContext:
             keyword_planner=new_keyword_planner,
             keyword_fetch=new_keyword_fetch,
             source_incremental_sync=new_source_incremental_sync,
+            digest_scheduler=new_digest_scheduler,
             pool_target_count=new_config.scheduler.pool_target_count,
             pool_source_shares=_pool_source_shares_from_config(new_config),
             signal_event_threshold=int(getattr(new_config.scheduler, "signal_event_threshold", 6)),

@@ -2373,6 +2373,7 @@ class Database:
         self._ensure_discovery_keywords_table()
         self._ensure_favorites_table()
         self._ensure_saved_sync_tables()
+        self._ensure_digest_issues_table()
         self._ensure_content_history_tables()
         self._ensure_user_visual_clusters_table()
         self._ensure_auth_state_table()
@@ -18022,6 +18023,125 @@ class Database:
                 ON recommendations (feedback_type, feedback_at DESC, id DESC);
         """)
         self.prune_content_history()
+
+    def _ensure_digest_issues_table(self) -> None:
+        """Create the daily-digest archive table if it does not exist.
+
+        ``digest_date`` is UNIQUE so a scheduler retry / manual run-now on the
+        same local day upserts in place — at most one digest per day, by
+        design. ``payload_json`` carries the structured sections (top picks /
+        delight / cognition) the web archive renders; ``delivery_json``
+        records each push channel's outcome for the settings UI.
+        """
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS digest_issues (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                digest_date   TEXT NOT NULL UNIQUE,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                title         TEXT NOT NULL DEFAULT '',
+                body_text     TEXT NOT NULL DEFAULT '',
+                item_count    INTEGER NOT NULL DEFAULT 0,
+                payload_json  TEXT NOT NULL DEFAULT '',
+                delivery_json TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_digest_issues_date
+                ON digest_issues (digest_date);
+        """)
+
+    def upsert_digest_issue(
+        self,
+        *,
+        digest_date: str,
+        title: str,
+        body_text: str,
+        payload: Mapping[str, Any],
+        delivery: Sequence[Mapping[str, Any]] = (),
+    ) -> int:
+        """Insert or replace today's digest issue and return its row id."""
+        cursor = self._execute_write(
+            """INSERT INTO digest_issues
+                   (digest_date, title, body_text, item_count, payload_json, delivery_json)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(digest_date) DO UPDATE SET
+                   title = excluded.title,
+                   body_text = excluded.body_text,
+                   item_count = excluded.item_count,
+                   payload_json = excluded.payload_json,
+                   delivery_json = excluded.delivery_json,
+                   created_at = CURRENT_TIMESTAMP""",
+            (
+                digest_date,
+                title,
+                body_text,
+                int(payload.get("item_count", 0) or 0),
+                json.dumps(dict(payload), ensure_ascii=False, sort_keys=True),
+                json.dumps([dict(item) for item in delivery], ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        row = self.conn.execute(
+            "SELECT id FROM digest_issues WHERE digest_date = ?", (digest_date,)
+        ).fetchone()
+        return int(row[0]) if row else (cursor.lastrowid or 0)
+
+    def update_digest_delivery(self, digest_id: int, delivery: Sequence[Mapping[str, Any]]) -> None:
+        """Persist per-channel delivery outcomes for one digest issue."""
+        self._execute_write(
+            "UPDATE digest_issues SET delivery_json = ? WHERE id = ?",
+            (
+                json.dumps([dict(item) for item in delivery], ensure_ascii=False, sort_keys=True),
+                int(digest_id),
+            ),
+        )
+
+    @staticmethod
+    def _digest_issue_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        def _load_json(raw: object) -> Any:
+            if not raw:
+                return []
+            try:
+                return json.loads(str(raw))
+            except (TypeError, ValueError):
+                return []
+
+        return {
+            "id": int(row["id"]),
+            "digest_date": str(row["digest_date"]),
+            "created_at": str(row["created_at"]),
+            "title": str(row["title"]),
+            "body_text": str(row["body_text"]),
+            "item_count": int(row["item_count"]),
+            "payload": _load_json(row["payload_json"]),
+            "delivery": _load_json(row["delivery_json"]),
+        }
+
+    _DIGEST_ISSUE_COLUMNS = (
+        "id, digest_date, created_at, title, body_text, item_count, payload_json, delivery_json"
+    )
+
+    def get_digest_issues(self, limit: int = 14) -> list[dict[str, Any]]:
+        """Return the most recent digest issues, newest first."""
+        rows = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues "
+            "ORDER BY digest_date DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [self._digest_issue_from_row(row) for row in rows]
+
+    def get_digest_issue(self, digest_id: int) -> dict[str, Any] | None:
+        """Return one digest issue by id, or None."""
+        row = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues WHERE id = ?",
+            (int(digest_id),),
+        ).fetchone()
+        return self._digest_issue_from_row(row) if row else None
+
+    def get_latest_digest_issue(self) -> dict[str, Any] | None:
+        """Return the newest digest issue, or None when none was built yet."""
+        row = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues "
+            "ORDER BY digest_date DESC LIMIT 1"
+        ).fetchone()
+        return self._digest_issue_from_row(row) if row else None
 
     def _ensure_saved_sync_tables(self) -> None:
         """Create normalized saved-content tables and import legacy saved rows once."""
