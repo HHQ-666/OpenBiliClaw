@@ -215,7 +215,7 @@ def _hf_model_items(payload: object, limit: int) -> list[FrontierWireItem]:
                 body_text=(
                     f"Hugging Face 趋势开源模型 {model_id}，{usage}。"
                     f"{'任务类型：' + pipeline + '。' if pipeline else ''}"
-                    "可直接用 Ollama / vLLM 本地运行，或通过推理 API 接入自己的应用。"
+                    "可直接用 Ollama 本地运行，或通过推理 API 接入自己的应用。"
                 ),
                 author_name=model_id.split("/")[0] if "/" in model_id else "Hugging Face",
                 published_at=published_at,

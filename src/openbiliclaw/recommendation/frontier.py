@@ -178,8 +178,8 @@ _APPLIED = re.compile(
     # English terms carry \b boundaries: without them "discipline" matches
     # `cline`, "interaction" matches `react`, and a paper's own prose can
     # fake a tooling angle that lets it through the academic gate.
-    r"插件|工作流|上手|实战|踩坑|本地运行|一键运行|搭建|配置|自动化|"
-    r"开源项目|独立开发|小工具|小产品|浏览器扩展|前端|"
+    r"插件|工作流|上手|实战|踩坑|本地运行|本地部署|一键运行|搭建|配置|自动化|"
+    r"开源项目|开源模型|开源权重|独立开发|小工具|小产品|浏览器扩展|前端|"
     r"open[- ]?source|\bsdks?\b|\bapis?\b|\bcli\b|\bide\b|\bworkflows?\b|"
     r"\bcursor\b|\bclaude[- ]?code\b|\bcodex\b|\bwindsurf\b|\bcline\b|"
     r"\baider\b|\bv0\b|\blovable\b|\bbolt\b|"
