@@ -209,3 +209,43 @@ def test_english_tool_names_do_not_match_inside_ordinary_words() -> None:
 
     assert not assessment.is_frontier
     assert "应用与工具" not in assessment.tags
+
+
+def test_deep_infra_internals_without_a_tool_angle_is_not_frontier() -> None:
+    # The user cannot act on attention-kernel trivia; without a headline-level
+    # tool angle an infra deep-dive is not channel material.
+    assessment = assess_ai_frontier(
+        title="A tricky LLM interview question",
+        body=(
+            "You serve a reasoning model on vLLM and it runs out of GPU memory. "
+            "PagedAttention splits GPU memory into 16-token physical blocks, so "
+            "evicting 90% of the KV cache frees almost nothing."
+        ),
+        source_platform="twitter",
+        content_type="tweet",
+    )
+
+    assert not assessment.is_frontier
+
+
+def test_ai_career_chatter_is_not_frontier() -> None:
+    assessment = assess_ai_frontier(
+        title="As an AI Engineer. Please learn",
+        body="If you learn AI Infrastructure Engineering, you will never be unemployed.",
+        source_platform="twitter",
+        content_type="tweet",
+    )
+
+    assert not assessment.is_frontier
+
+
+def test_infra_deep_dive_with_a_headline_tool_angle_stays_frontier() -> None:
+    # "本地部署实战" in the headline is the builder angle: the reader can act.
+    assessment = assess_ai_frontier(
+        title="2026 本地大模型横评：13 款开源模型，4000 元机器本地部署实战",
+        description="Qwen3.6、Gemma 4 实测，Ollama 一键跑起来。",
+        source_platform="youtube",
+        content_type="video",
+    )
+
+    assert assessment.is_frontier

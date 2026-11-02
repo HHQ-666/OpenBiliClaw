@@ -190,6 +190,21 @@ _APPLIED = re.compile(
     r"\btypescript\b|\btailwind\b",
     re.IGNORECASE,
 )
+# Deep-infra internals (attention kernels, KV-cache paging, CUDA, 显存) and
+# AI-career chatter (interview questions, "learn AI infra or be unemployed")
+# are neither papers nor tools. Without a headline-level builder angle they
+# belong to an infra / career feed, not to this one.
+_DEEP_INFRA = re.compile(
+    r"paged[- ]?attention|kv[- ]?cache|\bvllm\b|\bsglang\b|flash[- ]?attention|"
+    r"\bcuda\b|\btriton\b|算子|\bkernel\b|显存|吞吐|张量并行|分布式训练|"
+    r"\brlhf\b|\brlvr\b|预训练|\bgpu\b|infrastructure",
+    re.IGNORECASE,
+)
+_CAREER = re.compile(
+    r"面试|招聘|岗位|薪资|跳槽|求职|职业规划|\blearn\b|\bcareer\b|\bhiring\b|"
+    r"\bdemand\b|\binterview\b|\bsalary\b|unemploy",
+    re.IGNORECASE,
+)
 _ACADEMIC = re.compile(
     r"arxiv|预印本|preprint|论文|\bpaper\b|"
     r"消融|ablation|数据集|\bdataset\b|"
@@ -578,6 +593,12 @@ def assess_ai_frontier(
     if academic_hit and not applied_in_title:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
     if paper_like and not applied_in_title:
+        score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
+    # Deep-infra internals / AI-career chatter: understandable only to people
+    # who already live in that world, unless the headline carries a tool angle.
+    if _DEEP_INFRA.search(combined) and not applied_in_title:
+        score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
+    if _CAREER.search(combined) and not applied_in_title:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
 
     # Text-first sources use the post/question title as the card headline. A
