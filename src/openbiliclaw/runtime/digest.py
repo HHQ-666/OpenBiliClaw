@@ -250,14 +250,39 @@ class WebhookChannel:
         # network; production follows the shared proxy-routing policy.
         self._transport = transport
 
-    async def send(self, draft: DigestDraft) -> ChannelResult:
-        payload = {
+    def _build_payload(self, draft: DigestDraft) -> dict[str, Any]:
+        url_lower = self._url.lower()
+        if "open.feishu.cn" in url_lower:
+            return {
+                "msg_type": "post",
+                "content": {
+                    "post": {
+                        "zh_cn": {
+                            "title": draft.title,
+                            "content": [
+                                [{"tag": "text", "text": draft.body_text}]
+                            ],
+                        }
+                    }
+                },
+            }
+        if "qyapi.weixin.qq.com" in url_lower:
+            return {
+                "msg_type": "markdown",
+                "markdown": {
+                    "content": f"### {draft.title}\n{draft.body_text}"
+                },
+            }
+        return {
             "title": draft.title,
             "digest_date": draft.digest_date,
             "text": draft.body_text,
             "item_count": draft.item_count,
             "payload": draft.payload,
         }
+
+    async def send(self, draft: DigestDraft) -> ChannelResult:
+        payload = self._build_payload(draft)
         try:
             kwargs: dict[str, Any] = {"timeout": self._timeout}
             if self._transport is not None:

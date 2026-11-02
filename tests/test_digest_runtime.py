@@ -109,6 +109,42 @@ def test_webhook_channel_posts_payload() -> None:
     assert body["digest_date"] == "2026-11-01"
 
 
+def test_webhook_channel_supports_feishu_and_wecom() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["json"] = request.read()
+        return httpx.Response(200)
+
+    draft = build_daily_digest(
+        _db(Path(__import__("tempfile").mkdtemp())),
+        SimpleNamespace(load_cognition_updates=lambda: []),
+        now=datetime(2026, 11, 1, 9, 0),
+    )
+
+    # Feishu webhook
+    feishu = WebhookChannel(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/xxx", transport=httpx.MockTransport(handler)
+    )
+    result_feishu = asyncio.run(feishu.send(draft))
+    assert result_feishu.ok is True
+    feishu_body = __import__("json").loads(seen["json"])
+    assert feishu_body["msg_type"] == "post"
+    assert "zh_cn" in feishu_body["content"]["post"]
+
+    # WeCom webhook
+    wecom = WebhookChannel(
+        "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx",
+        transport=httpx.MockTransport(handler),
+    )
+    result_wecom = asyncio.run(wecom.send(draft))
+    assert result_wecom.ok is True
+    wecom_body = __import__("json").loads(seen["json"])
+    assert wecom_body["msg_type"] == "markdown"
+    assert "###" in wecom_body["markdown"]["content"]
+
+
 def test_webhook_channel_reports_http_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500)
