@@ -13,8 +13,14 @@ low-code platform" or a Claude Code quota monitor). A candidate must carry a
 frontier anchor: a versioned model plus a release/eval/research signal, a
 paper, or a specific inference/training engineering term. Marketing and
 tutorial language is penalised so the channel does not collapse into the
-"本地部署保姆级教程" genre. The score is additive and explainable so a false
-positive can be diagnosed from the returned ``matched`` terms.
+"本地部署保姆级教程" genre.
+
+The channel is *applied-first*: its reader builds applications with models,
+so a tool / SDK / workflow / product angle earns a bonus, while research-only
+artifacts (arXiv abstract tone, dataset-and-ablation papers) are capped below
+the threshold unless they also ship something usable. The score is additive
+and explainable so a false positive can be diagnosed from the returned
+``matched`` terms.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ TAG_INFRA = "推理与算力"
 TAG_AGENT = "Agent"
 TAG_MULTIMODAL = "多模态"
 TAG_SAFETY = "安全与对齐"
+TAG_APPLIED = "应用与工具"
 
 _MODEL_WITH_VERSION = re.compile(
     r"(?<![a-z0-9])("
@@ -156,6 +163,33 @@ _HARD_NEGATIVE = re.compile(
 _SOFT_NEGATIVE = re.compile(
     r"教程|入门|科普|盘点|合集|排行|推荐|清单|宝藏|一周|大事件|早报|日报|周报|汇总|"
     r"lesson|course",
+    re.IGNORECASE,
+)
+
+# ── Applied vs academic ──────────────────────────────────────────────
+# Who this channel is for: an application developer who builds with models
+# (AI coding tools, SDKs, agents, indie products) — not a research lab. What
+# makes a candidate useful is therefore a tool, workflow, API, product launch
+# or build log. Pure research artifacts carry enough research/eval/model
+# signals to clear the threshold on their own while answering no question
+# this reader actually has, so they are demoted unless they also carry a
+# practical angle (open-source repo, runnable demo, deployable tool).
+_APPLIED = re.compile(
+    r"插件|工作流|workflow|上手|实战|踩坑|"
+    r"开源项目|open[- ]?source|\bsdk\b|\bapi\b|\bcli\b|\bide\b|"
+    r"cursor|claude[- ]?code|codex|windsurf|cline|aider|\bv0\b|lovable|\bbolt\b|"
+    r"n8n|dify|coze|扣子|langflow|flowise|obsidian|notion|"
+    r"浏览器扩展|chrome\s*extension|ollama|lm[- ]?studio|localai|llama\.cpp|"
+    r"comfyui|webui|本地运行|一键运行|搭建|配置|自动化|"
+    r"前端|react|next\.js|\bvue\b|typescript|tailwind|独立开发|小工具|小产品",
+    re.IGNORECASE,
+)
+_ACADEMIC = re.compile(
+    r"arxiv|预印本|preprint|论文|\bpaper\b|"
+    r"消融|ablation|数据集|\bdataset\b|"
+    r"state[- ]of[- ]the[- ]art|\bsota\b|"
+    r"we propose|we introduce|we present|proposed method|experimental results|"
+    r"实验结果|对比实验|\bbaseline\b|基线|et al\.|\babstract\b|摘要",
     re.IGNORECASE,
 )
 
@@ -433,6 +467,30 @@ def assess_ai_frontier(
         # the word "AI"; the source/type prior is the anchor here.
         score += 2.0
 
+    # ── Applied-vs-academic axis ─────────────────────────────────────────
+    # The channel's job is "what can I build with / use today", so a tool,
+    # workflow, SDK or product angle earns a real bonus. Research-only
+    # language is charged against the candidate; a paper that also ships a
+    # usable artifact keeps most of its standing.
+    applied_mult, applied_hit = _match_group(
+        _APPLIED, title=title_text, body=body_text, topic=topic_text
+    )
+    if applied_hit:
+        score += 2.0 * applied_mult
+        tags_out.append(TAG_APPLIED)
+        matched.append(f"applied:{applied_hit}")
+
+    academic_mult, academic_hit = _match_group(
+        _ACADEMIC, title=title_text, body=body_text, topic=topic_text
+    )
+    if academic_hit:
+        if applied_hit:
+            score -= 0.5 * academic_mult
+            matched.append(f"academic:{academic_hit}")
+        else:
+            score -= 6.0 * academic_mult
+            matched.append(f"academic-only:{academic_hit}")
+
     # ── Penalties ────────────────────────────────────────────────────────
     block_negative = _BLOCK_NEGATIVE.search(combined)
     if block_negative:
@@ -461,12 +519,25 @@ def assess_ai_frontier(
     has_multimodal_anchor = bool(_MULTIMODAL.search(combined)) and (
         model_anchor or has_release_anchor or has_eval_anchor
     )
+    # Applied content (a tool, SDK, workflow or build log) is the channel's
+    # primary product, so it counts as an anchor on its own — but only when
+    # the headline also names the AI surface it is built on. Otherwise every
+    # "site configuration guide" in the pool would qualify.
+    has_applied_anchor = bool(applied_hit) and bool(
+        model_anchor
+        or _MODEL_FAMILY.search(title_text)
+        or _CN_MODEL.search(title_text)
+        or _GENERIC_AI.search(title_text)
+        or _ENGINEERING_ANCHOR.search(title_text)
+        or _AGENT_ANCHOR.search(title_text)
+    )
     has_anchor = bool(
         model_anchor
         or research_hit
         or has_engineering_anchor
         or has_agent_anchor
         or has_multimodal_anchor
+        or has_applied_anchor
         or (has_release_anchor and _GENERIC_AI.search(combined))
     )
     if not has_anchor:
@@ -488,6 +559,16 @@ def assess_ai_frontier(
     )
     if not headline_ai_signal:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 1.0)
+
+    # ── Academic gate ────────────────────────────────────────────────────
+    # Pure research artifacts stay out of this channel regardless of how many
+    # research/eval signals they accumulate: a paper abstract with no tool,
+    # repo or workflow angle is written for a lab, not for someone building
+    # with models. Applied content is untouched (it already earned its bonus).
+    if academic_hit and not applied_hit:
+        score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
+    if paper_like and not applied_hit:
+        score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
 
     # Text-first sources use the post/question title as the card headline. A
     # long personal post can mention DeepSeek/Gemini in the body without being

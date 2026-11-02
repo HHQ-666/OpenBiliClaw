@@ -2,6 +2,12 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：AI 前沿频道改为应用优先（2026-11-02）
+
+- `recommendation/frontier.py` 新增「应用 vs 学术」评分轴：工具 / SDK / 工作流 / 产品角度（含 Claude Code、Cursor、MCP、Ollama、AI SDK、前端接入等）加分并打 `应用与工具` 标签，且自身可作为入频锚点；只有研究语言（arXiv、论文、消融、数据集、SOTA、we propose）而没有可用产物的条目被压到阈值以下——纯论文不再进入频道，论文附带开源/可运行产物时仍保留。
+- `discovery/frontier_wire.py` 停用 arXiv 与 Hugging Face Daily Papers 两个纯论文源，改为 Hugging Face 趋势开源模型（可本地跑 / 可接 API），Hacker News 侧新增 `arXiv / paper / preprint` 标题拒绝。策展文案随之改为「权重公开、可本地运行」。
+- 兴趣画像（`profile_overrides.json`）同步调整：移除「具身智能与机器人」「AI 安全与对齐」「AI 研究论文解读」等学术标签，新增「AI 编程工具实战」「前端与全栈接入大模型」「开源 AI 工具与浏览器插件」「独立开发与 AI 小产品」「免费 Token 与低成本 API 方案」；新增避开项「学术论文与预印本」「理论推导与消融实验」「CUDA 算子与底层内核优化」「模型评测榜单与跑分」。
+
 ## 未发布：每日日报与多渠道推送（feat/daily-digest，2026-11-01）
 
 - 新增每日日报（Daily Digest）全链路能力：每天在可配置的时刻（默认 09:00）从发现池（按 relevance 门槛）、惊喜队列（未消费高分候选）和最新认知更新自动提炼出结构化日报，存档到本地 SQLite 并通过配置的渠道（Webhook / Bark）外发推送。

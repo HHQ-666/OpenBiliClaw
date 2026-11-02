@@ -26,7 +26,9 @@ def test_release_with_versioned_model_is_frontier() -> None:
     assert "前沿模型" in assessment.tags
 
 
-def test_research_paper_is_frontier_without_a_model_name() -> None:
+def test_research_paper_without_an_applied_angle_is_not_frontier() -> None:
+    # The channel is applied-first: a paper abstract with no tooling /
+    # workflow / repo angle answers a question this reader does not have.
     assessment = assess_ai_frontier(
         title="Long-MDR: Long-Context RL for Multimodal Deep-Research Agents",
         description="arXiv 2610.05195，128K 上下文、75+ 工具轮次。",
@@ -34,8 +36,35 @@ def test_research_paper_is_frontier_without_a_model_name() -> None:
         content_type="paper",
     )
 
-    assert assessment.is_frontier
+    assert not assessment.is_frontier
+    assert assessment.score < FRONTIER_SCORE_THRESHOLD
     assert "论文研究" in assessment.tags
+
+
+def test_paper_with_shipped_tooling_angle_stays_frontier() -> None:
+    # Paper + open-source repo + a way to run it today is exactly the useful
+    # intersection: research depth that arrives with something usable.
+    assessment = assess_ai_frontier(
+        title="Long-MDR 论文开源：128K 上下文的 LLM Agent 工具，支持 Ollama 本地运行",
+        description="论文附带开源项目与 SDK，可直接接入自己的应用。",
+        source_platform="huggingface",
+        content_type="paper",
+    )
+
+    assert assessment.is_frontier
+    assert "应用与工具" in assessment.tags
+
+
+def test_applied_tooling_headline_is_frontier() -> None:
+    assessment = assess_ai_frontier(
+        title="Claude Code 工作流实战：用 MCP 把内部 API 接进前端项目",
+        description="一步步配置 SDK、写好工具定义，并踩了几个权限坑。",
+        source_platform="linuxdo",
+        content_type="post",
+    )
+
+    assert assessment.is_frontier
+    assert "应用与工具" in assessment.tags
 
 
 def test_generic_ai_industry_commentary_is_not_frontier() -> None:
@@ -135,7 +164,11 @@ def test_channel_constant_is_stable_for_api_and_ui() -> None:
     assert AI_FRONTIER_CHANNEL == "ai_frontier"
 
 
-def test_arxiv_article_is_still_paper_like_for_scoring() -> None:
+def test_arxiv_article_without_tooling_angle_is_not_frontier() -> None:
+    # arXiv/Hugging Face papers are stored as `article`; the old paper-like
+    # prior let them into the channel on research signals alone. The applied
+    # gate now keeps a bare method paper out while the research tag survives
+    # for diagnostics.
     assessment = assess_ai_frontier(
         title="A New Method for Long-Context Agents",
         description="arXiv paper with 128K context and benchmark results.",
@@ -143,5 +176,5 @@ def test_arxiv_article_is_still_paper_like_for_scoring() -> None:
         content_type="article",
     )
 
-    assert assessment.is_frontier
+    assert not assessment.is_frontier
     assert "论文研究" in assessment.tags

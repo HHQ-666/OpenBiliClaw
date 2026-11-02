@@ -6,40 +6,26 @@ from types import SimpleNamespace
 
 from openbiliclaw.discovery.frontier_wire import (
     FrontierWireItem,
-    _arxiv_items,
-    _hf_items,
+    _hf_model_items,
     _hn_items,
     _wire_topics,
     ingest_frontier_wire,
     wire_source_counts,
 )
 
-ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"
-      xmlns:arxiv="http://arxiv.org/schemas/atom">
-  <entry>
-    <id>http://arxiv.org/abs/2610.12345v1</id>
-    <title>  A Long-Context Agent for Research  </title>
-    <summary>We propose a long-context agent that plans and verifies its work.</summary>
-    <published>2026-10-20T00:00:00Z</published>
-    <author><name>Alice</name></author>
-    <author><name>Bob</name></author>
-    <arxiv:primary_category term="cs.AI"/>
-  </entry>
-</feed>
-"""
-
-HF_PAYLOAD = [
+HF_MODELS_PAYLOAD = [
     {
-        "paper": {
-            "id": "2610.12345",
-            "title": "HF Daily Paper",
-            "summary": "A personalized recommendation paper with user history.",
-            "authors": [{"name": "Carol"}, {"name": "Dave"}],
-        },
-        "publishedAt": "2026-10-20T00:00:00Z",
-        "upvotes": 42,
-    }
+        "id": "Qwen/Qwen3-32B",
+        "likes": 420,
+        "downloads": 120000,
+        "pipeline_tag": "text-generation",
+        "tags": ["text-generation", "qwen3", "conversational"],
+        "createdAt": "2026-10-20T00:00:00Z",
+    },
+    {
+        "id": "org/model-without-metadata",
+        "likes": 0,
+    },
 ]
 
 HN_PAYLOAD = {
@@ -90,28 +76,23 @@ class _FakeDatabase:
         return list(range(1, len(items) + 1))
 
 
-def test_arxiv_parser_builds_a_paper_wire_item() -> None:
-    items = _arxiv_items(ARXIV_XML, 5)
+def test_hf_model_parser_builds_a_runnable_release_item() -> None:
+    items = _hf_model_items(HF_MODELS_PAYLOAD, 5)
 
-    assert len(items) == 1
+    assert len(items) == 2
     item = items[0]
-    assert item.source_platform == "arxiv"
-    assert item.content_id == "arxiv:2610.12345"
-    assert item.content_url == "https://arxiv.org/abs/2610.12345"
-    assert item.title == "A Long-Context Agent for Research"
-    assert item.author_name == "Alice, Bob"
-    assert "人工智能" in item.topic_label
-    assert "arXiv" in item.tags
+    assert item.source_platform == "huggingface"
+    assert item.content_id == "huggingface:model:Qwen/Qwen3-32B"
+    assert item.content_url == "https://huggingface.co/Qwen/Qwen3-32B"
+    assert item.title.startswith("Qwen3-32B 开源模型")
+    assert item.topic_label == "AI 前沿 · 开源模型"
+    assert "本地运行" in item.body_text
+    assert "下载 120000" in item.body_text
+    assert item.source_metadata["model_id"] == "Qwen/Qwen3-32B"
 
-
-def test_hf_parser_builds_a_paper_wire_item() -> None:
-    items = _hf_items(HF_PAYLOAD, 5)
-
-    assert len(items) == 1
-    assert items[0].source_platform == "huggingface"
-    assert items[0].content_url == "https://huggingface.co/papers/2610.12345"
-    assert items[0].source_metadata["upvotes"] == 42
-    assert "推荐系统与个性化" in items[0].expression
+    # A row without likes/downloads still renders a reason sentence.
+    assert items[1].content_id == "huggingface:model:org/model-without-metadata"
+    assert items[1].expression
 
 
 def test_hn_parser_filters_non_ai_titles_and_keeps_points() -> None:
@@ -123,16 +104,37 @@ def test_hn_parser_filters_non_ai_titles_and_keeps_points() -> None:
     assert items[0].source_metadata["points"] == 250
 
 
+def test_hn_parser_rejects_paper_discussion_threads() -> None:
+    payload = {
+        "hits": [
+            {
+                "objectID": "601",
+                "title": "arXiv paper on sparse attention (2026)",
+                "points": 300,
+            },
+            {
+                "objectID": "602",
+                "title": "Open-weight LLM you can run on a laptop",
+                "points": 320,
+            },
+        ]
+    }
+
+    items = _hn_items(payload, 5)
+
+    assert [item.content_id for item in items] == ["hackernews:602"]
+
+
 def test_ingest_writes_content_and_recommendation_rows() -> None:
     db = _FakeDatabase()
     item = FrontierWireItem(
-        source_platform="arxiv",
-        content_id="arxiv:2610.12345",
-        content_url="https://arxiv.org/abs/2610.12345",
+        source_platform="huggingface",
+        content_id="huggingface:model:org/model",
+        content_url="https://huggingface.co/org/model",
         title="A Paper",
         body_text="An abstract.",
         author_name="Alice",
-        expression="arXiv 最新论文。",
+        expression="开源权重模型。",
         topic_label="AI 前沿 · 人工智能",
     )
 
@@ -141,23 +143,23 @@ def test_ingest_writes_content_and_recommendation_rows() -> None:
     assert result == {"fetched": 1, "inserted": 1, "skipped": 0, "failed": 0}
     assert len(db.cached) == 1
     bvid, kwargs = db.cached[0]
-    assert bvid == "arxiv:2610.12345"
-    assert kwargs["source_platform"] == "arxiv"
+    assert bvid == "huggingface:model:org/model"
+    assert kwargs["source_platform"] == "huggingface"
     assert kwargs["content_type"] == "article"
-    assert kwargs["content_id"] == "2610.12345"
-    assert kwargs["item_key"] == "arxiv:2610.12345"
-    assert kwargs["pool_expression"] == "arXiv 最新论文。"
+    assert kwargs["content_id"] == "model:org/model"
+    assert kwargs["item_key"] == "huggingface:model:org/model"
+    assert kwargs["pool_expression"] == "开源权重模型。"
     assert kwargs["topic_group"] == "AI 前沿"
-    assert db.recommendations[0]["bvid"] == "arxiv:2610.12345"
+    assert db.recommendations[0]["bvid"] == "huggingface:model:org/model"
     assert db.recommendations[0]["topic"] == "AI 前沿 · 人工智能"
 
 
 def test_ingest_skips_existing_content_identity() -> None:
     db = _FakeDatabase(exists=True)
     item = FrontierWireItem(
-        source_platform="arxiv",
-        content_id="arxiv:2610.12345",
-        content_url="https://arxiv.org/abs/2610.12345",
+        source_platform="huggingface",
+        content_id="huggingface:model:org/model",
+        content_url="https://huggingface.co/org/model",
         title="A Paper",
         body_text="An abstract.",
     )
@@ -171,12 +173,12 @@ def test_ingest_skips_existing_content_identity() -> None:
 
 def test_wire_source_counts() -> None:
     items = [
-        FrontierWireItem("arxiv", "a1", "u1", "t1", "b1"),
-        FrontierWireItem("arxiv", "a2", "u2", "t2", "b2"),
+        FrontierWireItem("huggingface", "a1", "u1", "t1", "b1"),
+        FrontierWireItem("huggingface", "a2", "u2", "t2", "b2"),
         FrontierWireItem("hackernews", "h1", "u3", "t3", "b3"),
     ]
 
-    assert wire_source_counts(items) == {"arxiv": 2, "hackernews": 1}
+    assert wire_source_counts(items) == {"huggingface": 2, "hackernews": 1}
 
 
 def test_wire_topics_are_deterministic_and_distinct() -> None:

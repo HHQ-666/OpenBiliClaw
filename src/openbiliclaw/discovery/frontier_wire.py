@@ -4,9 +4,13 @@ The recommendation pool is fed by social/video platforms, which is good for
 "what people are talking about" but weak on primary sources. This module adds
 a small, explicitly curated wire for the ``AI 前沿`` channel:
 
-* arXiv (cs.AI / cs.CL / cs.LG) — primary research, latest submissions.
-* Hugging Face Daily Papers — community-curated research picks.
+* Hugging Face trending models — open-weight releases people can actually run.
 * Hacker News (points > 100, last 14 days) — engineering-community discussion.
+
+The wire is applied-first by design: the channel serves people who build with
+models, so pure paper feeds (arXiv, Hugging Face Daily Papers) are deliberately
+not fetched — their abstracts carry research signals without providing anything
+runnable, and the channel's classifier demotes research-only candidates anyway.
 
 Items are inserted as normal ``content_cache`` rows with a deterministic
 Chinese recommendation copy, then a normal ``recommendations`` history row.
@@ -20,7 +24,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -33,14 +36,9 @@ from openbiliclaw.saved_sync.identity import make_item_key
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-ARXIV_URL = "https://export.arxiv.org/api/query"
-HF_DAILY_PAPERS_URL = "https://huggingface.co/api/daily_papers"
+HF_TRENDING_MODELS_URL = "https://huggingface.co/api/models"
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
-_ARXIV_NS = {
-    "a": "http://www.w3.org/2005/Atom",
-    "arxiv": "http://arxiv.org/schemas/atom",
-}
 logger = logging.getLogger(__name__)
 
 _HN_FRONTIER_TERMS = re.compile(
@@ -53,6 +51,13 @@ _HN_FRONTIER_TERMS = re.compile(
 _HN_COMMENTARY = re.compile(
     r"controversial take|is a tool|opinion|essay|hiring|policy|regulation|"
     r"lawsuit|copyright|layoffs|stock|funding|interview",
+    re.IGNORECASE,
+)
+# Research write-ups are out of scope for an applied channel: the HN feed is
+# here for "someone shipped / measured something you can use", not for paper
+# discussion threads.
+_HN_PAPER_REJECT = re.compile(
+    r"arxiv|\bpaper\b|preprint|论文|预印本|\bet al\b",
     re.IGNORECASE,
 )
 
@@ -177,106 +182,61 @@ def _reason_variant(variants: tuple[str, ...], key: str) -> str:
     return variants[index]
 
 
-def _arxiv_items(payload: str, limit: int) -> list[FrontierWireItem]:
-    root = ET.fromstring(payload)
-    items: list[FrontierWireItem] = []
-    for entry in root.findall("a:entry", _ARXIV_NS)[:limit]:
-        raw_id = _clean(entry.findtext("a:id", default="", namespaces=_ARXIV_NS))
-        paper_id = raw_id.rsplit("/", 1)[-1]
-        paper_id = re.sub(r"v\d+$", "", paper_id)
-        title = _clean(entry.findtext("a:title", default="", namespaces=_ARXIV_NS))
-        summary = _clean(entry.findtext("a:summary", default="", namespaces=_ARXIV_NS))
-        if not paper_id or not title:
-            continue
-        authors = [
-            _clean(node.text)
-            for node in entry.findall("a:author/a:name", _ARXIV_NS)
-            if _clean(node.text)
-        ]
-        primary = entry.find("arxiv:primary_category", _ARXIV_NS)
-        category = _clean(primary.get("term") if primary is not None else "")
-        category_label = {
-            "cs.AI": "人工智能",
-            "cs.CL": "计算语言学",
-            "cs.LG": "机器学习",
-        }.get(category, "AI 研究")
-        topics = _merge_topics(_wire_topics(title), _wire_topics(summary))
-        items.append(
-            FrontierWireItem(
-                source_platform="arxiv",
-                content_id=f"arxiv:{paper_id}",
-                content_url=f"https://arxiv.org/abs/{paper_id}",
-                title=title,
-                body_text=summary,
-                author_name=", ".join(authors[:3]),
-                published_at=_iso(entry.findtext("a:published", default="", namespaces=_ARXIV_NS)),
-                tags=tuple(x for x in ("arXiv", category, category_label) if x),
-                score=0.9,
-                topic_label=f"AI 前沿 · {category_label}",
-                expression=_reason_variant(
-                    (
-                        f"arXiv {category_label}方向的新论文，聚焦{_topic_phrase(topics)}。"
-                        "摘要已附在卡片里，适合先看方法和实验结论。",
-                        f"这篇 arXiv 论文讨论{_topic_phrase(topics)}，属于{category_label}方向；"
-                        "摘要已在卡片里，方便先扫结论。",
-                        f"arXiv 最新上传的{category_label}论文，主题是{_topic_phrase(topics)}；"
-                        "摘要附在卡片里，适合快速判断是否值得细读。",
-                    ),
-                    paper_id,
-                ),
-                source_metadata={"wire": "arxiv", "category": category, "authors": authors[:8]},
-            )
-        )
-    return items
+def _hf_model_items(payload: object, limit: int) -> list[FrontierWireItem]:
+    """Turn Hugging Face trending models into runnable-release wire items.
 
-
-def _hf_items(payload: object, limit: int) -> list[FrontierWireItem]:
+    A trending open-weight model is the applied counterpart of a paper: the
+    reader can pull it with Ollama / vLLM or call it through an inference API
+    the same day. The card therefore leads with "what you can run", not with
+    an abstract.
+    """
     rows = payload if isinstance(payload, list) else []
     items: list[FrontierWireItem] = []
-    for row in rows[:limit]:
-        if not isinstance(row, dict):
+    for row in rows:
+        if not isinstance(row, dict) or len(items) >= limit:
             continue
-        raw_paper = row.get("paper")
-        paper: dict[str, Any] = raw_paper if isinstance(raw_paper, dict) else {}
-        paper_id = _clean(paper.get("id") or row.get("id"))
-        title = _clean(row.get("title") or paper.get("title"))
-        summary = _clean(paper.get("summary") or row.get("summary"))
-        if not paper_id or not title:
+        model_id = _clean(row.get("id") or row.get("modelId"))
+        if not model_id:
             continue
-        authors = [
-            _clean(author.get("name"))
-            for author in (paper.get("authors") or [])
-            if isinstance(author, dict) and _clean(author.get("name"))
-        ]
-        upvotes = row.get("upvotes")
-        topics = _merge_topics(_wire_topics(title), _wire_topics(summary))
+        likes = int(row.get("likes") or 0)
+        downloads = int(row.get("downloads") or 0)
+        pipeline = _clean(row.get("pipeline_tag") or "")
+        tags = [_clean(tag) for tag in (row.get("tags") or []) if _clean(tag)]
+        display_name = model_id.split("/")[-1]
+        published_at = _iso(row.get("createdAt") or row.get("lastModified"))
+        topic = _wire_topics(display_name, pipeline, " ".join(tags[:12]))
+        usage = f"下载 {downloads}" if downloads else f"{likes} 个赞"
         items.append(
             FrontierWireItem(
                 source_platform="huggingface",
-                content_id=f"huggingface:{paper_id}",
-                content_url=f"https://huggingface.co/papers/{paper_id}",
-                title=title,
-                body_text=summary,
-                author_name=", ".join(authors[:3]),
-                published_at=_iso(row.get("publishedAt") or paper.get("publishedAt")),
-                tags=("Hugging Face", "Daily Papers"),
-                score=0.88,
-                topic_label="AI 前沿 · 论文",
+                content_id=f"huggingface:model:{model_id}",
+                content_url=f"https://huggingface.co/{model_id}",
+                title=f"{display_name} 开源模型（{model_id}）",
+                body_text=(
+                    f"Hugging Face 趋势开源模型 {model_id}，{usage}。"
+                    f"{'任务类型：' + pipeline + '。' if pipeline else ''}"
+                    "可直接用 Ollama / vLLM 本地运行，或通过推理 API 接入自己的应用。"
+                ),
+                author_name=model_id.split("/")[0] if "/" in model_id else "Hugging Face",
+                published_at=published_at,
+                tags=tuple(x for x in ("Hugging Face", "开源模型", pipeline) if x),
+                score=min(0.92, 0.82 + likes / 5000.0),
+                topic_label="AI 前沿 · 开源模型",
                 expression=_reason_variant(
                     (
-                        f"Hugging Face 今日热门论文，聚焦{_topic_phrase(topics)}。"
-                        "摘要已附在卡片里，适合先看它解决了什么问题。",
-                        f"这篇 Hugging Face 论文讨论{_topic_phrase(topics)}，社区热度不错；"
-                        "摘要已在卡片里，方便先扫方法和结论。",
-                        f"Hugging Face 今日推荐的一篇论文，主题是{_topic_phrase(topics)}；"
-                        "摘要附在卡片里，适合快速判断是否值得细读。",
+                        f"Hugging Face 趋势开源模型，聚焦{_topic_phrase(topic)}；"
+                        "权重公开，可以本地跑或直接接入 API。",
+                        f"这个开源权重模型最近在 HF 上热度不错（{usage}），"
+                        f"主题是{_topic_phrase(topic)}，适合先试个 demo 再用进项目。",
                     ),
-                    paper_id,
+                    model_id,
                 ),
                 source_metadata={
                     "wire": "huggingface",
-                    "upvotes": upvotes,
-                    "authors": authors[:8],
+                    "model_id": model_id,
+                    "likes": likes,
+                    "downloads": downloads,
+                    "pipeline_tag": pipeline,
                 },
             )
         )
@@ -290,7 +250,12 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
         if not isinstance(row, dict):
             continue
         title = _clean(row.get("title"))
-        if not title or not _HN_FRONTIER_TERMS.search(title) or _HN_COMMENTARY.search(title):
+        if (
+            not title
+            or not _HN_FRONTIER_TERMS.search(title)
+            or _HN_COMMENTARY.search(title)
+            or _HN_PAPER_REJECT.search(title)
+        ):
             continue
         object_id = _clean(row.get("objectID"))
         if not object_id:
@@ -337,11 +302,16 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
 
 
 def fetch_frontier_wire(*, limit_per_source: int = 8) -> list[FrontierWireItem]:
-    """Fetch the three public feeds, skipping any source that fails.
+    """Fetch the applied AI feeds, skipping any source that fails.
+
+    Two sources, both applied-first: trending open-weight models on Hugging
+    Face (something you can run today) and Hacker News engineering discussion.
+    Paper feeds are intentionally absent — the channel is for people building
+    with models, and the classifier demotes research-only candidates anyway.
 
     The function is synchronous by design: the API delegates it to a worker
     thread with a wall-clock deadline. A source failure must not take the
-    other two down, so every request has its own ``try`` block.
+    other one down, so every request has its own ``try`` block.
     """
     limit = max(1, min(int(limit_per_source), 20))
     items: list[FrontierWireItem] = []
@@ -353,22 +323,16 @@ def fetch_frontier_wire(*, limit_per_source: int = 8) -> list[FrontierWireItem]:
     ) as client:
         try:
             response = client.get(
-                ARXIV_URL,
+                HF_TRENDING_MODELS_URL,
                 params={
-                    "search_query": "cat:cs.AI OR cat:cs.CL OR cat:cs.LG",
-                    "sortBy": "submittedDate",
-                    "sortOrder": "descending",
-                    "max_results": str(limit),
+                    "sort": "trendingScore",
+                    "direction": "-1",
+                    "limit": str(limit),
+                    "full": "false",
                 },
             )
             response.raise_for_status()
-            items.extend(_arxiv_items(response.text, limit))
-        except (httpx.HTTPError, ET.ParseError, ValueError):
-            pass
-        try:
-            response = client.get(HF_DAILY_PAPERS_URL, params={"limit": str(limit)})
-            response.raise_for_status()
-            items.extend(_hf_items(response.json(), limit))
+            items.extend(_hf_model_items(response.json(), limit))
         except (httpx.HTTPError, ValueError):
             pass
         try:
