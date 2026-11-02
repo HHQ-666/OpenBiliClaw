@@ -1455,6 +1455,13 @@
           <label class="settings-field"><span>语言</span><select id="language"><option value="zh">中文</option><option value="en">English</option></select></label>
           <label class="settings-field"><span>数据目录</span><input id="dataDir" placeholder="data"></label>
           <label class="settings-field full"><span>SQLite 数据库路径</span><input id="storageDbPath" placeholder="data/openbiliclaw.db"></label>
+          <p class="settings-section-title">黑名单管理（已屏蔽作者）</p>
+          <div class="settings-field full" style="flex-direction: column; align-items: stretch;">
+            <p class="settings-note-inline" style="margin-bottom: var(--s2);">已屏蔽的作者将不会在任何频道的推荐中出现。</p>
+            <div id="blockedAuthorsList" class="blocked-authors-list">
+              <p class="video-meta">正在加载黑名单…</p>
+            </div>
+          </div>
           <p class="settings-section-title">保存与平台同步</p>
           <label class="settings-field full settings-switch-field">
             <span>保存时自动同步到对应平台</span>

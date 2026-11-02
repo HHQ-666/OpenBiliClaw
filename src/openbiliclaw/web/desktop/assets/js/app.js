@@ -5541,6 +5541,81 @@ ${savedCardFeedbackBarHtml(listKind)}
       }
     }
 
+    async function loadBlockedAuthors() {
+      try {
+        const res = await requestJson("/api/blocked-authors");
+        return Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    }
+
+    async function blockAuthor(authorName, sourcePlatform = "") {
+      if (!authorName) return;
+      const cleanName = String(authorName).trim();
+      const confirmed = window.confirm(`确定要屏蔽作者「${cleanName}」吗？\n屏蔽后来自该作者的内容将不再推荐。`);
+      if (!confirmed) return;
+      try {
+        await requestJson("/api/blocked-authors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author_name: cleanName,
+            source_platform: sourcePlatform || "",
+          }),
+        });
+        showToast(`已屏蔽作者：${cleanName}`);
+        const grid = $("#videoGrid");
+        if (grid) {
+          grid.querySelectorAll(".video-card").forEach((c) => {
+            const it = c._recommendationItem;
+            if (it && (it.author === cleanName || it.up_name === cleanName)) {
+              c.remove();
+            }
+          });
+        }
+        closePanel("cardDetailDrawer");
+        void renderBlockedAuthorsList();
+      } catch (err) {
+        showToast(`屏蔽失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    async function unblockAuthor(id, authorName = "") {
+      try {
+        await requestJson(`/api/blocked-authors/${id}`, { method: "DELETE" });
+        showToast(`已解除屏蔽：${authorName || id}`);
+        void renderBlockedAuthorsList();
+      } catch (err) {
+        showToast(`解除失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    async function renderBlockedAuthorsList() {
+      const container = $("#blockedAuthorsList");
+      if (!container) return;
+      const authors = await loadBlockedAuthors();
+      if (!authors.length) {
+        container.innerHTML = `<p class="video-meta">目前没有被屏蔽的作者。</p>`;
+        return;
+      }
+      container.innerHTML = authors.map((a) => `
+        <div class="blocked-author-row">
+          <div class="blocked-author-info">
+            <strong>${escapeHtml(a.author_name)}</strong>
+            <span class="blocked-author-meta">${a.source_platform ? escapeHtml(platformName(a.source_platform)) : "全平台"} · ${escapeHtml(a.created_at ? a.created_at.slice(0, 10) : "")}</span>
+          </div>
+          <button class="small-btn" data-unblock-id="${a.id}" data-unblock-name="${escapeHtml(a.author_name)}" type="button">解除屏蔽</button>
+        </div>
+      `).join("");
+
+      container.querySelectorAll("[data-unblock-id]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          void unblockAuthor(btn.dataset.unblockId, btn.dataset.unblockName);
+        });
+      });
+    }
+
     function openCardDetail(item, card = null) {
       if (!item) return;
       markRecommendationSeen(item, card);
@@ -5587,6 +5662,7 @@ ${savedCardFeedbackBarHtml(listKind)}
           <div class="card-detail-actions-row">
             ${url ? `<a class="pill-btn primary card-external-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">跳转查看原文 ↗</a>` : `<span>暂无外链</span>`}
             <div class="card-actions" data-detail-actions>
+              <button class="small-btn danger" data-detail-action="block-author" type="button" title="屏蔽此作者，不再推荐其内容">屏蔽作者</button>
               <button class="feedback-icon-btn" data-detail-action="like" type="button" aria-label="喜欢" title="喜欢">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
               </button>
@@ -5637,6 +5713,15 @@ ${savedCardFeedbackBarHtml(listKind)}
           actionsContainer.querySelectorAll("[data-detail-action]").forEach((btn) => {
             btn.addEventListener("click", () => {
               const action = btn.dataset.detailAction;
+              if (action === "block-author") {
+                const authorName = item.author || item.up_name;
+                if (!authorName) {
+                  showToast("该内容没有作者信息");
+                  return;
+                }
+                void blockAuthor(authorName, item.platform);
+                return;
+              }
               if (action === "watch-later" || action === "favorite") {
                 const kind = action === "watch-later" ? "watch_later" : "favorite";
                 const savedItem = desktopSavedItem(item);
@@ -13862,7 +13947,10 @@ ${cardFeedbackBarHtml()}`;
         panel.hidden = !isActive;
         panel.setAttribute("aria-hidden", isActive ? "false" : "true");
       });
-      if (panelName === "general") void refreshMigrationStatus({ force: true });
+      if (panelName === "general") {
+        void refreshMigrationStatus({ force: true });
+        void renderBlockedAuthorsList();
+      }
       if (panelName === "logging") startDiagnosticsAlertFeed();
       else stopDiagnosticsAlertFeed();
     }

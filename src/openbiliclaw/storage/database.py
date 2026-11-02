@@ -2374,6 +2374,7 @@ class Database:
         self._ensure_favorites_table()
         self._ensure_saved_sync_tables()
         self._ensure_digest_issues_table()
+        self._ensure_blocked_authors_table()
         self._ensure_content_history_tables()
         self._ensure_user_visual_clusters_table()
         self._ensure_auth_state_table()
@@ -18142,6 +18143,149 @@ class Database:
             "ORDER BY digest_date DESC LIMIT 1"
         ).fetchone()
         return self._digest_issue_from_row(row) if row else None
+
+    def _ensure_blocked_authors_table(self) -> None:
+        """Create the blocked authors (blacklist) table if it does not exist."""
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS blocked_authors (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_platform TEXT NOT NULL DEFAULT '',
+                author_name     TEXT NOT NULL,
+                author_id       TEXT NOT NULL DEFAULT '',
+                reason          TEXT NOT NULL DEFAULT '',
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_blocked_authors_platform_name
+                ON blocked_authors (source_platform, author_name);
+        """)
+
+    def purge_pool_by_blocked_author(self, author_name: str, source_platform: str = "") -> int:
+        """Mark pool candidates matching a blocked author as purged."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            return 0
+        clean_platform = source_platform.strip().lower()
+
+        if clean_platform and clean_platform != "*":
+            cursor = self._execute_write(
+                """
+                UPDATE content_cache
+                SET pool_status = 'purged_by_dislike'
+                WHERE pool_status IN ('fresh', 'active')
+                  AND (author_name = ? OR up_name = ?)
+                  AND LOWER(source_platform) = ?
+                """,
+                (clean_author, clean_author, clean_platform),
+            )
+        else:
+            cursor = self._execute_write(
+                """
+                UPDATE content_cache
+                SET pool_status = 'purged_by_dislike'
+                WHERE pool_status IN ('fresh', 'active')
+                  AND (author_name = ? OR up_name = ?)
+                """,
+                (clean_author, clean_author),
+            )
+        return cursor.rowcount or 0
+
+    def add_blocked_author(
+        self,
+        author_name: str,
+        source_platform: str = "",
+        author_id: str = "",
+        reason: str = "",
+    ) -> int:
+        """Add an author to the persistent blacklist and purge matching candidates."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            raise ValueError("author_name must not be empty")
+        clean_platform = source_platform.strip().lower()
+
+        cursor = self._execute_write(
+            """
+            INSERT INTO blocked_authors (source_platform, author_name, author_id, reason)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(source_platform, author_name) DO UPDATE SET
+                author_id = CASE
+                    WHEN excluded.author_id != '' THEN excluded.author_id
+                    ELSE blocked_authors.author_id
+                END,
+                reason = CASE
+                    WHEN excluded.reason != '' THEN excluded.reason
+                    ELSE blocked_authors.reason
+                END
+            """,
+            (clean_platform, clean_author, author_id.strip(), reason.strip()),
+        )
+        self.purge_pool_by_blocked_author(clean_author, clean_platform)
+        if cursor.lastrowid:
+            return cursor.lastrowid
+        row = self.conn.execute(
+            "SELECT id FROM blocked_authors WHERE source_platform = ? AND author_name = ?",
+            (clean_platform, clean_author),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def remove_blocked_author(
+        self,
+        blocked_id: int | None = None,
+        *,
+        author_name: str | None = None,
+        source_platform: str = "",
+    ) -> bool:
+        """Remove a blocked author by ID or platform+author_name."""
+        if blocked_id is not None:
+            cursor = self._execute_write(
+                "DELETE FROM blocked_authors WHERE id = ?",
+                (int(blocked_id),),
+            )
+            return bool(cursor.rowcount and cursor.rowcount > 0)
+        if author_name:
+            cursor = self._execute_write(
+                "DELETE FROM blocked_authors WHERE author_name = ? AND source_platform = ?",
+                (author_name.strip(), source_platform.strip().lower()),
+            )
+            return bool(cursor.rowcount and cursor.rowcount > 0)
+        return False
+
+    def get_blocked_authors(self) -> list[dict[str, Any]]:
+        """Return all blocked authors ordered by creation time descending."""
+        rows = self.conn.execute(
+            """
+            SELECT id, source_platform, author_name, author_id, reason, created_at
+            FROM blocked_authors
+            ORDER BY created_at DESC, id DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "source_platform": row[1],
+                "author_name": row[2],
+                "author_id": row[3],
+                "reason": row[4],
+                "created_at": str(row[5]) if row[5] else "",
+            }
+            for row in rows
+        ]
+
+    def is_author_blocked(self, author_name: str, source_platform: str = "") -> bool:
+        """Check if an author is blocked either globally or on a specific platform."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            return False
+        clean_platform = source_platform.strip().lower()
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM blocked_authors
+            WHERE author_name = ?
+              AND (source_platform = '' OR source_platform = '*' OR source_platform = ?)
+            LIMIT 1
+            """,
+            (clean_author, clean_platform),
+        ).fetchone()
+        return row is not None
 
     def _ensure_saved_sync_tables(self) -> None:
         """Create normalized saved-content tables and import legacy saved rows once."""

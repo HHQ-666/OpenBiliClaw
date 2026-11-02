@@ -3082,3 +3082,35 @@ class SourceShareSuggestionResponse(BaseModel):
     event_counts: dict[str, int] = Field(default_factory=dict)
     enabled_sources: dict[str, bool] = Field(default_factory=dict)
     suggested_shares: dict[str, int] = Field(default_factory=dict)
+
+
+class BlockedAuthorIn(BaseModel):
+    """Payload to add an author to the persistent blacklist."""
+
+    author_name: str = Field(..., min_length=1, description="Author or UP name")
+    source_platform: str = Field(
+        default="",
+        description="Platform identifier or empty for all platforms",
+    )
+    author_id: str = Field(default="", description="Optional stable author ID or UP mid")
+    reason: str = Field(default="", description="Optional note or reason")
+
+
+class BlockedAuthorOut(BaseModel):
+    """One blocked author record."""
+
+    id: int
+    source_platform: str = ""
+    author_name: str
+    author_id: str = ""
+    reason: str = ""
+    created_at: str = ""
+
+
+class BlockedAuthorActionResponse(BaseModel):
+    """Result of adding or removing a blocked author."""
+
+    ok: bool = True
+    id: int = 0
+    message: str = ""
+    purged_count: int = 0
