@@ -5491,6 +5491,199 @@ ${savedCardFeedbackBarHtml(listKind)}
     // recommendation key -> { node, html }：上一轮渲染出来的卡片。只有 markup 真的
     // 变了才会重建节点，其余情况原样复用 —— 见 syncRecommendationCards 的注释。
     const renderedRecommendationCards = new Map();
+    let focusedCardIndex = -1;
+
+    const SEEN_CARDS_STORAGE_KEY = "openbiliclaw.webui.seenCards";
+    const SEEN_CARDS_LIMIT = 500;
+    const seenCardIds = new Set();
+
+    function loadSeenCards() {
+      try {
+        const raw = localStorage.getItem(SEEN_CARDS_STORAGE_KEY);
+        if (!raw) return;
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach((id) => {
+            if (id) seenCardIds.add(String(id));
+          });
+        }
+      } catch {}
+    }
+
+    function saveSeenCards() {
+      try {
+        const list = Array.from(seenCardIds).slice(-SEEN_CARDS_LIMIT);
+        localStorage.setItem(SEEN_CARDS_STORAGE_KEY, JSON.stringify(list));
+      } catch {}
+    }
+
+    function recommendationSeenKey(item) {
+      if (!item) return "";
+      return String(item.bvid || item.content_id || item.id || "").trim();
+    }
+
+    function isRecommendationSeen(item) {
+      const key = recommendationSeenKey(item);
+      return key ? seenCardIds.has(key) : false;
+    }
+
+    function markRecommendationSeen(item, card = null) {
+      const key = recommendationSeenKey(item);
+      if (key) {
+        seenCardIds.add(key);
+        saveSeenCards();
+      }
+      if (card && card.classList) {
+        card.classList.add("is-seen");
+      }
+    }
+
+    function openCardDetail(item, card = null) {
+      if (!item) return;
+      markRecommendationSeen(item, card);
+
+      const url = contentUrl(item);
+      const platformSlug = canonicalPlatformSlug(item.platform || "bilibili");
+      const platformTitle = platformName(item.platform);
+      const durationBadge = item.content_type === "video" && item.duration > 0
+        ? ` · ⏱ ${formatDuration(item.duration)}`
+        : "";
+      const stats = recommendationStats(item);
+      const reasonText = item.reason || "基于你的近期口味与兴趣发现";
+      const summaryText = item.summary || item.desc || item.description || "暂无更详细的文字摘要，建议点击上方链接直接浏览原文。";
+
+      const platformHeader = $("#cardDetailPlatform");
+      if (platformHeader) {
+        platformHeader.innerHTML = `${platformLogoSvg(item.platform)} <span style="vertical-align: middle;">${escapeHtml(platformTitle)}</span>`;
+      }
+      const titleHeader = $("#cardDetailDrawerTitle");
+      if (titleHeader) {
+        titleHeader.textContent = item.title || "卡片详注";
+      }
+
+      const container = $("#cardDetailContent");
+      if (container) {
+        const coverHtml = item.cover_url
+          ? `<div class="card-detail-cover">
+               <img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title || "")}" loading="lazy">
+             </div>`
+          : "";
+
+        container.innerHTML = `
+          ${coverHtml}
+          <div>
+            <h3 class="card-detail-title">${escapeHtml(item.title || "")}</h3>
+            <div class="card-detail-meta">
+              <span>作者：${escapeHtml(item.author || "未知")}</span>
+              ${item.pubdate ? `<span>发布：${escapeHtml(formatTime(item.pubdate))}</span>` : ""}
+              ${durationBadge ? `<span>${escapeHtml(durationBadge)}</span>` : ""}
+              ${stats ? `<span>${escapeHtml(stats)}</span>` : ""}
+            </div>
+          </div>
+
+          <div class="card-detail-actions-row">
+            ${url ? `<a class="pill-btn primary card-external-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">跳转查看原文 ↗</a>` : `<span>暂无外链</span>`}
+            <div class="card-actions" data-detail-actions>
+              <button class="feedback-icon-btn" data-detail-action="like" type="button" aria-label="喜欢" title="喜欢">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="dislike" type="button" aria-label="不感兴趣" title="不感兴趣">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="watch-later" type="button" aria-label="稍后再看" title="稍后再看">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="favorite" type="button" aria-label="收藏" title="收藏">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="card-detail-section">
+            <p class="eyebrow">编目批注 · 为什么推给你</p>
+            <div class="reason is-expanded">
+              <span class="reason-text">${escapeHtml(reasonText)}</span>
+            </div>
+          </div>
+
+          <div class="card-detail-section">
+            <p class="eyebrow">内容纲要 / 摘要</p>
+            <div class="card-detail-summary">${escapeHtml(summaryText)}</div>
+          </div>
+
+          <div class="card-detail-section card-detail-chat">
+            <p class="eyebrow">研读对话 · 围绕此内容提问</p>
+            <form class="card-detail-chat-form" id="cardDetailChatForm">
+              <input type="text" class="card-detail-chat-input" id="cardDetailChatInput" placeholder="向阿B提问：这篇内容主要讲了什么？有哪些亮点？">
+              <button class="pill-btn primary" type="submit">提问</button>
+            </form>
+            <div class="card-detail-chat-reply" id="cardDetailChatReply" hidden></div>
+          </div>
+        `;
+
+        const extLink = container.querySelector(".card-external-link");
+        if (extLink) {
+          extLink.addEventListener("click", () => {
+            trackRecommendationClick(item);
+            markRecommendationSeen(item, card);
+          });
+        }
+
+        const actionsContainer = container.querySelector("[data-detail-actions]");
+        if (actionsContainer) {
+          actionsContainer.querySelectorAll("[data-detail-action]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const action = btn.dataset.detailAction;
+              if (action === "watch-later" || action === "favorite") {
+                const kind = action === "watch-later" ? "watch_later" : "favorite";
+                const savedItem = desktopSavedItem(item);
+                void desktopSavedMutations.toggle(kind, savedItem).then(() => {
+                  const isSaved = desktopSavedMutations.isSaved(kind, savedItem.item_key);
+                  btn.setAttribute("aria-pressed", isSaved ? "true" : "false");
+                  showToast(isSaved ? `已${kind === "favorite" ? "收藏" : "加入稍后再看"}` : "已移除");
+                  if (card) {
+                    const cardBtn = card.querySelector(`[data-action="${action}"]`);
+                    if (cardBtn) cardBtn.setAttribute("aria-pressed", isSaved ? "true" : "false");
+                  }
+                });
+              } else if (action === "like" || action === "dislike") {
+                void submitFeedback(item, action).then(() => {
+                  showToast(action === "like" ? "已记录喜欢" : "已记录不感兴趣");
+                });
+              }
+            });
+          });
+        }
+
+        const chatForm = container.querySelector("#cardDetailChatForm");
+        const chatInput = container.querySelector("#cardDetailChatInput");
+        const chatReply = container.querySelector("#cardDetailChatReply");
+        if (chatForm && chatInput && chatReply) {
+          chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (!text) return;
+            chatInput.value = "";
+            chatReply.hidden = false;
+            chatReply.textContent = "阿B 正在思考…";
+            try {
+              await sendChat(text, {
+                scope: "recommendation",
+                subjectId: String(item.bvid || item.content_id || item.id || ""),
+                subjectTitle: item.title || "",
+                contextPrefix: `用户正在研读内容《${item.title}》（来自 ${platformName(item.platform)}，理由：${item.reason}）。请围绕该内容解答用户问题：`
+              });
+              const lastMsg = state.chat[state.chat.length - 1];
+              chatReply.textContent = lastMsg?.text || "已完成思考并记录。";
+            } catch (err) {
+              chatReply.textContent = `提问未成功：${err?.message || "后端服务异常"}`;
+            }
+          });
+        }
+      }
+
+      openPanel("cardDetailDrawer");
+    }
 
     function recommendationCardHtml(item, index) {
       const url = contentUrl(item);
@@ -5514,7 +5707,7 @@ ${savedCardFeedbackBarHtml(listKind)}
             ${durationBadge}
           </button>`}
           <div>
-            <p class="video-title">${escapeHtml(item.title)}</p>
+            <p class="video-title" role="button" tabindex="0" title="点击展开卡片详览与速读">${escapeHtml(item.title)}</p>
             <p class="video-meta">${recommendationMetaHtml(item)}</p>
             ${stats ? `<p class="video-stats">${escapeHtml(stats)}</p>` : ""}
           </div>
@@ -5527,10 +5720,24 @@ ${cardFeedbackBarHtml()}`;
       card.className = recommendationIsTextCard(item) && !recommendationTextCardBackdrop(item)
         ? "video-card is-text-only"
         : "video-card";
+      if (isRecommendationSeen(item)) {
+        card.classList.add("is-seen");
+      }
+      card._recommendationItem = item;
       // 进场错峰：同一批卡片按位置依次落下（CSS 只读这个变量，序号不参与对账）。
       card.style.setProperty("--card-index", String(Math.min(index, 11)));
       card.dataset.bvid = item.bvid || item.id;
       card.innerHTML = html;
+      const titleEl = card.querySelector(".video-title");
+      if (titleEl) {
+        titleEl.addEventListener("click", () => openCardDetail(item, card));
+        titleEl.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openCardDetail(item, card);
+          }
+        });
+      }
       const reason = card.querySelector(".reason");
       const toggleReason = () => {
         const expanded = reason.classList.toggle("is-expanded");
@@ -5728,6 +5935,7 @@ ${cardFeedbackBarHtml()}`;
     function openRecommendation(item, card) {
       const url = contentUrl(item);
       trackRecommendationClick(item);
+      markRecommendationSeen(item, card);
       card.querySelector(".status-line").textContent = url ? "已打开真实内容链接，点击信号会在后台记录。" : "后端没有返回可打开链接；点击信号会在后台记录。";
       showToast(url ? `打开：${item.title}` : "后端没有返回可打开链接");
     }
@@ -14570,8 +14778,194 @@ ${cardFeedbackBarHtml()}`;
       scheduleActivityRailHeightSync();
     });
 
+    focusedCardIndex = -1;
+
+    function getRecommendationCards() {
+      const g = $("#videoGrid");
+      if (!g) return [];
+      return Array.from(g.querySelectorAll(".video-card:not(.is-skeleton)"));
+    }
+
+    function clearCardFocus() {
+      getRecommendationCards().forEach((c) => c.classList.remove("is-focused"));
+      focusedCardIndex = -1;
+    }
+
+    function focusCardByIndex(index) {
+      const cards = getRecommendationCards();
+      if (!cards.length) return;
+      const clamped = Math.max(0, Math.min(index, cards.length - 1));
+      cards.forEach((c, i) => {
+        if (i === clamped) {
+          c.classList.add("is-focused");
+          c.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else {
+          c.classList.remove("is-focused");
+        }
+      });
+      focusedCardIndex = clamped;
+    }
+
+    function getFocusedCard() {
+      const cards = getRecommendationCards();
+      if (focusedCardIndex >= 0 && focusedCardIndex < cards.length) {
+        return cards[focusedCardIndex];
+      }
+      return null;
+    }
+
+    function openShortcutsModal() {
+      openPanel("shortcutsDialog");
+    }
+
+    function handleGlobalKeydown(event) {
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable ||
+        Boolean(target.closest(".comment-field")) ||
+        Boolean(target.closest(".chat-input-row")) ||
+        Boolean(target.closest(".chat-input")) ||
+        Boolean(target.closest(".card-detail-chat-form"))
+      );
+
+      if (isTyping) {
+        if (event.key === "Escape") {
+          target.blur();
+        }
+        return;
+      }
+
+      // If drawer is open, Escape closes it
+      const openDrawers = Array.from(document.querySelectorAll(".drawer.is-open"));
+      if (openDrawers.length > 0) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          const topDrawer = openDrawers[openDrawers.length - 1];
+          closePanel(topDrawer.id);
+        }
+        return;
+      }
+
+      const key = event.key;
+
+      if (key === "j" || key === "ArrowDown") {
+        event.preventDefault();
+        const cards = getRecommendationCards();
+        if (!cards.length) return;
+        if (focusedCardIndex === -1) {
+          focusCardByIndex(0);
+        } else {
+          focusCardByIndex(focusedCardIndex + 1);
+        }
+        return;
+      }
+
+      if (key === "k" || key === "ArrowUp") {
+        event.preventDefault();
+        const cards = getRecommendationCards();
+        if (!cards.length) return;
+        if (focusedCardIndex === -1) {
+          focusCardByIndex(0);
+        } else {
+          focusCardByIndex(focusedCardIndex - 1);
+        }
+        return;
+      }
+
+      if (key === "Enter" || key === "o") {
+        const card = getFocusedCard();
+        if (card && card._recommendationItem) {
+          event.preventDefault();
+          if (event.shiftKey) {
+            const url = contentUrl(card._recommendationItem);
+            if (url) {
+              window.open(url, "_blank", "noopener,noreferrer");
+              markRecommendationSeen(card._recommendationItem, card);
+            }
+          } else {
+            openCardDetail(card._recommendationItem, card);
+          }
+        }
+        return;
+      }
+
+      if (key === "s") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const favBtn = card.querySelector('[data-action="favorite"]');
+          if (favBtn) favBtn.click();
+        }
+        return;
+      }
+
+      if (key === "l") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const wlBtn = card.querySelector('[data-action="watch-later"]');
+          if (wlBtn) wlBtn.click();
+        }
+        return;
+      }
+
+      if (key === "x") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const disBtn = card.querySelector('[data-action="dislike"]') || card.querySelector('[data-action="dismiss"]');
+          if (disBtn) disBtn.click();
+        }
+        return;
+      }
+
+      if (key === "c") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const commentBtn = card.querySelector('[data-action="comment"]');
+          if (commentBtn) {
+            commentBtn.click();
+            const input = card.querySelector(".comment-field input");
+            if (input) input.focus();
+          }
+        }
+        return;
+      }
+
+      if (key === "/") {
+        event.preventDefault();
+        const searchInput = $("#searchInput");
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+        return;
+      }
+
+      if (key === "?") {
+        event.preventDefault();
+        openShortcutsModal();
+        return;
+      }
+
+      if (key === "Escape") {
+        clearCardFocus();
+        return;
+      }
+    }
+
+    function initKeyboardNavigation() {
+      document.addEventListener("keydown", handleGlobalKeydown);
+    }
+
     restoreBackendEndpoint();
     restoreFrontendSettings();
+    loadSeenCards();
+    initKeyboardNavigation();
     setSideDrawerOpen(!isMobileViewport() && storageGet(SIDE_DRAWER_OPEN_KEY) !== "0", { persist: false });
     initBackToTop();
     startSharedChatSurfaceSync();

@@ -1734,6 +1734,46 @@
     </div>
   </section>
 
+  <section class="drawer" id="cardDetailDrawer" aria-label="卡片详览与速读" data-od-id="card-detail-drawer">
+    <div class="scrim" data-close="cardDetailDrawer"></div>
+    <div class="drawer-panel" id="cardDetailPanel">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow" id="cardDetailPlatform">Catalog Card</p>
+          <h2 id="cardDetailDrawerTitle">卡片详注</h2>
+        </div>
+        <button class="icon-btn" data-close="cardDetailDrawer" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="card-detail-content" id="cardDetailContent"></div>
+    </div>
+  </section>
+
+  <section class="drawer" id="shortcutsDialog" aria-label="快捷键速查" data-od-id="shortcuts-dialog">
+    <div class="scrim" data-close="shortcutsDialog"></div>
+    <div class="drawer-panel shortcuts-panel" id="shortcutsPanel">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">Keyboard Shortcuts</p>
+          <h2>键盘快捷操作</h2>
+        </div>
+        <button class="icon-btn" data-close="shortcutsDialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>J</kbd> / <kbd>↓</kbd></div><span class="shortcut-desc">切换至下一张卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>K</kbd> / <kbd>↑</kbd></div><span class="shortcut-desc">切换至上一张卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Enter</kbd> / <kbd>O</kbd></div><span class="shortcut-desc">展开当前卡片详览与 AI 速读</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Shift</kbd>+<kbd>Enter</kbd></div><span class="shortcut-desc">直接在新标签页打开原文</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>S</kbd></div><span class="shortcut-desc">收藏 / 取消收藏</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>L</kbd></div><span class="shortcut-desc">移入 / 移出稍后再看</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>X</kbd></div><span class="shortcut-desc">不感兴趣 / 忽略卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>C</kbd></div><span class="shortcut-desc">展开当前卡片留言 / 讨论输入框</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>/</kbd></div><span class="shortcut-desc">快速聚焦顶栏搜索框</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Esc</kbd></div><span class="shortcut-desc">关闭抽屉 / 弹层 / 取消卡片聚焦</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>?</kbd></div><span class="shortcut-desc">打开快捷键说明面板</span></div>
+      </div>
+    </div>
+  </section>
+
   <section class="drawer" id="messagesDrawer" aria-label="消息中心" data-od-id="messages-drawer">
     <div class="scrim" data-close="messagesDrawer"></div>
     <div class="drawer-panel" id="messagesPanel">

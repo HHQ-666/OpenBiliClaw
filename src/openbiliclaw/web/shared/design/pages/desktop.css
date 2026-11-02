@@ -232,3 +232,171 @@ body.chat-page-open .chat-input-row,
 body.chat-page-open .chat-input {
   padding: var(--space-3) calc(var(--space-3) + 76px);
 }
+
+/* ── 卡片详览与 AI 速读抽屉 ── */
+#cardDetailPanel {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.card-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.card-detail-cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-card);
+}
+
+.card-detail-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-detail-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+  color: var(--ink);
+  margin: var(--s2) 0;
+}
+
+.card-detail-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--ink-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.card-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.card-detail-section .eyebrow {
+  margin: 0;
+}
+
+.card-detail-summary {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-card);
+  padding: var(--s3) var(--s4);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.card-detail-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.card-detail-actions-row .card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.card-detail-chat {
+  margin-top: var(--s2);
+}
+
+.card-detail-chat-form {
+  display: flex;
+  gap: var(--s2);
+}
+
+.card-detail-chat-input {
+  flex: 1 1 auto;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-card);
+  padding: var(--s2) var(--s3);
+}
+
+.card-detail-chat-input:focus {
+  outline: none;
+  border-color: var(--stamp);
+  box-shadow: 0 0 0 2px var(--stamp-soft);
+}
+
+.card-detail-chat-reply {
+  margin-top: var(--s2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  background: var(--card-sunk);
+  border-left: 2px solid var(--stamp);
+  padding: var(--s3);
+  border-radius: 0 var(--r-card) var(--r-card) 0;
+}
+
+/* ── 键盘快捷键速查面板 ── */
+.drawer-panel.shortcuts-panel {
+  width: min(500px, 100%);
+}
+
+.shortcuts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) 0;
+  border-bottom: 1px dashed var(--rule-soft);
+}
+
+.shortcut-item .shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shortcut-item kbd {
+  display: inline-block;
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  line-height: 1;
+  color: var(--ink);
+  background: var(--card-sunk);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-card);
+  box-shadow: 0 1px 0 var(--rule-strong);
+}
+
+.shortcut-item .shortcut-desc {
+  font-size: var(--fs-note);
+  color: var(--ink-2);
+}

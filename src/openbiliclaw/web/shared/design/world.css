@@ -914,6 +914,38 @@
   z-index: 2;
 }
 
+.video-card.is-seen .cover img {
+  opacity: 0.88;
+  filter: saturate(0.85);
+  transition: opacity var(--imp), filter var(--imp);
+}
+
+.video-card.is-seen:hover .cover img,
+.video-card.is-seen.is-focused .cover img {
+  opacity: 1;
+  filter: saturate(0.96);
+}
+
+/* 键盘聚焦高亮：印章轮廓 */
+.video-card.is-focused {
+  transform: translateY(-3px);
+  border-color: var(--stamp);
+  box-shadow: var(--card-edge), 0 0 0 2px var(--stamp), var(--lift-hi);
+  z-index: 5;
+}
+
+.video-card.is-focused::before {
+  opacity: 1;
+}
+
+.video-title[role="button"] {
+  cursor: pointer;
+}
+
+.video-title[role="button"]:hover {
+  color: var(--stamp);
+}
+
 .cover {
   display: block;
   text-decoration: none;
