@@ -501,7 +501,11 @@ def assess_ai_frontier(
     # (the model/tool it ships with), otherwise the paper stays research-only.
     applied_in_title = bool(_APPLIED.search(title_text))
     if applied_hit:
-        score += 2.0 * applied_mult
+        # 3.0, not 2.0: a text post whose only signal is a tool brand
+        # ("如何用 Codex …") otherwise tops out around 5.25 and can never
+        # clear the 6.0 threshold, so the channel would keep only papers and
+        # release news — the two genres it exists to exclude.
+        score += 3.0 * applied_mult
         tags_out.append(TAG_APPLIED)
         matched.append(f"applied:{applied_hit}")
 
