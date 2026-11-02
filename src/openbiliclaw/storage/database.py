@@ -18287,6 +18287,82 @@ class Database:
         ).fetchone()
         return row is not None
 
+    def search_content(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Search content_cache across titles, authors, and descriptions.
+
+        Automatically filters out blocked authors.
+        """
+        clean = query.strip()
+        if not clean:
+            return []
+
+        tokens = [t.strip() for t in clean.split() if t.strip()]
+        if not tokens:
+            return []
+
+        blocked_pairs: set[tuple[str, str]] = set()
+        try:
+            for b in self.get_blocked_authors():
+                platform_key = b.get("source_platform", "").strip().lower()
+                name_key = b.get("author_name", "").strip()
+                blocked_pairs.add((platform_key, name_key))
+        except Exception:
+            pass
+
+        like_clauses: list[str] = []
+        params: list[Any] = []
+        for token in tokens:
+            like = f"%{token}%"
+            like_clauses.append(
+                "(title LIKE ? OR description LIKE ? OR author_name LIKE ? "
+                "OR up_name LIKE ? OR pool_topic_label LIKE ?)"
+            )
+            params.extend([like, like, like, like, like])
+
+        where_sql = " AND ".join(like_clauses)
+        limit_val = min(100, max(1, int(limit)))
+        params.append(limit_val)
+
+        sql = f"""
+            SELECT bvid, title, author_name, up_name, source_platform,
+                   cover_url, content_url, description, published_at,
+                   pool_topic_label, view_count, like_count, relevance_score
+            FROM content_cache
+            WHERE {where_sql}
+            ORDER BY relevance_score DESC, published_at DESC, bvid DESC
+            LIMIT ?
+        """
+        rows = self.conn.execute(sql, params).fetchall()
+
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            platform = str(row[4] or "").strip().lower()
+            author = str(row[2] or row[3] or "").strip()
+            if (
+                (platform, author) in blocked_pairs
+                or ("", author) in blocked_pairs
+                or ("*", author) in blocked_pairs
+            ):
+                continue
+
+            results.append(
+                {
+                    "bvid": row[0],
+                    "title": row[1],
+                    "author": author,
+                    "platform": platform or "bilibili",
+                    "cover_url": row[5] or "",
+                    "url": row[6] or "",
+                    "description": row[7] or "",
+                    "published_at": str(row[8] or ""),
+                    "topic": row[9] or "",
+                    "view_count": row[10] or 0,
+                    "like_count": row[11] or 0,
+                    "relevance_score": row[12] or 0.0,
+                }
+            )
+        return results
+
     def _ensure_saved_sync_tables(self) -> None:
         """Create normalized saved-content tables and import legacy saved rows once."""
         self.conn.executescript("""

@@ -204,6 +204,10 @@
           <!-- 徽标语义说明：数字是后端还能换的库存，不是这一屏的卡片数；0 常见于
                来源没开或补货还没回来，所以顺手说清它为什么会涨。 -->
           <p class="filter-legend">平台后的数字＝还能换的数量，后台补货后会涨</p>
+          <div class="search-results-banner" id="searchResultsBanner" hidden>
+            <p id="searchResultsBannerText">全库检索结果</p>
+            <button class="small-btn" id="clearSearchResultsBtn" type="button">清除全库筛选</button>
+          </div>
           <!-- 首屏骨架占位：后端推荐取回前先撑住版面，renderVideos 首次渲染时整体替换 -->
           <div class="card-grid" id="videoGrid">
             <article class="video-card is-skeleton" aria-hidden="true"><div class="cover skeleton-shimmer"></div><div><p class="video-title skeleton-line skeleton-shimmer"></p><p class="video-meta skeleton-line skeleton-shimmer short"></p></div><p class="reason skeleton-line skeleton-shimmer"></p></article>
@@ -1460,6 +1464,14 @@
             <p class="settings-note-inline" style="margin-bottom: var(--s2);">已屏蔽的作者将不会在任何频道的推荐中出现。</p>
             <div id="blockedAuthorsList" class="blocked-authors-list">
               <p class="video-meta">正在加载黑名单…</p>
+            </div>
+          </div>
+          <p class="settings-section-title">个人专属 RSS / Atom 订阅源</p>
+          <div class="settings-field full" style="flex-direction: column; align-items: stretch;">
+            <p class="settings-note-inline" style="margin-bottom: var(--s2);">可复制此链接在 Follow、NetNewsWire、Reeder、Feedly 等阅读器中直接订阅你的私人高分推荐流。</p>
+            <div class="rss-feed-box">
+              <input id="rssFeedUrlInput" readonly value="/api/feed/rss" style="font-family: var(--font-mono); flex: 1;">
+              <button class="small-btn primary" id="copyRssFeedBtn" type="button">复制 RSS 链接</button>
             </div>
           </div>
           <p class="settings-section-title">保存与平台同步</p>

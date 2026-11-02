@@ -2094,6 +2094,101 @@ async def generate_session_title(
     return fallback_session_title(message)
 
 
+def generate_rss_feed(
+    items: list[dict[str, Any]],
+    *,
+    base_url: str = "http://127.0.0.1:8420",
+    channel_name: str = "all",
+) -> str:
+    """Format recommendation candidates into valid RSS 2.0 XML."""
+    import contextlib
+    import html
+    from datetime import UTC, datetime
+    from email.utils import format_datetime
+
+    now_rfc822 = format_datetime(datetime.now(UTC))
+    feed_title = "OpenBiliClaw 私人推荐目录"
+    if channel_name == "ai_frontier":
+        feed_title = "OpenBiliClaw · AI 前沿速递"
+
+    feed_url = f"{base_url.rstrip('/')}/api/feed/rss"
+    if channel_name and channel_name != "all":
+        feed_url += f"?channel={channel_name}"
+
+    item_blocks: list[str] = []
+    for item in items:
+        title = html.escape(str(item.get("title") or "无标题"))
+        url = str(item.get("content_url") or item.get("url") or "")
+        if not url:
+            bvid = str(item.get("bvid") or "")
+            url = f"https://www.bilibili.com/video/{bvid}" if bvid.startswith("BV") else base_url
+
+        url_escaped = html.escape(url)
+        author = html.escape(
+            str(
+                item.get("author_name")
+                or item.get("author")
+                or item.get("up_name")
+                or "OpenBiliClaw"
+            )
+        )
+        platform = html.escape(
+            str(item.get("source_platform") or item.get("platform") or "Bilibili")
+        )
+        reason = str(
+            item.get("relevance_reason") or item.get("pool_expression") or item.get("reason") or ""
+        )
+        desc = str(item.get("description") or item.get("desc") or item.get("summary") or "")
+
+        content_html = f"<p><strong>来源：</strong>{platform} · {author}</p>"
+        if reason:
+            content_html += f"<p><strong>编目批注：</strong>{html.escape(reason)}</p>"
+        if desc:
+            content_html += f"<p>{html.escape(desc)}</p>"
+
+        pub_date_val = item.get("published_at") or item.get("pubdate") or item.get("created_at")
+        pub_date_rfc = now_rfc822
+        if isinstance(pub_date_val, (int, float)) and pub_date_val > 0:
+            with contextlib.suppress(Exception):
+                pub_date_rfc = format_datetime(datetime.fromtimestamp(pub_date_val, tz=UTC))
+        elif isinstance(pub_date_val, datetime):
+            pub_date_rfc = format_datetime(pub_date_val)
+        elif isinstance(pub_date_val, str) and pub_date_val:
+            with contextlib.suppress(Exception):
+                dt = datetime.fromisoformat(pub_date_val.replace("Z", "+00:00"))
+                pub_date_rfc = format_datetime(dt)
+
+        guid = html.escape(str(item.get("item_key") or item.get("bvid") or item.get("id") or url))
+
+        item_blocks.append(
+            f"    <item>\n"
+            f"      <title>{title}</title>\n"
+            f"      <link>{url_escaped}</link>\n"
+            f'      <guid isPermaLink="false">{guid}</guid>\n'
+            f"      <pubDate>{pub_date_rfc}</pubDate>\n"
+            f"      <author>{author}</author>\n"
+            f"      <category>{platform}</category>\n"
+            f"      <description><![CDATA[{content_html}]]></description>\n"
+            f"    </item>"
+        )
+
+    items_joined = "\n".join(item_blocks)
+    return (
+        f'<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n'
+        f"  <channel>\n"
+        f"    <title>{feed_title}</title>\n"
+        f"    <link>{html.escape(base_url)}/web</link>\n"
+        f"    <description>本地优先的个人专属跨平台内容推荐与发现目录馆</description>\n"
+        f"    <language>zh-cn</language>\n"
+        f"    <lastBuildDate>{now_rfc822}</lastBuildDate>\n"
+        f'    <atom:link href="{html.escape(feed_url)}" rel="self" type="application/rss+xml" />\n'
+        f"{items_joined}\n"
+        f"  </channel>\n"
+        f"</rss>"
+    )
+
+
 def create_app(
     *,
     memory_manager: Any | None = None,
@@ -11499,6 +11594,48 @@ def create_app(
         if not ok:
             raise HTTPException(status_code=404, detail="未找到该屏蔽记录")
         return BlockedAuthorActionResponse(ok=True, id=blocked_id, message="已解除屏蔽")
+
+    @app.get("/api/feed/rss")
+    def get_rss_feed(request: Request, channel: str = "all", limit: int = 30) -> Response:
+        """Serve personal recommendation feed as standard RSS 2.0 XML."""
+        if not getattr(ctx, "database", None):
+            xml_empty = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<rss version="2.0"><channel><title>OpenBiliClaw</title></channel></rss>'
+            )
+            return Response(content=xml_empty, media_type="application/xml; charset=utf-8")
+
+        candidates: list[dict[str, Any]] = []
+        try:
+            candidates = ctx.database.get_pool_candidates(limit=min(100, max(1, limit)))
+        except Exception:
+            candidates = []
+
+        if not candidates:
+            try:
+                candidates = ctx.database.get_cached_content(limit=min(100, max(1, limit)))
+            except Exception:
+                candidates = []
+
+        if channel == "ai_frontier":
+            candidates = [
+                c
+                for c in candidates
+                if str(c.get("source_platform") or c.get("platform")).lower()
+                in ("arxiv", "huggingface", "hackernews")
+                or "ai" in str(c.get("topic_key") or "").lower()
+            ]
+
+        base_url = str(request.base_url).rstrip("/")
+        xml_content = generate_rss_feed(candidates, base_url=base_url, channel_name=channel)
+        return Response(content=xml_content, media_type="application/xml; charset=utf-8")
+
+    @app.get("/api/search")
+    def search_content_items(q: str = "", limit: int = 30) -> list[dict[str, Any]]:
+        """Search content across the entire historical database."""
+        if not getattr(ctx, "database", None) or not q.strip():
+            return []
+        return ctx.database.search_content(q.strip(), limit=limit)
 
     @app.post("/api/delight/trigger")
     async def trigger_delight(payload: dict[str, Any] | None = None) -> Any:

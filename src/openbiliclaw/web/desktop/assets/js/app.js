@@ -3283,6 +3283,8 @@
       void lanAuthControl?.reload();
       void bootAutostartControl?.reload();
       void refreshUpdateStatus();
+      const rssInput = $("#rssFeedUrlInput");
+      if (rssInput) rssInput.value = window.location.origin + "/api/feed/rss";
     }
 
     // ── Saved pages: 稍后再看 (watch-later) & 收藏 (favorites) ──────
@@ -4097,6 +4099,9 @@ ${savedCardFeedbackBarHtml(listKind)}
     }
 
     function filteredVideos() {
+      if (Array.isArray(state.searchResults)) {
+        return state.searchResults;
+      }
       const items = recommendationBaseItems();
       if (state.typeFilter === "全部") return items;
       return items.filter((item) => contentTypeGroup(item) === state.typeFilter);
@@ -5616,6 +5621,190 @@ ${savedCardFeedbackBarHtml(listKind)}
       });
     }
 
+    function generateShareCard(item) {
+      if (!item) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = 750;
+      canvas.height = 1060;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const palette = document.documentElement.dataset.palette || "default";
+      let bgGrad = "#f7f8f9";
+      let cardBg = "#ffffff";
+      let ink = "#171a1f";
+      let inkMuted = "#606873";
+      let stampColor = "#2e65a3";
+      let ruleColor = "#d8dce1";
+
+      if (palette === "warm" || palette === "paper") {
+        bgGrad = "#f0ece3";
+        cardBg = "#f7f5ef";
+        ink = "#1f262e";
+        inkMuted = "#766d5e";
+        stampColor = "#b83828";
+        ruleColor = "#c6bfb0";
+      } else if (palette === "moss" || palette === "green") {
+        bgGrad = "#eaeee8";
+        cardBg = "#fbfcfa";
+        ink = "#1b2320";
+        inkMuted = "#5c6961";
+        stampColor = "#2f6f55";
+        ruleColor = "#ccd4cb";
+      }
+
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const pad = 36;
+      const cardW = canvas.width - pad * 2;
+      const cardH = canvas.height - pad * 2;
+      ctx.fillStyle = cardBg;
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 2;
+      ctx.fillRect(pad, pad, cardW, cardH);
+      ctx.strokeRect(pad, pad, cardW, cardH);
+
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad + 8, pad + 8, cardW - 16, cardH - 16);
+
+      ctx.font = "bold 20px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      ctx.fillText(`平台 · ${platformName(item.platform || "bilibili")}`, pad + 32, pad + 48);
+
+      ctx.save();
+      ctx.translate(canvas.width - pad - 120, pad + 52);
+      ctx.rotate(-0.06);
+      ctx.strokeStyle = stampColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-10, -22, 108, 34);
+      ctx.fillStyle = stampColor;
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText("目录馆 · 编目", 0, 0);
+      ctx.restore();
+
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad + 32, pad + 72);
+      ctx.lineTo(canvas.width - pad - 32, pad + 72);
+      ctx.stroke();
+
+      ctx.fillStyle = ink;
+      ctx.font = "bold 32px Songti SC, Source Han Serif SC, Georgia, serif";
+      const title = String(item.title || "无标题");
+      const titleWords = title.split("");
+      let line = "";
+      let titleY = pad + 120;
+      const maxTitleW = cardW - 64;
+
+      for (let n = 0; n < titleWords.length; n++) {
+        const testLine = line + titleWords[n];
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxTitleW && n > 0) {
+          ctx.fillText(line, pad + 32, titleY);
+          line = titleWords[n];
+          titleY += 44;
+          if (titleY > pad + 210) {
+            line += "…";
+            break;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, pad + 32, titleY);
+
+      ctx.font = "16px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      titleY += 40;
+      const authorText = `作者：${item.author || item.up_name || "未知"}  |  发布：${item.pubdate ? formatTime(item.pubdate) : "近期"}`;
+      ctx.fillText(authorText, pad + 32, titleY);
+
+      titleY += 30;
+      const reasonBoxY = titleY;
+      const reasonBoxH = 150;
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(pad + 32, reasonBoxY, cardW - 64, reasonBoxH);
+      ctx.fillStyle = stampColor;
+      ctx.fillRect(pad + 32, reasonBoxY, 4, reasonBoxH);
+
+      ctx.fillStyle = stampColor;
+      ctx.font = "bold 15px monospace, monospace";
+      ctx.fillText("编目批注 · 为什么推荐给你", pad + 48, reasonBoxY + 30);
+
+      ctx.fillStyle = ink;
+      ctx.font = "18px sans-serif";
+      const reasonText = String(item.reason || "基于近期口味与深度兴趣发现。");
+      let rLine = "";
+      let rY = reasonBoxY + 62;
+      for (let n = 0; n < reasonText.length; n++) {
+        const testLine = rLine + reasonText[n];
+        if (ctx.measureText(testLine).width > cardW - 100 && n > 0) {
+          ctx.fillText(rLine, pad + 48, rY);
+          rLine = reasonText[n];
+          rY += 28;
+          if (rY > reasonBoxY + 130) {
+            rLine += "…";
+            break;
+          }
+        } else {
+          rLine = testLine;
+        }
+      }
+      ctx.fillText(rLine, pad + 48, rY);
+
+      titleY = reasonBoxY + reasonBoxH + 30;
+      ctx.fillStyle = inkMuted;
+      ctx.font = "bold 15px monospace, monospace";
+      ctx.fillText("内容纲要 / 摘要", pad + 32, titleY);
+      titleY += 25;
+
+      ctx.fillStyle = ink;
+      ctx.font = "16px sans-serif";
+      const summaryText = String(item.summary || item.desc || item.description || "暂无文字摘要。");
+      let sLine = "";
+      let sY = titleY + 10;
+      for (let n = 0; n < summaryText.length; n++) {
+        const testLine = sLine + summaryText[n];
+        if (ctx.measureText(testLine).width > cardW - 64 && n > 0) {
+          ctx.fillText(sLine, pad + 32, sY);
+          sLine = summaryText[n];
+          sY += 26;
+          if (sY > canvas.height - pad - 120) {
+            sLine += "…";
+            break;
+          }
+        } else {
+          sLine = testLine;
+        }
+      }
+      ctx.fillText(sLine, pad + 32, sY);
+
+      const footerY = canvas.height - pad - 40;
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad + 32, footerY - 20);
+      ctx.lineTo(canvas.width - pad - 32, footerY - 20);
+      ctx.stroke();
+
+      ctx.font = "bold 14px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      ctx.fillText("OPENBILICLAW · 私人卡片目录馆", pad + 32, footerY + 8);
+      ctx.textAlign = "right";
+      ctx.fillText(new Date().toISOString().slice(0, 10), canvas.width - pad - 32, footerY + 8);
+      ctx.textAlign = "left";
+
+      const a = document.createElement("a");
+      const safeTitle = (item.title || "card").replace(/[^\w\u4e00-\u9fa5]/g, "_").slice(0, 20);
+      a.download = `openbiliclaw-${safeTitle}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      showToast("已生成并下载书签卡片图片");
+    }
+
     function openCardDetail(item, card = null) {
       if (!item) return;
       markRecommendationSeen(item, card);
@@ -5662,6 +5851,7 @@ ${savedCardFeedbackBarHtml(listKind)}
           <div class="card-detail-actions-row">
             ${url ? `<a class="pill-btn primary card-external-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">跳转查看原文 ↗</a>` : `<span>暂无外链</span>`}
             <div class="card-actions" data-detail-actions>
+              <button class="small-btn" data-detail-action="share-card" type="button" title="导出为精美书签分享图">生成分享卡</button>
               <button class="small-btn danger" data-detail-action="block-author" type="button" title="屏蔽此作者，不再推荐其内容">屏蔽作者</button>
               <button class="feedback-icon-btn" data-detail-action="like" type="button" aria-label="喜欢" title="喜欢">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
@@ -5713,6 +5903,10 @@ ${savedCardFeedbackBarHtml(listKind)}
           actionsContainer.querySelectorAll("[data-detail-action]").forEach((btn) => {
             btn.addEventListener("click", () => {
               const action = btn.dataset.detailAction;
+              if (action === "share-card") {
+                generateShareCard(item);
+                return;
+              }
               if (action === "block-author") {
                 const authorName = item.author || item.up_name;
                 if (!authorName) {
@@ -14287,9 +14481,68 @@ ${cardFeedbackBarHtml()}`;
     safeBind("#delightCommentInput", "blur", (event) => {
       autoCollapseComposer(document.querySelector(".delight-main-actions"), event, closeDelightComposer);
     });
-    safeBind("#resetFiltersBtn", "click", () => { state.query = ""; state.filter = "全部"; state.typeFilter = "全部"; const input = $("#searchInput"); if (input) input.value = ""; renderAll(); });
-    safeBind("#searchInput", "input", (event) => { state.query = event.target.value || ""; renderAll(); });
-    safeBind("#searchForm", "submit", (event) => { event.preventDefault(); state.query = $("#searchInput")?.value || ""; renderAll(); });
+    async function executeGlobalSearch(query) {
+      const q = String(query || "").trim();
+      if (!q) {
+        clearGlobalSearch();
+        return;
+      }
+      try {
+        const results = await requestJson(`/api/search?q=${encodeURIComponent(q)}&limit=40`);
+        const banner = $("#searchResultsBanner");
+        const bannerText = $("#searchResultsBannerText");
+        if (banner && bannerText) {
+          banner.hidden = false;
+          bannerText.textContent = `全库检索「${q}」：找到 ${results.length} 条匹配素材`;
+        }
+        state.searchResults = Array.isArray(results) ? results : [];
+        renderVideos();
+        if (!results || !results.length) {
+          showToast(`全库检索未找到包含「${q}」的内容`);
+        }
+      } catch (err) {
+        showToast(`搜索失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    function clearGlobalSearch() {
+      state.searchResults = null;
+      const banner = $("#searchResultsBanner");
+      if (banner) banner.hidden = true;
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      state.query = "";
+      renderVideos();
+    }
+
+    safeBind("#clearSearchResultsBtn", "click", clearGlobalSearch);
+    safeBind("#copyRssFeedBtn", "click", () => {
+      const input = $("#rssFeedUrlInput");
+      const fullUrl = window.location.origin + "/api/feed/rss";
+      if (input) input.value = fullUrl;
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast("已复制 RSS 订阅链接到剪贴板");
+      }).catch(() => {
+        showToast("复制链接：" + fullUrl);
+      });
+    });
+    safeBind("#resetFiltersBtn", "click", () => {
+      clearGlobalSearch();
+      state.filter = "全部";
+      state.typeFilter = "全部";
+      renderAll();
+    });
+    safeBind("#searchInput", "input", (event) => {
+      state.query = event.target.value || "";
+      if (!state.query) clearGlobalSearch();
+      else renderAll();
+    });
+    safeBind("#searchForm", "submit", (event) => {
+      event.preventDefault();
+      const q = $("#searchInput")?.value?.trim() || "";
+      if (q) void executeGlobalSearch(q);
+      else clearGlobalSearch();
+    });
     window.addEventListener("resize", scheduleActivityRailHeightSync);
     safeBind("#desktopPendingToggle", "click", () => {
       state.pendingConfirmations.expanded = !state.pendingConfirmations.expanded;
