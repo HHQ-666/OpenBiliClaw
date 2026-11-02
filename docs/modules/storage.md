@@ -797,6 +797,31 @@ db.suppress_low_confidence_recommendations()
 - `set_admission_min_score()` 由 runtime 在配置加载 / 热重载时调用；storage 不直接读取 runtime state 或 `config.toml`。
 - `suppress_low_score_pool_items()` 会把 `content_cache.relevance_score` 低于阈值且仍可能展示的 `fresh / shown / suppressed` 行标为 `suppressed`。
 - `suppress_low_confidence_recommendations()` 会把低于阈值且尚无用户反馈的历史推荐标为 `feedback_type='suppressed_low_score'`。
+
+### Digest Issues Persistence
+
+每日日报归档表 `digest_issues`：
+
+```sql
+CREATE TABLE IF NOT EXISTS digest_issues (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    digest_date   TEXT NOT NULL UNIQUE,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    title         TEXT NOT NULL DEFAULT '',
+    body_text     TEXT NOT NULL DEFAULT '',
+    item_count    INTEGER NOT NULL DEFAULT 0,
+    payload_json  TEXT NOT NULL DEFAULT '',
+    delivery_json TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_digest_issues_date ON digest_issues (digest_date);
+```
+
+公开 Python API：
+- `db.upsert_digest_issue(digest_date, title, body_text, payload, delivery)`：插入或按 `digest_date` 原地更新当期日报。保证同日幂等。
+- `db.get_digest_issues(limit=14)`：获取最近日报列表。
+- `db.get_digest_issue(digest_id)`：按 ID 获取单期日报完整行（带解析后的 payload 和 delivery）。
+- `db.get_latest_digest_issue()`：获取最新一期日报。
+- `db.update_digest_delivery(digest_id, delivery)`：更新投递结果记录。
 - `Database.initialize()` 会用默认阈值执行一次上述清理，处理旧版本已经入池 / 入历史的低分数据。
 
 ### 卡片文案翻译缓存（`text_translations`）

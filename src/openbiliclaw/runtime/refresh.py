@@ -447,6 +447,10 @@ class ContinuousRefreshController:
     # Extension-online account bootstrap refresh.  This loop has its own
     # direct presence/profile/init gates and must not inherit the LLM gate.
     source_incremental_sync: Any | None = None
+    # 每日日报 scheduler（runtime/digest.py）。自带 enabled / 同日幂等 /
+    # 空池退避门，因此这个 loop 也不继承 LLM gate；``None``（测试直接构建
+    # controller 时）→ loop 直接返回。
+    digest_scheduler: Any | None = None
     _manual_refresh_task: asyncio.Task[None] | None = None
     _discovery_drain_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
@@ -1940,6 +1944,7 @@ class ContinuousRefreshController:
             ├─ _loop_proactive_push()    60s   delight + interest probe
             ├─ _loop_keyword_planner()  120s   P1.6 — merged keyword generation (flag-gated)
             ├─ _loop_source_incremental_sync() 60s  extension account refresh
+            ├─ _loop_daily_digest()     60s   daily digest at [digest].send_time (flag-gated)
             ├─ _loop_image_cache_cleanup() 6h  prune consumed+unsaved covers
             └─ _loop_cover_prefetch()    60s   cache fresh-token covers (XHS)
         """
@@ -1993,6 +1998,8 @@ class ContinuousRefreshController:
         ]
         if self.source_incremental_sync is not None:
             tasks.append(asyncio.create_task(self._loop_source_incremental_sync()))
+        if self.digest_scheduler is not None:
+            tasks.append(asyncio.create_task(self._loop_daily_digest()))
         try:
             await asyncio.gather(*tasks)
         finally:
@@ -2014,6 +2021,21 @@ class ContinuousRefreshController:
         ``_llm_work_allowed``: periodic account collection is not LLM work.
         """
         scheduler = self.source_incremental_sync
+        if scheduler is None:
+            return
+        while True:
+            with suppress(Exception):
+                await scheduler.tick()
+            await asyncio.sleep(self.check_interval_seconds)
+
+    async def _loop_daily_digest(self) -> None:
+        """Poll the daily-digest scheduler independently.
+
+        The scheduler performs its own enabled / same-day / send-time /
+        backoff gates, so this loop never calls ``_llm_work_allowed``:
+        sending the digest is not LLM work.
+        """
+        scheduler = self.digest_scheduler
         if scheduler is None:
             return
         while True:

@@ -1,8 +1,8 @@
 """Static regression tests for the mobile web engagement-stats row.
 
-The stats row (播放 views · 点赞 likes · 评论 comments · 分享 shares · 收藏 favorites · 弹幕 danmaku)
-must render on both recommendation cards and the delight tray, mirroring the
-desktop web surface. These are byte-level source contracts, not runtime tests.
+The stats row (播放 views · 点赞 likes · 评论 comments · 分享 shares · 收藏 favorites
+· 弹幕 danmaku) must render on both recommendation cards and the delight tray, mirroring
+the desktop web surface. These are byte-level source contracts, not runtime tests.
 """
 
 from __future__ import annotations

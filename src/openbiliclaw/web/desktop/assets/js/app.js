@@ -53,6 +53,9 @@
       migrationStatus: "/migration/status",
       watchLater: "/watch-later",
       favorites: "/favorites",
+      digest: "/digest",
+      digestLatest: "/digest/latest",
+      digestRunNow: "/digest/run-now",
       profileEdit: "/profile/edit",
       profileEditState: "/profile/edit-state",
       translateTexts: "/translate-texts"
@@ -11745,6 +11748,17 @@ ${cardFeedbackBarHtml()}`;
       const savedAutoSync = $("#savedAutoSync");
       if (savedAutoSync) savedAutoSync.checked = config.saved_sync?.auto_sync_enabled === true;
       if ($("#savedAutoSyncText")) $("#savedAutoSyncText").textContent = savedAutoSync?.checked ? "开启" : "关闭";
+      const digest = config.digest || {};
+      const digestEnabled = $("#digestEnabled");
+      if (digestEnabled) digestEnabled.checked = digest.enabled === true;
+      setInput("digestSendTime", digest.send_time || "09:00");
+      setInput("digestTopN", String(digest.top_n ?? 10));
+      const digestDelight = $("#digestIncludeDelight");
+      if (digestDelight) digestDelight.checked = digest.include_delight !== false;
+      const digestCognition = $("#digestIncludeCognition");
+      if (digestCognition) digestCognition.checked = digest.include_cognition !== false;
+      setInput("digestWebhookUrl", digest.webhook_url || "");
+      setInput("digestBarkUrl", digest.bark_url || "");
       const tailnet = config.tailnet || {};
       const tailnetEnabled = $("#tailnetEnabled");
       if (tailnetEnabled) tailnetEnabled.checked = tailnet.enabled === true;
@@ -13407,6 +13421,15 @@ ${cardFeedbackBarHtml()}`;
           danmaku_max_chars: getIntInput("danmakuMaxChars", 500)
         },
         saved_sync: { auto_sync_enabled: Boolean($("#savedAutoSync")?.checked) },
+        digest: {
+          enabled: Boolean($("#digestEnabled")?.checked),
+          send_time: getInput("digestSendTime") || "09:00",
+          top_n: getIntInput("digestTopN", 10),
+          include_delight: $("#digestIncludeDelight")?.checked !== false,
+          include_cognition: $("#digestIncludeCognition")?.checked !== false,
+          webhook_url: getInput("digestWebhookUrl"),
+          bark_url: getInput("digestBarkUrl")
+        },
         tailnet: {
           enabled: Boolean($("#tailnetEnabled")?.checked),
           hostname: getInput("tailnetHostname"),
@@ -14647,6 +14670,151 @@ ${cardFeedbackBarHtml()}`;
         const message = configErrorMessage(error?.details) || error?.message || "未知错误";
         if (result) result.textContent = `测试失败：${message}`;
         showToast("语气测试失败，请查看结果区提示", { duration: 5200 });
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    // ------------------------------------------------------------------
+    // 每日日报：手动触发 + 存档对话框
+    // ------------------------------------------------------------------
+
+    function digestSectionMeta() {
+      return {
+        top_picks: { label: "高分推荐" },
+        delight: { label: "惊喜" },
+        cognition: { label: "认知更新" }
+      };
+    }
+
+    function renderDigestIssue(container, issue) {
+      if (!container) return;
+      if (!issue) {
+        container.innerHTML = '<p class="digest-empty-note">这一天没有生成日报。</p>';
+        return;
+      }
+      const meta = digestSectionMeta();
+      const payload = issue.payload || {};
+      const parts = [];
+      Object.entries(meta).forEach(([key, info]) => {
+        const items = Array.isArray(payload[key]) ? payload[key] : [];
+        if (!items.length) return;
+        const rows = items.map((item) => {
+          const url = String(item.url || "");
+          const title = String(item.title || "").replace(/[<>&"]/g, (ch) => ({
+            "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;"
+          }[ch] || ch));
+          const titleHtml = url
+            ? `<a class="digest-item-title" href="${url}" target="_blank" rel="noopener">${title}</a>`
+            : `<span class="digest-item-title">${title}</span>`;
+          const reason = String(item.reason || "");
+          const reasonHtml = reason
+            ? `<span class="digest-item-reason">${reason.replace(/[<>&"]/g, (ch) => ({
+                "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;"
+              }[ch] || ch))}</span>`
+            : "";
+          return `<div class="digest-item">${titleHtml}${reasonHtml}</div>`;
+        }).join("");
+        parts.push(`<section><p class="digest-section-title">${info.label}</p>${rows}</section>`);
+      });
+      if (!parts.length) {
+        container.innerHTML = '<p class="digest-empty-note">这份日报没有可展示的内容。</p>';
+        return;
+      }
+      container.innerHTML = parts.join("");
+    }
+
+    async function openDigestDialog() {
+      const dialog = $("#digestDialog");
+      if (!dialog) return;
+      dialog.hidden = false;
+      const dateRow = $("#digestDateRow");
+      const body = $("#digestDialogBody");
+      if (body) body.innerHTML = '<p class="digest-empty-note">加载中…</p>';
+      try {
+        const [listResp, latestResp] = await Promise.all([
+          requestJsonStrict(ENDPOINTS.digest, { timeoutMs: 15000 }).catch(() => null),
+          requestJsonStrict(ENDPOINTS.digestLatest, { timeoutMs: 15000 }).catch(() => null)
+        ]);
+        const issues = Array.isArray(listResp?.issues) ? listResp.issues : [];
+        if (dateRow) {
+          dateRow.innerHTML = "";
+          issues.forEach((issue) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "digest-date-chip";
+            chip.textContent = String(issue.digest_date || "");
+            chip.setAttribute("role", "tab");
+            chip.setAttribute("aria-selected", "false");
+            chip.addEventListener("click", async () => {
+              dateRow.querySelectorAll(".digest-date-chip").forEach((el) => el.setAttribute("aria-selected", "false"));
+              chip.setAttribute("aria-selected", "true");
+              if (body) body.innerHTML = '<p class="digest-empty-note">加载中…</p>';
+              try {
+                const detail = await requestJsonStrict(`${ENDPOINTS.digest}/${encodeURIComponent(issue.id)}`, { timeoutMs: 15000 });
+                renderDigestIssue(body, detail);
+              } catch (error) {
+                if (body) body.innerHTML = '<p class="digest-empty-note">加载失败，请稍后重试。</p>';
+              }
+            });
+            dateRow.appendChild(chip);
+          });
+        }
+        renderDigestIssue(body, latestResp);
+        const chips = dateRow ? dateRow.querySelectorAll(".digest-date-chip") : [];
+        if (chips.length) chips[0].setAttribute("aria-selected", "true");
+      } catch (error) {
+        renderDigestIssue(body, null);
+      }
+    }
+
+    function closeDigestDialog() {
+      const dialog = $("#digestDialog");
+      if (dialog) dialog.hidden = true;
+    }
+
+    safeBind("#digestArchiveBtn", "click", () => { void openDigestDialog(); });
+    safeBind("#closeDigestDialog", "click", closeDigestDialog);
+    document.querySelectorAll("[data-close-digest-dialog]").forEach((el) => {
+      el.addEventListener("click", closeDigestDialog);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDigestDialog();
+    });
+
+    safeBind("#digestRunNowBtn", "click", async () => {
+      const btn = $("#digestRunNowBtn");
+      const status = $("#digestRunStatus");
+      if (btn?.disabled) return;
+      if (btn) btn.disabled = true;
+      if (status) {
+        status.hidden = false;
+        status.textContent = "正在生成日报并推送…";
+      }
+      try {
+        const result = await requestJsonStrict(ENDPOINTS.digestRunNow, {
+          method: "POST",
+          timeoutMs: 120000,
+          headers: { "Content-Type": "application/json" }
+        });
+        if (!result?.created) {
+          const message = result?.message || "没有可汇总的内容";
+          if (status) status.textContent = `未生成：${message}`;
+          showToast(`日报未生成：${message}`, { duration: 5200 });
+          return;
+        }
+        const delivery = Array.isArray(result.delivery) ? result.delivery : [];
+        const failed = delivery.filter((item) => item.ok === false);
+        let summary;
+        if (!delivery.length) summary = "已存档（未配置推送渠道，仅保存在本机）";
+        else if (!failed.length) summary = `已存档并推送到 ${delivery.length} 个渠道`;
+        else summary = `已存档；${failed.length} 个渠道推送失败（${failed.map((item) => item.channel).join("、")}）`;
+        if (status) status.textContent = summary;
+        showToast(`日报完成：${summary}`, { duration: 5200 });
+      } catch (error) {
+        const message = configErrorMessage(error?.details) || error?.message || "未知错误";
+        if (status) status.textContent = `生成失败：${message}`;
+        showToast("日报生成失败，请查看结果区提示", { duration: 5200 });
       } finally {
         if (btn) btn.disabled = false;
       }

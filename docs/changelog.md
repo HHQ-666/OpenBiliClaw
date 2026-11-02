@@ -2,6 +2,17 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：每日日报与多渠道推送（feat/daily-digest，2026-11-01）
+
+- 新增每日日报（Daily Digest）全链路能力：每天在可配置的时刻（默认 09:00）从发现池（按 relevance 门槛）、惊喜队列（未消费高分候选）和最新认知更新自动提炼出结构化日报，存档到本地 SQLite 并通过配置的渠道（Webhook / Bark）外发推送。
+- 新增 `[digest]` 配置段（`enabled`, `send_time`, `top_n`, `include_delight`, `include_cognition`, `webhook_url`, `bark_url`），默认关闭；支持时间格式自动归一化与非法输入回退，PUT `/api/config` 严格校验并持久化到 `config.toml`。
+- 新增 `runtime/digest.py`：包含 `build_daily_digest` 构建器、`WebhookChannel` 与 `BarkChannel` 推送适配器、`DigestScheduler` 周期调度器及测试 seam。调度具备三层幂等防护：开关门控、同日唯一定点归档（UNIQUE 约束 + upsert）、空池/失败后 1 小时退避，避免无效打扰。
+- 后台集成：`ContinuousRefreshController` 新增 `_loop_daily_digest` 独立循环，不占用 LLM 门控；`api/runtime_context.py` 在组件刷新时自动装载调度器。
+- 存储层新增 `digest_issues` 表，支持结构化 payload 存取、多渠道结果状态记录及按日期查询与列表归档。
+- API 层新增 `/api/digest`（归档列表）、`/api/digest/latest`（最新日报详情）、`/api/digest/{id}`（历史期号详情）、`/api/digest/run-now`（手动触发生成并推送）。
+- 桌面 Web 前端：在「设置 → 调度」面板底部新增「每日日报」配置卡片，支持推送时间、条数限制、惊喜与认知选项、Webhook / Bark 链接配置；支持「立即生成并发送」状态回显与「查看日报存档」对话框（卡片式日期切换与分类渲染）。
+- 验证：新增 `tests/test_digest_config.py`、`tests/test_digest_runtime.py`、`tests/test_digest_api.py` 共 37 项单元测试全部通过；`ruff check`、`ruff format --check` 及 `mypy src/`（严格模式 315 个源文件）全部零警告通过。
+
 ## 未发布：AI 前沿频道（feat/ai-frontier-channel，2026-10-26）
 
 - PC Web 推荐筛选行在「全部」后新增「AI 前沿」频道 chip。首次选中按需请求 `GET /api/recommendations?channel=ai_frontier`，频道卡片独立于普通推荐列表缓存；频道内「换一批」「加载更多」分别以 `channel=ai_frontier` 调用既有 reshuffle / append，不发 `source_platform`。切回来源 Tab 时普通列表原样保留。

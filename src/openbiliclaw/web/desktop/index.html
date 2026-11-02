@@ -1342,6 +1342,26 @@
             <label class="settings-field"><span>次要兴趣项上限</span><input id="speculationMaxSecondary" inputmode="numeric" placeholder="60"></label>
             <span></span>
           </div>
+          <p class="settings-section-title">每日日报</p>
+          <label class="settings-advanced-toggle"><input id="digestEnabled" type="checkbox"><span>启用每日日报（到点汇总高分内容并推送）</span></label>
+          <div class="inline-row">
+            <label class="settings-field"><span>推送时间</span><input id="digestSendTime" type="time" value="09:00"></label>
+            <label class="settings-field"><span>高分条数上限</span><input id="digestTopN" type="number" min="1" max="50" step="1" placeholder="10" inputmode="numeric"></label>
+            <label class="settings-advanced-toggle"><input id="digestIncludeDelight" type="checkbox"><span>附带惊喜</span></label>
+            <label class="settings-advanced-toggle"><input id="digestIncludeCognition" type="checkbox"><span>附带认知更新</span></label>
+          </div>
+          <div class="inline-row">
+            <label class="settings-field"><span>Webhook URL（POST JSON，可对接 ntfy / 企业微信等）</span><input id="digestWebhookUrl" type="url" placeholder="https://example.com/hook"></label>
+            <label class="settings-field"><span>Bark URL（iOS 推送，含设备 key）</span><input id="digestBarkUrl" type="url" placeholder="https://api.day.app/yourkey"></label>
+            <span></span>
+            <span></span>
+          </div>
+          <p class="settings-note-inline">日报每天至多一份，错过推送时间会在后端启动后补发；未配置任何渠道时仅存档到本机，不会外发。</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1">
+            <button type="button" id="digestRunNowBtn" class="pill-btn">立即生成并发送</button>
+            <button type="button" id="digestArchiveBtn" class="pill-btn">查看日报存档</button>
+          </div>
+          <p class="settings-probe-status" id="digestRunStatus" aria-live="polite" hidden></p>
         </div>
 
         <div id="settingsPanelAdvanced" class="settings-panel settings-advanced-panel" data-settings-panel="advanced" role="tabpanel" aria-labelledby="settingsTabAdvanced" hidden>
@@ -1693,6 +1713,20 @@
             <button class="pill-btn" id="cancelLlmInstance" type="button">取消</button>
             <button class="pill-btn primary" id="saveLlmInstance" type="button">保存实例</button>
           </div>
+        </section>
+      </div>
+
+      <div class="llm-instance-dialog" id="digestDialog" role="dialog" aria-modal="true" aria-labelledby="digestDialogTitle" hidden>
+        <div class="llm-instance-dialog-backdrop" data-close-digest-dialog></div>
+        <section class="llm-instance-dialog-panel" tabindex="-1">
+          <div class="llm-instance-dialog-head">
+            <div><p class="settings-section-kicker">Daily digest</p><h3 id="digestDialogTitle">日报存档</h3></div>
+            <button class="icon-btn" id="closeDigestDialog" type="button" aria-label="关闭日报存档">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <div class="digest-dialog-date-row" id="digestDateRow" role="tablist" aria-label="选择日期"></div>
+          <div class="digest-dialog-body" id="digestDialogBody" aria-live="polite"></div>
         </section>
       </div>
     </main>

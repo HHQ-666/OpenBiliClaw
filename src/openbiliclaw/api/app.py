@@ -95,6 +95,12 @@ from openbiliclaw.api.models import (
     DelightAckResponse,
     DelightResponseIn,
     DialogueContextPreview,
+    DigestChannelResultOut,
+    DigestConfigOut,
+    DigestIssueDetailOut,
+    DigestIssueListOut,
+    DigestIssueOut,
+    DigestRunNowOut,
     DiscoveryConfigOut,
     DouyinCookieIn,
     DouyinCookieResponse,
@@ -11347,6 +11353,107 @@ def create_app(
         save_cognition_updates(updates)
         return CognitionUpdateSeenResponse(ok=True, id=update_id)
 
+    # ------------------------------------------------------------------
+    # 每日日报（daily digest）：存档查看 + 手动触发。
+    # 调度推送在 runtime/digest.py 的 DigestScheduler（refresh loop 家族）。
+    # ------------------------------------------------------------------
+
+    def _digest_issue_detail_out(issue: Mapping[str, Any]) -> DigestIssueDetailOut:
+        """Map a digest_issues row to the detail response model."""
+        payload = issue.get("payload")
+        return DigestIssueDetailOut(
+            id=int(issue["id"]),
+            digest_date=str(issue["digest_date"]),
+            created_at=str(issue["created_at"]),
+            title=str(issue["title"]),
+            item_count=int(issue["item_count"]),
+            delivery=[
+                DigestChannelResultOut(
+                    channel=str(item.get("channel", "")),
+                    ok=bool(item.get("ok", False)),
+                    detail=str(item.get("detail", "")),
+                )
+                for item in (issue.get("delivery") or [])
+                if isinstance(item, Mapping)
+            ],
+            body_text=str(issue.get("body_text", "")),
+            payload=dict(payload) if isinstance(payload, Mapping) else {},
+        )
+
+    @app.get("/api/digest", response_model=DigestIssueListOut)
+    def list_digest_issues(limit: int = 14) -> DigestIssueListOut:
+        """List recent daily digests, newest first (archive view)."""
+        issues = ctx.database.get_digest_issues(limit=limit) or []
+        return DigestIssueListOut(
+            issues=[
+                DigestIssueOut(
+                    id=int(issue["id"]),
+                    digest_date=str(issue["digest_date"]),
+                    created_at=str(issue["created_at"]),
+                    title=str(issue["title"]),
+                    item_count=int(issue["item_count"]),
+                    delivery=[
+                        DigestChannelResultOut(
+                            channel=str(item.get("channel", "")),
+                            ok=bool(item.get("ok", False)),
+                            detail=str(item.get("detail", "")),
+                        )
+                        for item in (issue.get("delivery") or [])
+                        if isinstance(item, Mapping)
+                    ],
+                )
+                for issue in issues
+                if isinstance(issue, Mapping)
+            ]
+        )
+
+    @app.get("/api/digest/latest", response_model=DigestIssueDetailOut)
+    def latest_digest_issue() -> DigestIssueDetailOut:
+        """Return the newest digest issue (web archive default view)."""
+        issue = ctx.database.get_latest_digest_issue()
+        if issue is None:
+            raise HTTPException(status_code=404, detail="还没有日报。")
+        return _digest_issue_detail_out(issue)
+
+    @app.get("/api/digest/{digest_id}", response_model=DigestIssueDetailOut)
+    def get_digest_issue(digest_id: int) -> DigestIssueDetailOut:
+        """Return one digest issue by id (web archive history)."""
+        issue = ctx.database.get_digest_issue(digest_id)
+        if issue is None:
+            raise HTTPException(status_code=404, detail="日报不存在。")
+        return _digest_issue_detail_out(issue)
+
+    @app.post("/api/digest/run-now", response_model=DigestRunNowOut)
+    async def run_digest_now() -> DigestRunNowOut:
+        """Build, archive and push a digest immediately (manual trigger).
+
+        Ignores the daily time gate on purpose — it is the settings-page
+        "立即生成并发送" button and the setup smoke test. Same-day
+        idempotence still applies: a second run replaces today's issue.
+        """
+        from openbiliclaw.config import load_config
+        from openbiliclaw.runtime.digest import run_digest_once
+
+        result = await run_digest_once(
+            ctx.database,
+            ctx.memory_manager,
+            digest_config=load_config().digest,
+        )
+        return DigestRunNowOut(
+            created=bool(result.get("created")),
+            issue=(_digest_issue_detail_out(result["issue"]) if result.get("issue") else None),
+            delivery=[
+                DigestChannelResultOut(
+                    channel=str(item.get("channel", "")),
+                    ok=bool(item.get("ok", False)),
+                    detail=str(item.get("detail", "")),
+                )
+                for item in (result.get("delivery") or [])
+                if isinstance(item, Mapping)
+            ],
+            message=str(result.get("message", "")),
+        )
+
     @app.post("/api/delight/trigger")
     async def trigger_delight(payload: dict[str, Any] | None = None) -> Any:
         """Manually push N distinct delight candidates via WebSocket.
@@ -20899,6 +21006,15 @@ def create_app(
             saved_sync=SavedSyncConfigOut(
                 auto_sync_enabled=cfg.saved_sync.auto_sync_enabled,
             ),
+            digest=DigestConfigOut(
+                enabled=cfg.digest.enabled,
+                send_time=cfg.digest.send_time,
+                top_n=cfg.digest.top_n,
+                include_delight=cfg.digest.include_delight,
+                include_cognition=cfg.digest.include_cognition,
+                webhook_url=cfg.digest.webhook_url,
+                bark_url=cfg.digest.bark_url,
+            ),
             tailnet=TailnetConfigOut(
                 enabled=cfg.tailnet.enabled,
                 hostname=cfg.tailnet.hostname,
@@ -23939,6 +24055,33 @@ def create_app(
             saved_sync_data = update["saved_sync"]
             if "auto_sync_enabled" in saved_sync_data:
                 cfg.saved_sync.auto_sync_enabled = saved_sync_data["auto_sync_enabled"]
+
+        # Apply digest updates. send_time goes through the same normalizer as
+        # load time so an invalid HH:MM is canonicalized/fallback here too —
+        # pitfall rule 7: reject/repair at save time, not at fire time.
+        if "digest" in update:
+            digest_data = update["digest"]
+            from openbiliclaw.config import normalize_digest_send_time
+
+            if "enabled" in digest_data:
+                cfg.digest.enabled = bool(digest_data["enabled"])
+            if "send_time" in digest_data:
+                cfg.digest.send_time = normalize_digest_send_time(digest_data["send_time"])
+            if "top_n" in digest_data:
+                try:
+                    cfg.digest.top_n = max(1, min(50, int(digest_data["top_n"])))
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=422, detail="digest.top_n must be an integer"
+                    ) from None
+            if "include_delight" in digest_data:
+                cfg.digest.include_delight = bool(digest_data["include_delight"])
+            if "include_cognition" in digest_data:
+                cfg.digest.include_cognition = bool(digest_data["include_cognition"])
+            if "webhook_url" in digest_data:
+                cfg.digest.webhook_url = str(digest_data["webhook_url"] or "").strip()
+            if "bark_url" in digest_data:
+                cfg.digest.bark_url = str(digest_data["bark_url"] or "").strip()
 
         # Apply storage updates
         if "storage" in update:
