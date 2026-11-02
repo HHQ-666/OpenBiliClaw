@@ -1654,8 +1654,8 @@ async def test_serve_ai_frontier_channel_filters_pool_candidates() -> None:
         _seed_visible(
             db,
             "BVF-FRONTIER",
-            title="Gemini 4 Argon 正式发布，基准第一",
-            description="1M 上下文，Agent 能力大幅提升。",
+            title="Gemini 4 正式发布：API 价格砍半，SDK 一行接入",
+            description="1M 上下文，前端项目直接调用。",
             source="search",
             source_platform="bilibili",
             content_type="video",

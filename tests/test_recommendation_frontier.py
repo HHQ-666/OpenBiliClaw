@@ -13,7 +13,9 @@ from openbiliclaw.recommendation.frontier import (
 )
 
 
-def test_release_with_versioned_model_is_frontier() -> None:
+def test_bare_model_release_with_benchmark_is_not_frontier() -> None:
+    # Release + benchmark news is a headline, not something the reader can
+    # use today; the channel is tooling-first, so it is capped out.
     assessment = assess_ai_frontier(
         title="Gemini 4 Argon 正式发布，基准第一",
         description="1M 上下文，Agent 能力大幅提升。",
@@ -21,9 +23,21 @@ def test_release_with_versioned_model_is_frontier() -> None:
         content_type="video",
     )
 
+    assert not assessment.is_frontier
+    assert assessment.score < FRONTIER_SCORE_THRESHOLD
+
+
+def test_actionable_model_release_is_frontier() -> None:
+    # The same genre passes when the headline names what you get to use.
+    assessment = assess_ai_frontier(
+        title="Gemini 4 正式发布：API 价格砍半，SDK 一行接入",
+        description="1M 上下文，前端项目直接调用。",
+        source_platform="bilibili",
+        content_type="video",
+    )
+
     assert assessment.is_frontier
-    assert assessment.score >= FRONTIER_SCORE_THRESHOLD
-    assert "前沿模型" in assessment.tags
+    assert "应用与工具" in assessment.tags
 
 
 def test_research_paper_without_an_applied_angle_is_not_frontier() -> None:
@@ -116,22 +130,22 @@ def test_repository_that_merely_uses_models_is_not_frontier() -> None:
     assert not assessment.is_frontier
 
 
-def test_text_post_with_versioned_model_and_eval_passes() -> None:
+def test_text_post_about_wiring_a_model_into_a_tool_passes() -> None:
     assessment = assess_ai_frontier(
-        title="Kimi K3.1 Pro 正式发布，Terminal-Bench 4.0 65.7%",
-        description="3T 级开放权重，1M 上下文。",
+        title="Kimi K3.1 Pro 发布后我把它接进 Cursor 试了下，MCP 配置分享",
+        description="3T 级开放权重，1M 上下文，接 SDK 三行跑通。",
         source_platform="twitter",
         content_type="tweet",
     )
 
     assert assessment.is_frontier
-    assert "前沿模型" in assessment.tags
+    assert "应用与工具" in assessment.tags
 
 
 def test_row_and_content_wrappers_share_the_same_score() -> None:
     row = {
-        "title": "DeepSeek-V4.1-Flash-1017 开源，DeepSWE 77.0",
-        "description": "552B MoE，输入激活 8B。",
+        "title": "DeepSeek-V4.1-Flash 开源权重本地部署实战",
+        "description": "552B MoE，输入激活 8B，Ollama 直接拉起来。",
         "topic": "前沿模型",
         "source_platform": "bilibili",
         "content_type": "video",

@@ -179,7 +179,7 @@ _APPLIED = re.compile(
     # `cline`, "interaction" matches `react`, and a paper's own prose can
     # fake a tooling angle that lets it through the academic gate.
     r"插件|工作流|上手|实战|踩坑|本地运行|本地部署|一键运行|搭建|配置|自动化|"
-    r"开源项目|开源模型|开源权重|独立开发|小工具|小产品|浏览器扩展|前端|"
+    r"开源项目|独立开发|小工具|小产品|浏览器扩展|前端|"
     r"open[- ]?source|\bsdks?\b|\bapis?\b|\bcli\b|\bide\b|\bworkflows?\b|"
     r"\bcursor\b|\bclaude[- ]?code\b|\bcodex\b|\bwindsurf\b|\bcline\b|"
     r"\baider\b|\bv0\b|\blovable\b|\bbolt\b|"
@@ -599,6 +599,17 @@ def assess_ai_frontier(
     if _DEEP_INFRA.search(combined) and not applied_in_title:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
     if _CAREER.search(combined) and not applied_in_title:
+        score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
+    # Release news ("X 3.0 发布 / 开源权重") is a headline, not a tool. It only
+    # enters the channel when the title itself names something the reader can
+    # use (a workflow, a deployment path, an engineering artifact).
+    release_in_title = bool(_RELEASE.search(title_text))
+    if (
+        release_in_title
+        and not applied_in_title
+        and not _ENGINEERING_ANCHOR.search(title_text)
+        and not _AGENT_ANCHOR.search(title_text)
+    ):
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
 
     # Text-first sources use the post/question title as the card headline. A

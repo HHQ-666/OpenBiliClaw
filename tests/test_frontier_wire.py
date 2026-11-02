@@ -6,27 +6,11 @@ from types import SimpleNamespace
 
 from openbiliclaw.discovery.frontier_wire import (
     FrontierWireItem,
-    _hf_model_items,
     _hn_items,
     _wire_topics,
     ingest_frontier_wire,
     wire_source_counts,
 )
-
-HF_MODELS_PAYLOAD = [
-    {
-        "id": "Qwen/Qwen3-32B",
-        "likes": 420,
-        "downloads": 120000,
-        "pipeline_tag": "text-generation",
-        "tags": ["text-generation", "qwen3", "conversational"],
-        "createdAt": "2026-10-20T00:00:00Z",
-    },
-    {
-        "id": "org/model-without-metadata",
-        "likes": 0,
-    },
-]
 
 HN_PAYLOAD = {
     "hits": [
@@ -76,25 +60,6 @@ class _FakeDatabase:
         return list(range(1, len(items) + 1))
 
 
-def test_hf_model_parser_builds_a_runnable_release_item() -> None:
-    items = _hf_model_items(HF_MODELS_PAYLOAD, 5)
-
-    assert len(items) == 2
-    item = items[0]
-    assert item.source_platform == "huggingface"
-    assert item.content_id == "huggingface:model:Qwen/Qwen3-32B"
-    assert item.content_url == "https://huggingface.co/Qwen/Qwen3-32B"
-    assert item.title.startswith("Qwen3-32B 开源模型")
-    assert item.topic_label == "AI 前沿 · 开源模型"
-    assert "本地运行" in item.body_text
-    assert "下载 120000" in item.body_text
-    assert item.source_metadata["model_id"] == "Qwen/Qwen3-32B"
-
-    # A row without likes/downloads still renders a reason sentence.
-    assert items[1].content_id == "huggingface:model:org/model-without-metadata"
-    assert items[1].expression
-
-
 def test_hn_parser_filters_non_ai_titles_and_keeps_points() -> None:
     items = _hn_items(HN_PAYLOAD, 5)
 
@@ -128,13 +93,13 @@ def test_hn_parser_rejects_paper_discussion_threads() -> None:
 def test_ingest_writes_content_and_recommendation_rows() -> None:
     db = _FakeDatabase()
     item = FrontierWireItem(
-        source_platform="huggingface",
-        content_id="huggingface:model:org/model",
-        content_url="https://huggingface.co/org/model",
+        source_platform="hackernews",
+        content_id="hackernews:501",
+        content_url="https://example.com/tool",
         title="A Paper",
         body_text="An abstract.",
         author_name="Alice",
-        expression="开源权重模型。",
+        expression="工程社区热帖。",
         topic_label="AI 前沿 · 人工智能",
     )
 
@@ -143,23 +108,23 @@ def test_ingest_writes_content_and_recommendation_rows() -> None:
     assert result == {"fetched": 1, "inserted": 1, "skipped": 0, "failed": 0}
     assert len(db.cached) == 1
     bvid, kwargs = db.cached[0]
-    assert bvid == "huggingface:model:org/model"
-    assert kwargs["source_platform"] == "huggingface"
+    assert bvid == "hackernews:501"
+    assert kwargs["source_platform"] == "hackernews"
     assert kwargs["content_type"] == "article"
-    assert kwargs["content_id"] == "model:org/model"
-    assert kwargs["item_key"] == "huggingface:model:org/model"
-    assert kwargs["pool_expression"] == "开源权重模型。"
+    assert kwargs["content_id"] == "501"
+    assert kwargs["item_key"] == "hackernews:501"
+    assert kwargs["pool_expression"] == "工程社区热帖。"
     assert kwargs["topic_group"] == "AI 前沿"
-    assert db.recommendations[0]["bvid"] == "huggingface:model:org/model"
+    assert db.recommendations[0]["bvid"] == "hackernews:501"
     assert db.recommendations[0]["topic"] == "AI 前沿 · 人工智能"
 
 
 def test_ingest_skips_existing_content_identity() -> None:
     db = _FakeDatabase(exists=True)
     item = FrontierWireItem(
-        source_platform="huggingface",
-        content_id="huggingface:model:org/model",
-        content_url="https://huggingface.co/org/model",
+        source_platform="hackernews",
+        content_id="hackernews:501",
+        content_url="https://example.com/tool",
         title="A Paper",
         body_text="An abstract.",
     )
@@ -173,12 +138,12 @@ def test_ingest_skips_existing_content_identity() -> None:
 
 def test_wire_source_counts() -> None:
     items = [
-        FrontierWireItem("huggingface", "a1", "u1", "t1", "b1"),
-        FrontierWireItem("huggingface", "a2", "u2", "t2", "b2"),
+        FrontierWireItem("hackernews", "a1", "u1", "t1", "b1"),
+        FrontierWireItem("hackernews", "a2", "u2", "t2", "b2"),
         FrontierWireItem("hackernews", "h1", "u3", "t3", "b3"),
     ]
 
-    assert wire_source_counts(items) == {"huggingface": 2, "hackernews": 1}
+    assert wire_source_counts(items) == {"hackernews": 3}
 
 
 def test_wire_topics_are_deterministic_and_distinct() -> None:
@@ -188,4 +153,36 @@ def test_wire_topics_are_deterministic_and_distinct() -> None:
     assert _wire_topics("SliderEdit++ image editing", "instruction-based editing")[:2] == [
         "多模态与视觉生成",
         "图像生成与编辑",
+    ]
+
+
+def test_hn_parser_accepts_tool_and_workflow_posts() -> None:
+    payload = {
+        "hits": [
+            {
+                "objectID": "701",
+                "title": "Show HN: An MCP server that turns my notes into an agent",
+                "points": 210,
+                "num_comments": 44,
+                "author": "builder",
+            },
+            {
+                "objectID": "702",
+                "title": "Running Ollama on a 16GB laptop: what actually fits",
+                "points": 180,
+            },
+            {
+                "objectID": "703",
+                "title": "A quiet weekend project: my first vibe coding app",
+                "points": 140,
+            },
+        ]
+    }
+
+    items = _hn_items(payload, 5)
+
+    assert [item.content_id for item in items] == [
+        "hackernews:701",
+        "hackernews:702",
+        "hackernews:703",
     ]

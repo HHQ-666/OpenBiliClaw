@@ -7,9 +7,11 @@ keyword pack that the API can inject into the normal discovery keyword store.
 The regular fetch pipeline then claims those words exactly like planner-
 generated keywords — no separate crawler, no bypass of admission/eval.
 
-Keep the pack short and specific: model releases, benchmarks, open weights,
-inference/agent engineering. Broad words like "AI" or "人工智能" produce the
-tutorial/marketing noise the classifier is trying to filter out.
+Keep the pack short and specific and *applied*: AI coding tools, agent/MCP
+workflows, app integration, local-run tooling, indie builds. Model-release and
+benchmark words were removed together with the paper feeds — they produced the
+news cards this channel's reader never asked for. Broad words like "AI" or
+"人工智能" produce the tutorial/marketing noise the classifier filters out.
 """
 
 from __future__ import annotations
@@ -27,81 +29,72 @@ AI_FRONTIER_INTEREST_LABEL = "AI 前沿"
 # deliberately expressed differently per platform.
 FRONTIER_SEED_KEYWORDS: dict[str, tuple[str, ...]] = {
     "bilibili": (
-        "Gemini 4 实测",
-        "DeepSeek V4 实测",
-        "Kimi K3 实测",
-        "大模型 基准 评测",
-        "AI Agent 实测",
-        "开源大模型 本地部署",
-        "多模态大模型 发布",
+        "Claude Code 实战",
+        "Cursor 进阶技巧",
+        "Codex 工作流",
+        "MCP 工具 实战",
+        "AI 编程 提效",
+        "AI 做小工具",
     ),
     "youtube": (
-        "Gemini 4 Argon",
-        "GPT-6.1 Sol",
-        "Claude Opus 5.5",
-        "DeepSeek V4.1",
-        "Kimi K3.1",
-        "LLM benchmark",
-        "AI agent benchmark",
-        "open weights model",
+        "Claude Code workflow",
+        "Cursor tips",
+        "MCP server tutorial",
+        "build AI app with Next.js",
+        "Vercel AI SDK",
+        "vibe coding",
     ),
     "github": (
-        "LLM inference",
-        "AI agent framework",
-        "open weights",
-        "multimodal model",
-        "vLLM",
-        "agent harness",
+        "AI coding agent",
+        "MCP server",
+        "claude code",
+        "AI app boilerplate",
+        "LLM app SDK",
     ),
     "linuxdo": (
-        "大模型 发布",
-        "AI 前沿",
-        "开源模型 权重",
-        "推理框架",
-        "Gemini 4",
-        "Agent 工具",
+        "Claude Code",
+        "Cursor",
+        "AI 编程",
+        "MCP",
+        "免费 API 额度",
+        "自建 AI 工具",
     ),
     "v2ex": (
-        "大模型 发布",
-        "AI Agent",
-        "开源模型",
-        "推理加速",
+        "AI 编程工具",
+        "Claude Code",
+        "Cursor",
+        "独立开发",
     ),
     "weibo": (
-        "大模型 发布",
-        "AI 前沿",
-        "Gemini 4",
-        "开源模型",
+        "AI 编程",
+        "Cursor",
+        "Claude Code",
     ),
     "douyin": (
-        "AI 前沿",
-        "大模型 发布",
-        "AI Agent 实测",
+        "AI 编程 提效",
+        "AI 做工具",
     ),
     "xiaohongshu": (
-        "AI 前沿",
-        "大模型 实测",
-        "AI Agent",
+        "AI 编程",
+        "Cursor 使用",
     ),
     "zhihu": (
-        "大模型 发布",
-        "AI Agent",
-        "开源大模型",
-        "模型评测",
+        "AI 编程 工具",
+        "如何用 AI 做产品",
+        "AI 独立开发",
     ),
     "twitter": (
-        "Gemini 4",
-        "GPT-6",
-        "Claude Opus",
-        "DeepSeek",
-        "Kimi",
-        "open weights",
+        "Claude Code",
+        "Cursor",
+        "MCP",
+        "vibe coding",
+        "AI agent",
     ),
     "reddit": (
-        "LocalLLaMA",
-        "open weights",
-        "LLM benchmark",
-        "AI agent",
+        "ClaudeAI",
+        "cursor",
+        "mcp",
+        "vibecoding",
     ),
 }
 

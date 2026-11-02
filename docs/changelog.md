@@ -2,6 +2,13 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
+## 未发布：AI 前沿只收「能上手的东西」（2026-11-02）
+
+- 分类器新增**发布门**：标题含发布/开源但没有任何工作流、部署或工程角度的裸模型发布新闻，压到阈值以下不再入频。
+- `_APPLIED` 移除「开源模型 / 开源权重」——模型卡不是工具，只有标题里带上使用方式（本地部署、实战、SDK、MCP 等）才算应用内容。
+- 策展线下线 Hugging Face 趋势开源模型源（8 张模型卡曾占据频道一半版面），只保留 Hacker News，并把词表从「模型/benchmark/training」改为「claude / cursor / codex / mcp / agent / ollama / rag / sdk / plugin / vibe coding」，同时继续拒绝论文标题。
+- 关键词种子包整体改为应用向：Claude Code / Cursor / MCP / AI 编程提效 / 独立开发 / 免费 API 额度，不再塞「大模型发布」「基准评测」这类会产出不相关内容的词。
+
 ## 未发布：AI 前沿频道改为应用优先（2026-11-02）
 
 - `recommendation/frontier.py` 新增「应用 vs 学术」评分轴：工具 / SDK / 工作流 / 产品角度（含 Claude Code、Cursor、MCP、Ollama、AI SDK、前端接入等）加分并打 `应用与工具` 标签，且自身可作为入频锚点；只有研究语言（arXiv、论文、消融、数据集、SOTA、we propose）而没有可用产物的条目被压到阈值以下——纯论文不再进入频道，论文附带开源/可运行产物时仍保留。

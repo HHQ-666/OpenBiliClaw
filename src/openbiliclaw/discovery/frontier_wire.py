@@ -4,13 +4,14 @@ The recommendation pool is fed by social/video platforms, which is good for
 "what people are talking about" but weak on primary sources. This module adds
 a small, explicitly curated wire for the ``AI 前沿`` channel:
 
-* Hugging Face trending models — open-weight releases people can actually run.
-* Hacker News (points > 100, last 14 days) — engineering-community discussion.
+* Hacker News (points > 100, last 14 days) — tool / workflow discussion from
+  people who ship: coding agents, MCP servers, local-run tooling, app SDKs.
 
-The wire is applied-first by design: the channel serves people who build with
-models, so pure paper feeds (arXiv, Hugging Face Daily Papers) are deliberately
-not fetched — their abstracts carry research signals without providing anything
-runnable, and the channel's classifier demotes research-only candidates anyway.
+The wire is applied-first by design: the channel serves people who build *with*
+models. Research feeds (arXiv, Hugging Face Daily Papers) and open-weight model
+lists (Hugging Face trending) are deliberately not fetched — an abstract or a
+model card carries release/research signals without answering "what can I use
+today", and the classifier demotes both genres anyway.
 
 Items are inserted as normal ``content_cache`` rows with a deterministic
 Chinese recommendation copy, then a normal ``recommendations`` history row.
@@ -36,16 +37,14 @@ from openbiliclaw.saved_sync.identity import make_item_key
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-HF_TRENDING_MODELS_URL = "https://huggingface.co/api/models"
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
 logger = logging.getLogger(__name__)
 
 _HN_FRONTIER_TERMS = re.compile(
-    r"(?<![a-z0-9])(?:llm|llms|model|models|agent|agents|claude|gpt|gemini|"
-    r"deepseek|qwen|kimi|llama|mistral|open[- ]weight|inference|neural|"
-    r"transformer|multimodal|benchmark|training|fine[- ]tun|quantiz|reasoning|"
-    r"context window|mcp|alignment|diffusion|vla|robot)(?![a-z0-9])",
+    r"(?<![a-z0-9])(?:claude|cursor|codex|copilot|mcp|agent|agents|"
+    r"ollama|llm|llms|rag|sdk|api|plugin|coding|vibe[- ]?coding|langchain|"
+    r"local[- ]?model|open[- ]?weight|inference|prompt|chatbot)(?![a-z0-9])",
     re.IGNORECASE,
 )
 _HN_COMMENTARY = re.compile(
@@ -182,67 +181,6 @@ def _reason_variant(variants: tuple[str, ...], key: str) -> str:
     return variants[index]
 
 
-def _hf_model_items(payload: object, limit: int) -> list[FrontierWireItem]:
-    """Turn Hugging Face trending models into runnable-release wire items.
-
-    A trending open-weight model is the applied counterpart of a paper: the
-    reader can pull it with Ollama / vLLM or call it through an inference API
-    the same day. The card therefore leads with "what you can run", not with
-    an abstract.
-    """
-    rows = payload if isinstance(payload, list) else []
-    items: list[FrontierWireItem] = []
-    for row in rows:
-        if not isinstance(row, dict) or len(items) >= limit:
-            continue
-        model_id = _clean(row.get("id") or row.get("modelId"))
-        if not model_id:
-            continue
-        likes = int(row.get("likes") or 0)
-        downloads = int(row.get("downloads") or 0)
-        pipeline = _clean(row.get("pipeline_tag") or "")
-        tags = [_clean(tag) for tag in (row.get("tags") or []) if _clean(tag)]
-        display_name = model_id.split("/")[-1]
-        published_at = _iso(row.get("createdAt") or row.get("lastModified"))
-        topic = _wire_topics(display_name, pipeline, " ".join(tags[:12]))
-        usage = f"下载 {downloads}" if downloads else f"{likes} 个赞"
-        items.append(
-            FrontierWireItem(
-                source_platform="huggingface",
-                content_id=f"huggingface:model:{model_id}",
-                content_url=f"https://huggingface.co/{model_id}",
-                title=f"{display_name} 开源模型（{model_id}）",
-                body_text=(
-                    f"Hugging Face 趋势开源模型 {model_id}，{usage}。"
-                    f"{'任务类型：' + pipeline + '。' if pipeline else ''}"
-                    "可直接用 Ollama 本地运行，或通过推理 API 接入自己的应用。"
-                ),
-                author_name=model_id.split("/")[0] if "/" in model_id else "Hugging Face",
-                published_at=published_at,
-                tags=tuple(x for x in ("Hugging Face", "开源模型", pipeline) if x),
-                score=min(0.92, 0.82 + likes / 5000.0),
-                topic_label="AI 前沿 · 开源模型",
-                expression=_reason_variant(
-                    (
-                        f"Hugging Face 趋势开源模型，聚焦{_topic_phrase(topic)}；"
-                        "权重公开，可以本地跑或直接接入 API。",
-                        f"这个开源权重模型最近在 HF 上热度不错（{usage}），"
-                        f"主题是{_topic_phrase(topic)}，适合先试个 demo 再用进项目。",
-                    ),
-                    model_id,
-                ),
-                source_metadata={
-                    "wire": "huggingface",
-                    "model_id": model_id,
-                    "likes": likes,
-                    "downloads": downloads,
-                    "pipeline_tag": pipeline,
-                },
-            )
-        )
-    return items
-
-
 def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
     rows = payload.get("hits") if isinstance(payload, dict) else []
     items: list[FrontierWireItem] = []
@@ -302,16 +240,14 @@ def _hn_items(payload: object, limit: int) -> list[FrontierWireItem]:
 
 
 def fetch_frontier_wire(*, limit_per_source: int = 8) -> list[FrontierWireItem]:
-    """Fetch the applied AI feeds, skipping any source that fails.
+    """Fetch the applied AI wire from Hacker News, skipping failures.
 
-    Two sources, both applied-first: trending open-weight models on Hugging
-    Face (something you can run today) and Hacker News engineering discussion.
-    Paper feeds are intentionally absent — the channel is for people building
-    with models, and the classifier demotes research-only candidates anyway.
+    One source, applied-first: tool and workflow discussion from engineers who
+    ship (coding agents, MCP servers, local-run tooling, app SDKs). Paper and
+    model-release feeds are intentionally absent — see the module docstring.
 
     The function is synchronous by design: the API delegates it to a worker
-    thread with a wall-clock deadline. A source failure must not take the
-    other one down, so every request has its own ``try`` block.
+    thread with a wall-clock deadline.
     """
     limit = max(1, min(int(limit_per_source), 20))
     items: list[FrontierWireItem] = []
@@ -321,20 +257,6 @@ def fetch_frontier_wire(*, limit_per_source: int = 8) -> list[FrontierWireItem]:
         follow_redirects=True,
         **outbound_httpx_kwargs(),
     ) as client:
-        try:
-            response = client.get(
-                HF_TRENDING_MODELS_URL,
-                params={
-                    "sort": "trendingScore",
-                    "direction": "-1",
-                    "limit": str(limit),
-                    "full": "false",
-                },
-            )
-            response.raise_for_status()
-            items.extend(_hf_model_items(response.json(), limit))
-        except (httpx.HTTPError, ValueError):
-            pass
         try:
             since = int((datetime.now(UTC) - timedelta(days=14)).timestamp())
             response = client.get(
