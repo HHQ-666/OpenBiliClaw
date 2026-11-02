@@ -175,13 +175,19 @@ _SOFT_NEGATIVE = re.compile(
 # this reader actually has, so they are demoted unless they also carry a
 # practical angle (open-source repo, runnable demo, deployable tool).
 _APPLIED = re.compile(
-    r"插件|工作流|workflow|上手|实战|踩坑|"
-    r"开源项目|open[- ]?source|\bsdk\b|\bapi\b|\bcli\b|\bide\b|"
-    r"cursor|claude[- ]?code|codex|windsurf|cline|aider|\bv0\b|lovable|\bbolt\b|"
-    r"n8n|dify|coze|扣子|langflow|flowise|obsidian|notion|"
-    r"浏览器扩展|chrome\s*extension|ollama|lm[- ]?studio|localai|llama\.cpp|"
-    r"comfyui|webui|本地运行|一键运行|搭建|配置|自动化|"
-    r"前端|react|next\.js|\bvue\b|typescript|tailwind|独立开发|小工具|小产品",
+    # English terms carry \b boundaries: without them "discipline" matches
+    # `cline`, "interaction" matches `react`, and a paper's own prose can
+    # fake a tooling angle that lets it through the academic gate.
+    r"插件|工作流|上手|实战|踩坑|本地运行|一键运行|搭建|配置|自动化|"
+    r"开源项目|独立开发|小工具|小产品|浏览器扩展|前端|"
+    r"open[- ]?source|\bsdks?\b|\bapis?\b|\bcli\b|\bide\b|\bworkflows?\b|"
+    r"\bcursor\b|\bclaude[- ]?code\b|\bcodex\b|\bwindsurf\b|\bcline\b|"
+    r"\baider\b|\bv0\b|\blovable\b|\bbolt\b|"
+    r"\bn8n\b|\bdify\b|\bcoze\b|扣子|\blangflow\b|\bflowise\b|"
+    r"\bobsidian\b|\bnotion\b|\bchrome\s*extension\b|"
+    r"\bollama\b|\blm[- ]?studio\b|\blocalai\b|\bllama\.cpp\b|"
+    r"\bcomfyui\b|\bwebui\b|\breact\b|\bnext\.js\b|\bvue\b|"
+    r"\btypescript\b|\btailwind\b",
     re.IGNORECASE,
 )
 _ACADEMIC = re.compile(
@@ -475,6 +481,10 @@ def assess_ai_frontier(
     applied_mult, applied_hit = _match_group(
         _APPLIED, title=title_text, body=body_text, topic=topic_text
     )
+    # A paper's abstract routinely says "API" or "SDK" in passing. For
+    # research artifacts the applied angle has to be in the headline itself
+    # (the model/tool it ships with), otherwise the paper stays research-only.
+    applied_in_title = bool(_APPLIED.search(title_text))
     if applied_hit:
         score += 2.0 * applied_mult
         tags_out.append(TAG_APPLIED)
@@ -565,9 +575,9 @@ def assess_ai_frontier(
     # research/eval signals they accumulate: a paper abstract with no tool,
     # repo or workflow angle is written for a lab, not for someone building
     # with models. Applied content is untouched (it already earned its bonus).
-    if academic_hit and not applied_hit:
+    if academic_hit and not applied_in_title:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
-    if paper_like and not applied_hit:
+    if paper_like and not applied_in_title:
         score = min(score, FRONTIER_SCORE_THRESHOLD - 0.5)
 
     # Text-first sources use the post/question title as the card headline. A

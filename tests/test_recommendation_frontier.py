@@ -178,3 +178,34 @@ def test_arxiv_article_without_tooling_angle_is_not_frontier() -> None:
 
     assert not assessment.is_frontier
     assert "论文研究" in assessment.tags
+
+
+def test_paper_mentioning_api_only_in_abstract_is_not_frontier() -> None:
+    # A paper abstract routinely says "API"/"SDK" in passing; that must not
+    # count as an applied angle. The tool has to be in the headline itself.
+    assessment = assess_ai_frontier(
+        title="A Unified Library and Benchmark for Robust Reinforcement Learning",
+        description=(
+            "We propose RobustRLlib, exposing a single API and an SDK that "
+            "researchers can call from their training scripts. Experiments show "
+            "state-of-the-art robustness across datasets."
+        ),
+        source_platform="arxiv",
+        content_type="paper",
+    )
+
+    assert not assessment.is_frontier
+
+
+def test_english_tool_names_do_not_match_inside_ordinary_words() -> None:
+    # "discipline" used to satisfy `cline`, letting a pure paper through the
+    # applied gate with a fake 应用与工具 tag.
+    assessment = assess_ai_frontier(
+        title="Clause-Anchored Corpus for Professional Ethics",
+        description="This discipline increasingly relies on large language models.",
+        source_platform="huggingface",
+        content_type="article",
+    )
+
+    assert not assessment.is_frontier
+    assert "应用与工具" not in assessment.tags
