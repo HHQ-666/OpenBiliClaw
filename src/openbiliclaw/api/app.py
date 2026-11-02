@@ -11460,20 +11460,24 @@ def create_app(
     @app.get("/api/blocked-authors", response_model=list[BlockedAuthorOut])
     def get_blocked_authors() -> list[BlockedAuthorOut]:
         """Return all blocked authors ordered by creation time descending."""
-        rows = database.get_blocked_authors()
+        if not getattr(ctx, "database", None):
+            return []
+        rows = ctx.database.get_blocked_authors()
         return [BlockedAuthorOut(**row) for row in rows]
 
     @app.post("/api/blocked-authors", response_model=BlockedAuthorActionResponse)
     def add_blocked_author(payload: BlockedAuthorIn) -> BlockedAuthorActionResponse:
         """Add an author to the blacklist and purge matching candidates from the active pool."""
+        if not getattr(ctx, "database", None):
+            raise HTTPException(status_code=503, detail="Database not ready")
         try:
-            row_id = database.add_blocked_author(
+            row_id = ctx.database.add_blocked_author(
                 author_name=payload.author_name,
                 source_platform=payload.source_platform,
                 author_id=payload.author_id,
                 reason=payload.reason,
             )
-            purged = database.purge_pool_by_blocked_author(
+            purged = ctx.database.purge_pool_by_blocked_author(
                 author_name=payload.author_name,
                 source_platform=payload.source_platform,
             )
@@ -11489,7 +11493,9 @@ def create_app(
     @app.delete("/api/blocked-authors/{blocked_id}", response_model=BlockedAuthorActionResponse)
     def delete_blocked_author(blocked_id: int) -> BlockedAuthorActionResponse:
         """Remove an author from the blacklist."""
-        ok = database.remove_blocked_author(blocked_id=blocked_id)
+        if not getattr(ctx, "database", None):
+            raise HTTPException(status_code=503, detail="Database not ready")
+        ok = ctx.database.remove_blocked_author(blocked_id=blocked_id)
         if not ok:
             raise HTTPException(status_code=404, detail="未找到该屏蔽记录")
         return BlockedAuthorActionResponse(ok=True, id=blocked_id, message="已解除屏蔽")
