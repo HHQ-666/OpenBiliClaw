@@ -144,7 +144,7 @@ async def test_proxy_dns_fails_closed_without_local_or_hostname_fallback(
     assert 1 <= len(queried) <= 2
 
 
-@pytest.mark.parametrize("address", ["127.0.0.1", "10.0.0.1", "169.254.169.254", "198.18.0.1"])
+@pytest.mark.parametrize("address", ["127.0.0.1", "10.0.0.1", "169.254.169.254", "192.168.1.1"])
 async def test_allowed_hostname_cannot_connect_to_nonpublic_ip(
     monkeypatch: pytest.MonkeyPatch, address: str
 ) -> None:
@@ -186,6 +186,11 @@ async def test_allowed_hostname_cannot_connect_to_nonpublic_ip(
 )
 def test_special_address_ranges_are_not_public(address: str) -> None:
     assert not network.is_public_address(address)
+
+
+def test_fake_ip_benchmark_range_allowed() -> None:
+    assert network.is_public_address("198.18.0.1")
+    assert network.is_public_address("198.19.255.254")
 
 
 class Stream(httpcore.AsyncNetworkStream):
