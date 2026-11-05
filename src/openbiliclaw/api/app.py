@@ -7508,7 +7508,7 @@ def create_app(
             try:
                 import httpx
 
-                async with httpx.AsyncClient(timeout=30) as client:
+                async with httpx.AsyncClient(trust_env=False, timeout=30) as client:
                     upstream = await client.get(
                         f"{service_base}/api/image-proxy",
                         params={"url": url},
