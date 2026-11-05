@@ -1,8 +1,10 @@
 import re
 from pathlib import Path
 
+from tests._design_css import read_desktop_css
+
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+APP_CSS = read_desktop_css()
 
 
 def _function_body(name: str) -> str:
@@ -64,7 +66,7 @@ def test_card_metadata_css_defines_duration_badge_and_stats_line() -> None:
     assert ".duration-badge" in APP_CSS
     assert ".video-stats" in APP_CSS
     assert "background: var(--overlay);" in APP_CSS
-    assert "color: var(--muted);" in APP_CSS
+    assert "color: var(--card-hi);" in APP_CSS
 
 
 def test_desktop_recommendation_covers_bound_eager_loading_to_first_four() -> None:
@@ -100,7 +102,7 @@ def test_delight_card_renders_the_same_engagement_stats_as_the_grid() -> None:
     # comment_count (💬) is in the shared stats renderer so both cards show it.
     stats = _function_body("recommendationStats")
     assert "if (item.comment_count > 0)" in stats
-    assert "💬 " in stats
+    assert "评论 " in stats
 
     # The DOM has the stats element on the delight card.
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")

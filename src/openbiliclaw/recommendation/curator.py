@@ -280,13 +280,38 @@ class PoolCurator:
         *,
         now: datetime | None = None,
     ) -> list[DiscoveredContent]:
-        """Drop candidates that strict publication preference cannot serve."""
+        """Drop candidates that publication preference cannot serve or are blocked."""
 
         current = now or datetime.now(UTC)
+        blocked_pairs: set[tuple[str, str]] = set()
+        if hasattr(self._database, "get_blocked_authors"):
+            try:
+                for b in self._database.get_blocked_authors():
+                    platform = b.get("source_platform", "").strip().lower()
+                    name = b.get("author_name", "").strip()
+                    blocked_pairs.add((platform, name))
+            except Exception:
+                pass
+
+        def is_blocked(item: DiscoveredContent) -> bool:
+            if not blocked_pairs:
+                return False
+            author = getattr(item, "author_name", "") or getattr(item, "up_name", "") or ""
+            author = author.strip()
+            if not author:
+                return False
+            platform = getattr(item, "source_platform", "") or ""
+            platform = platform.strip().lower()
+            return (
+                (platform, author) in blocked_pairs
+                or ("", author) in blocked_pairs
+                or ("*", author) in blocked_pairs
+            )
+
         return [
             item
             for item in candidates
-            if self.publication_date_decision(item, now=current).eligible
+            if not is_blocked(item) and self.publication_date_decision(item, now=current).eligible
         ]
 
     # ------------------------------------------------------------------

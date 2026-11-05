@@ -818,6 +818,27 @@ manage_ollama = true
 # 同步外部平台收藏的总开关；默认关闭，需由用户明确开启。
 auto_sync_enabled = false
 
+[digest]
+# 每日日报：每天到点把发现池高分条目、未消费惊喜（delight）和最新认知更新
+# 汇总成一份日报，存档到本地数据库，并推送到下方已配置的渠道。
+# 默认关闭；可在桌面 Web「设置 → 调度」里开启，或用 POST /api/digest/run-now 手动触发。
+enabled = false
+# 本地时区 HH:MM。每天至多一份；后端到点没在运行时，启动后会补发当天的。
+send_time = "09:00"
+# 日报主列表（发现池高分条目）的条数上限，1-50。
+top_n = 10
+# 是否附带未消费的惊喜推荐（delight）。
+include_delight = true
+# 是否附带最新认知更新（画像/口味的近期变化）。
+include_cognition = true
+# 通用 webhook 渠道：到点后 POST 一个 JSON
+# {title, digest_date, text, item_count, payload} 到这个 URL。
+# 可对接 ntfy / 企业微信机器人 / 自建服务等任何能收 POST 的端点。留空则不启用。
+webhook_url = ""
+# Bark 渠道（iOS）：填「服务器 + 设备 key」基础 URL，
+# 例如 https://api.day.app/AbCdEfGh（从 Bark App 复制）。留空则不启用。
+bark_url = ""
+
 [storage]
 # SQLite database path
 db_path = "data/openbiliclaw.db"

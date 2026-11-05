@@ -8,30 +8,31 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/m/icon-32.png?v=4">
   <script>
     (() => {
-      let accent = "classic";
       try {
         const storage = window.localStorage;
         const theme = storage?.getItem("obc.theme");
         if (theme === "light" || theme === "dark") {
           document.documentElement.dataset.theme = theme;
         }
+        const palette = storage?.getItem("obc.palette");
+        if (palette === "paper" || palette === "moss") {
+          document.documentElement.dataset.palette = palette;
+        }
         const hue = storage?.getItem("obc.themeHue");
         if (hue) { document.documentElement.style.setProperty("--hue-primary", hue); }
-        const storedAccent = storage?.getItem("obc.accentStyle");
-        const hasCustomHue = hue !== null && hue !== "";
-        // 迁移必须在样式加载前完成：老用户已有 hue 时保留 modern，新用户用 classic。
-        accent = storedAccent === "modern" || storedAccent === "classic"
-          ? storedAccent
-          : hasCustomHue ? "modern" : "classic";
-        if (storedAccent !== accent) {
-          try { storage?.setItem("obc.accentStyle", accent); } catch {}
-        }
       } catch {}
-      if (accent === "classic") document.documentElement.dataset.accent = "classic";
     })();
   </script>
-  <link rel="stylesheet" href="/web/assets/css/app.css">
-  <link rel="stylesheet" href="/web/assets/css/classic.css">
+  <!-- 私人卡片目录馆 · Personal Card Catalog — one token system, three surfaces -->
+  <link rel="stylesheet" href="/shared/design/tokens.css">
+  <link rel="stylesheet" href="/shared/design/base.css">
+  <link rel="stylesheet" href="/shared/design/world.css">
+  <link rel="stylesheet" href="/shared/design/pages/desktop.css">
+  <link rel="stylesheet" href="/shared/design/pages/home.css">
+  <link rel="stylesheet" href="/shared/design/pages/library.css">
+  <link rel="stylesheet" href="/shared/design/pages/profile.css">
+  <link rel="stylesheet" href="/shared/design/pages/chat.css">
+  <link rel="stylesheet" href="/shared/design/pages/settings.css">
 </head>
 <body>
   <div class="app-shell">
@@ -105,14 +106,14 @@
           <h3>推荐池实时看板</h3>
           <p id="runtimeSummary">连接 FastAPI 后，这里会显示候选池、补货和新动作记录。</p>
           <div class="hero-status-grid" aria-label="推荐池实时状态">
-            <div><span>当前可换库存</span><strong id="poolAvailable">—</strong></div>
+            <div><span>池中素材</span><strong id="poolAvailable">—</strong></div>
             <div><span>补货进展</span><strong id="poolReplenished">—</strong></div>
             <div><span>补货状态</span><strong id="poolRefreshState">—</strong></div>
           </div>
           <div class="metric-row">
-            <div class="metric"><strong id="metricPool">—</strong><span>当前可换</span></div>
+            <div class="metric"><strong id="metricPool">—</strong><span>可换库存</span></div>
             <div class="metric"><strong id="metricUnread">—</strong><span>通知数</span></div>
-            <div class="metric"><strong id="metricSources">—</strong><span>内容源</span></div>
+            <div class="metric"><strong id="metricSources">—</strong><span>已开启来源</span></div>
           </div>
           <p class="hero-topics"><span id="poolTopicsLabel">最近主题</span>：<span id="poolTopics">等待后端同步</span></p>
           <p id="accountSyncStatus" class="account-sync-status" hidden></p>
@@ -198,6 +199,15 @@
           </div>
           <!-- chip 由 renderFilters 渲染成 role=tab（含 instagram、aria-selected 与库存计数） -->
           <div class="filter-row" id="filterRow" role="tablist" aria-label="推荐平台与库存"></div>
+          <!-- 内容类型二级筛选：仅当当前列表同时存在文章 / 视频 / 帖子等类型时由 renderTypeFilters 显示 -->
+          <div class="filter-row type-filter-row" id="typeFilterRow" role="tablist" aria-label="内容类型" hidden></div>
+          <!-- 徽标语义说明：数字是后端还能换的库存，不是这一屏的卡片数；0 常见于
+               来源没开或补货还没回来，所以顺手说清它为什么会涨。 -->
+          <p class="filter-legend">平台后的数字＝还能换的数量，后台补货后会涨</p>
+          <div class="search-results-banner" id="searchResultsBanner" hidden>
+            <p id="searchResultsBannerText">全库检索结果</p>
+            <button class="small-btn" id="clearSearchResultsBtn" type="button">清除全库筛选</button>
+          </div>
           <!-- 首屏骨架占位：后端推荐取回前先撑住版面，renderVideos 首次渲染时整体替换 -->
           <div class="card-grid" id="videoGrid">
             <article class="video-card is-skeleton" aria-hidden="true"><div class="cover skeleton-shimmer"></div><div><p class="video-title skeleton-line skeleton-shimmer"></p><p class="video-meta skeleton-line skeleton-shimmer short"></p></div><p class="reason skeleton-line skeleton-shimmer"></p></article>
@@ -1400,6 +1410,26 @@
             <label class="settings-field"><span>次要兴趣项上限</span><input id="speculationMaxSecondary" inputmode="numeric" placeholder="60"></label>
             <span></span>
           </div>
+          <p class="settings-section-title">每日日报</p>
+          <label class="settings-advanced-toggle"><input id="digestEnabled" type="checkbox"><span>启用每日日报（到点汇总高分内容并推送）</span></label>
+          <div class="inline-row">
+            <label class="settings-field"><span>推送时间</span><input id="digestSendTime" type="time" value="09:00"></label>
+            <label class="settings-field"><span>高分条数上限</span><input id="digestTopN" type="number" min="1" max="50" step="1" placeholder="10" inputmode="numeric"></label>
+            <label class="settings-advanced-toggle"><input id="digestIncludeDelight" type="checkbox"><span>附带惊喜</span></label>
+            <label class="settings-advanced-toggle"><input id="digestIncludeCognition" type="checkbox"><span>附带认知更新</span></label>
+          </div>
+          <div class="inline-row">
+            <label class="settings-field"><span>Webhook URL（POST JSON，可对接 ntfy / 企业微信等）</span><input id="digestWebhookUrl" type="url" placeholder="https://example.com/hook"></label>
+            <label class="settings-field"><span>Bark URL（iOS 推送，含设备 key）</span><input id="digestBarkUrl" type="url" placeholder="https://api.day.app/yourkey"></label>
+            <span></span>
+            <span></span>
+          </div>
+          <p class="settings-note-inline">日报每天至多一份，错过推送时间会在后端启动后补发；未配置任何渠道时仅存档到本机，不会外发。</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1">
+            <button type="button" id="digestRunNowBtn" class="pill-btn">立即生成并发送</button>
+            <button type="button" id="digestArchiveBtn" class="pill-btn">查看日报存档</button>
+          </div>
+          <p class="settings-probe-status" id="digestRunStatus" aria-live="polite" hidden></p>
         </div>
 
         <div id="settingsPanelAdvanced" class="settings-panel settings-advanced-panel" data-settings-panel="advanced" role="tabpanel" aria-labelledby="settingsTabAdvanced" hidden>
@@ -1493,6 +1523,21 @@
           <label class="settings-field"><span>语言</span><select id="language"><option value="zh">中文</option><option value="en">English</option></select></label>
           <label class="settings-field"><span>数据目录</span><input id="dataDir" placeholder="data"></label>
           <label class="settings-field full"><span>SQLite 数据库路径</span><input id="storageDbPath" placeholder="data/openbiliclaw.db"></label>
+          <p class="settings-section-title">黑名单管理（已屏蔽作者）</p>
+          <div class="settings-field full" style="flex-direction: column; align-items: stretch;">
+            <p class="settings-note-inline" style="margin-bottom: var(--s2);">已屏蔽的作者将不会在任何频道的推荐中出现。</p>
+            <div id="blockedAuthorsList" class="blocked-authors-list">
+              <p class="video-meta">正在加载黑名单…</p>
+            </div>
+          </div>
+          <p class="settings-section-title">个人专属 RSS / Atom 订阅源</p>
+          <div class="settings-field full" style="flex-direction: column; align-items: stretch;">
+            <p class="settings-note-inline" style="margin-bottom: var(--s2);">可复制此链接在 Follow、NetNewsWire、Reeder、Feedly 等阅读器中直接订阅你的私人高分推荐流。</p>
+            <div class="rss-feed-box">
+              <input id="rssFeedUrlInput" readonly value="/api/feed/rss" style="font-family: var(--font-mono); flex: 1;">
+              <button class="small-btn primary" id="copyRssFeedBtn" type="button">复制 RSS 链接</button>
+            </div>
+          </div>
           <p class="settings-section-title">保存与平台同步</p>
           <label class="settings-field full settings-switch-field">
             <span>保存时自动同步到对应平台</span>
@@ -1601,16 +1646,29 @@
               <button type="button" role="radio" data-theme-choice="dark">深色</button>
             </div>
           </div>
-          <div class="settings-field full">
-            <span>色彩引擎</span>
-            <div class="theme-segmented theme-segmented-2col" id="themeAccentSetting" role="radiogroup" aria-label="色彩引擎">
-              <button type="button" role="radio" data-accent-choice="modern">动态主题色</button>
-              <button type="button" role="radio" data-accent-choice="classic">经典配色</button>
+          <div class="settings-field full settings-palette-field">
+            <span>纸张</span>
+            <div class="palette-swatches" id="themePaletteSetting" role="radiogroup" aria-label="纸张">
+              <!-- 每块色板预览的是「另一种」纸张，所以它必须自带色值，不能用当前 token：
+                   台面色 / 卡纸色 / 印染色，与 tokens.css 的 [data-palette] 区块一一对应。 -->
+              <button type="button" role="radio" data-palette-choice="plain" class="palette-swatch" title="素白：冷中性白纸，钢制标签，靛蓝印">
+                <span class="palette-chip" style="--chip-desk:#eef0f2;--chip-card:#ffffff;--chip-ink:#2e5b9e" aria-hidden="true"></span>
+                <span class="palette-name">素白</span>
+              </button>
+              <button type="button" role="radio" data-palette-choice="paper" class="palette-swatch" title="暖纸：米色台面，奶油卡纸，黄铜标签，印章红">
+                <span class="palette-chip" style="--chip-desk:#d9d4c8;--chip-card:#f7f5ef;--chip-ink:#9e442e" aria-hidden="true"></span>
+                <span class="palette-name">暖纸</span>
+              </button>
+              <button type="button" role="radio" data-palette-choice="moss" class="palette-swatch" title="青苔：灰绿纸面，旧铜标签，苔绿印">
+                <span class="palette-chip" style="--chip-desk:#e4e8e2;--chip-card:#fbfcfa;--chip-ink:#2e9e78" aria-hidden="true"></span>
+                <span class="palette-name">青苔</span>
+              </button>
             </div>
+            <p class="settings-hue-hint">纸张决定台面、卡纸和五金件的材质；换纸张会把印章颜色一起换成它的默认色相。</p>
           </div>
           <div class="settings-field full settings-hue-field">
-            <span>主题色相</span>
-            <div class="hue-swatches" id="themeHueSetting" role="radiogroup" aria-label="主题色相">
+            <span>印章色相</span>
+            <div class="hue-swatches" id="themeHueSetting" role="radiogroup" aria-label="印章色相">
               <button type="button" role="radio" data-hue="0" class="hue-swatch" style="--swatch:oklch(80% 0.16 0)" title="烈焰红">烈焰红</button>
               <button type="button" role="radio" data-hue="30" class="hue-swatch" style="--swatch:oklch(80% 0.16 30)" title="珊瑚橙">珊瑚橙</button>
               <button type="button" role="radio" data-hue="60" class="hue-swatch" style="--swatch:oklch(80% 0.16 60)" title="柠檬黄">柠檬黄</button>
@@ -1627,8 +1685,9 @@
             <div class="hue-slider-wrap">
               <input type="range" id="hueSlider" min="0" max="360" value="20" class="hue-slider" aria-label="自定义色相">
               <input type="number" id="hueValueInput" min="0" max="360" value="20" class="hue-value" aria-label="色相值">
+              <button type="button" id="themeHueReset" class="hue-reset" hidden title="清除自定义色相，回到纸张自带的印章颜色">跟随纸张</button>
             </div>
-            <p class="settings-hue-hint" hidden>经典模式下不可用，切换至动态主题色后可自定义色相</p>
+            <p class="settings-hue-hint">色相只改变印章；台面、卡纸与五金件由纸张决定。</p>
           </div>
           <label class="settings-field full settings-switch-field" title="开启：滚动到底部且推荐池可用时自动加载更多；关闭：保留纯手动加载。">
             <span>滚动到底自动加载推荐</span>
@@ -1648,7 +1707,7 @@
               <span id="showPendingChatCountSettingText">关闭</span>
             </span>
           </label>
-          <p class="settings-note-inline">后端地址、端口、外观主题、色彩引擎、自动加载和待聊未读数偏好保存在当前浏览器；惊喜推荐加载数量会随保存配置写入后端，供桌面 Web、移动 Web 和插件共享。</p>
+          <p class="settings-note-inline">后端地址、端口、外观主题、纸张、印章色相、自动加载和待聊未读数偏好保存在当前浏览器；惊喜推荐加载数量会随保存配置写入后端，供桌面 Web、移动 Web 和插件共享。</p>
         </div>
 
         <div id="settingsPanelLogging" class="settings-panel" data-settings-panel="logging" role="tabpanel" aria-labelledby="settingsTabLogging" hidden>
@@ -1739,6 +1798,20 @@
           </div>
         </section>
       </div>
+
+      <div class="llm-instance-dialog" id="digestDialog" role="dialog" aria-modal="true" aria-labelledby="digestDialogTitle" hidden>
+        <div class="llm-instance-dialog-backdrop" data-close-digest-dialog></div>
+        <section class="llm-instance-dialog-panel" tabindex="-1">
+          <div class="llm-instance-dialog-head">
+            <div><p class="settings-section-kicker">Daily digest</p><h3 id="digestDialogTitle">日报存档</h3></div>
+            <button class="icon-btn" id="closeDigestDialog" type="button" aria-label="关闭日报存档">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <div class="digest-dialog-date-row" id="digestDateRow" role="tablist" aria-label="选择日期"></div>
+          <div class="digest-dialog-body" id="digestDialogBody" aria-live="polite"></div>
+        </section>
+      </div>
     </main>
     </div>
   </div>
@@ -1775,6 +1848,46 @@
         <h3>后台刚记住的事</h3>
         <div class="activity-list" id="mobileActivityList"></div>
       </section>
+    </div>
+  </section>
+
+  <section class="drawer" id="cardDetailDrawer" aria-label="卡片详览与速读" data-od-id="card-detail-drawer">
+    <div class="scrim" data-close="cardDetailDrawer"></div>
+    <div class="drawer-panel" id="cardDetailPanel">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow" id="cardDetailPlatform">Catalog Card</p>
+          <h2 id="cardDetailDrawerTitle">卡片详注</h2>
+        </div>
+        <button class="icon-btn" data-close="cardDetailDrawer" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="card-detail-content" id="cardDetailContent"></div>
+    </div>
+  </section>
+
+  <section class="drawer" id="shortcutsDialog" aria-label="快捷键速查" data-od-id="shortcuts-dialog">
+    <div class="scrim" data-close="shortcutsDialog"></div>
+    <div class="drawer-panel shortcuts-panel" id="shortcutsPanel">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">Keyboard Shortcuts</p>
+          <h2>键盘快捷操作</h2>
+        </div>
+        <button class="icon-btn" data-close="shortcutsDialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>J</kbd> / <kbd>↓</kbd></div><span class="shortcut-desc">切换至下一张卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>K</kbd> / <kbd>↑</kbd></div><span class="shortcut-desc">切换至上一张卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Enter</kbd> / <kbd>O</kbd></div><span class="shortcut-desc">展开当前卡片详览与 AI 速读</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Shift</kbd>+<kbd>Enter</kbd></div><span class="shortcut-desc">直接在新标签页打开原文</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>S</kbd></div><span class="shortcut-desc">收藏 / 取消收藏</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>L</kbd></div><span class="shortcut-desc">移入 / 移出稍后再看</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>X</kbd></div><span class="shortcut-desc">不感兴趣 / 忽略卡片</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>C</kbd></div><span class="shortcut-desc">展开当前卡片留言 / 讨论输入框</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>/</kbd></div><span class="shortcut-desc">快速聚焦顶栏搜索框</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>Esc</kbd></div><span class="shortcut-desc">关闭抽屉 / 弹层 / 取消卡片聚焦</span></div>
+        <div class="shortcut-item"><div class="shortcut-keys"><kbd>?</kbd></div><span class="shortcut-desc">打开快捷键说明面板</span></div>
+      </div>
     </div>
   </section>
 
@@ -1827,14 +1940,6 @@
     </div>
   </section>
 
-  <aside class="theme-notice" id="themeNotice" role="region" aria-live="polite" aria-labelledby="themeNoticeTitle" aria-describedby="themeNoticeDescription" hidden>
-    <strong id="themeNoticeTitle">已启用经典配色</strong>
-    <p id="themeNoticeDescription">喜欢自定义色彩？可在“设置 → 前端”切换到动态主题色并调节色相。</p>
-    <div class="theme-notice-actions">
-      <button class="notice-btn secondary" id="themeNoticeDismiss" type="button">知道了</button>
-      <button class="notice-btn primary" id="themeNoticeSettings" type="button">前往设置</button>
-    </div>
-  </aside>
   <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
   <button id="backToTop" class="back-to-top" type="button" aria-label="回到顶部" title="回到顶部" hidden>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1851,6 +1956,7 @@
   <script src="/shared/dialogue-confirmation.js" defer></script>
   <script src="/shared/agent-chat.js" defer></script>
   <script src="/shared/source-status.js" defer></script>
+  <script src="/shared/text-localize.js" defer></script>
   <script src="/web/assets/js/chat-agent-core.js" defer></script>
   <script src="/web/assets/js/app.js" defer></script>
 </body></html>

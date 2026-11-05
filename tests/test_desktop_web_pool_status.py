@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+from tests._design_css import read_desktop_css
+
 
 def _function_body(app_js: str, name: str) -> str:
     match = re.search(
@@ -112,8 +114,10 @@ def test_desktop_pool_status_shows_available_count() -> None:
     assert "pool_available_count" in app_js
     assert "还有 ${runtime.pool_available_count} 条可换" in app_js
     assert "暂无可换库存" in app_js
-    assert "当前可换库存" in index_html
-    assert "当前可换" in index_html
+    assert "可换库存" in index_html
+    # 三格统计里的数字各管一件事：可换库存 / 通知 / 已开启来源；「池中素材」
+    # 是旁边那一行原始候选数，不再复述同一个数字。
+    assert "池中素材" in index_html
 
 
 def test_desktop_hydration_refetches_runtime_after_recommendation_bootstrap() -> None:
@@ -139,7 +143,7 @@ def test_desktop_pool_status_labels_pending_signals_as_discovery_context() -> No
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
 
     assert "待处理 ${runtime.pending_signal_events} 条行为信号" not in app_js
-    assert "已记下 ${runtime.pending_signal_events} 个新动作" in app_js
+    assert "刚记下你 ${runtime.pending_signal_events} 条新动态" in app_js
     assert "待处理行为信号" not in index_html
     assert "新动作" in index_html
 
@@ -209,7 +213,7 @@ def test_desktop_renders_x_recommendations_as_text_cards() -> None:
     saved_sync_js = Path("src/openbiliclaw/web/desktop/assets/js/saved-sync-core.js").read_text(
         encoding="utf-8"
     )
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
 
     normalize_recommendation = re.search(
         r"function normalizeRecommendation\(item\) \{(?P<body>.*?)\n    \}",
@@ -392,7 +396,7 @@ def test_desktop_healthy_stream_reconnect_does_not_rebuild_cards() -> None:
 def test_desktop_web_shows_github_star_cta() -> None:
     """Desktop web should ask happy users for a GitHub Star in the top bar."""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
     top_actions = re.search(r'<div class="top-actions"[\s\S]*?</div>', index_html)
 
@@ -524,7 +528,7 @@ def test_desktop_platform_tabs_union_enabled_inventory_and_loaded() -> None:
 def test_desktop_platform_chips_render_counts_and_accessible_selected_state() -> None:
     """chip 显示紧凑库存计数，选中态不能只靠颜色表达。"""
     app_js = Path("src/openbiliclaw/web/desktop/assets/js/app.js").read_text(encoding="utf-8")
-    app_css = Path("src/openbiliclaw/web/desktop/assets/css/app.css").read_text(encoding="utf-8")
+    app_css = read_desktop_css()
     index_html = Path("src/openbiliclaw/web/desktop/index.html").read_text(encoding="utf-8")
 
     body = _function_body(app_js, "renderFilters")

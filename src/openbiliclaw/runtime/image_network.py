@@ -40,6 +40,8 @@ def is_public_address(value: str) -> bool:
     # (Clash, Surge, etc.)
     if address in _FAKE_IP_NET:
         return True
+    if address in _FAKE_IP_NET:
+        return True
     if not address.is_global or address.is_multicast or address.is_reserved:
         return False
     if isinstance(address, ipaddress.IPv6Address):

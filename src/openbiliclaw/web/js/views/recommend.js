@@ -13,6 +13,7 @@ import {
   respondToDelight,
   markDelightSent,
   reportClick,
+  requestJson,
   submitFeedback,
   startChatTurn,
   fetchChatTurn,
@@ -170,6 +171,17 @@ function hydrateSavedLocally(listKind, item, update) {
 }
 
 // ── Render ────────────────────────────────────────────────────
+
+// Card text is quoted from the source, so a tweet or an English title lands on
+// a Chinese reader as-is. shared/text-localize.js swaps in a rendering when the
+// backend has one; it only rewrites text nodes, so it neither blocks this
+// render nor fights the reconciliation below.
+function localizeCardText(root) {
+  const localizer = globalThis.OpenBiliClawTextLocalize;
+  if (!localizer) return;
+  localizer.localizeWithin(root || $root || document, { request: requestJson });
+}
+
 function render() {
   if (!$root) return;
 
@@ -235,6 +247,8 @@ function render() {
 
   // Restore scroll position so the page doesn't jump to top.
   if ($root.parentElement) $root.parentElement.scrollTop = scrollTop;
+
+  localizeCardText($root);
 
   // Feedback bottom sheet
   renderFeedbackSheet();
@@ -842,6 +856,7 @@ function navigateDelight(newIndex) {
     patchState({ delightCurrentIndex: newIndex });
     slot.innerHTML = "";
     renderInto(slot, renderDelightTray);
+    localizeCardText(slot);
     const newTray = slot.querySelector(".delight-tray");
     if (!newTray) return;
     const newTextEls = newTray.querySelectorAll(".delight-title, .delight-stats, .delight-reason, .delight-meta, .delight-kicker-line, .delight-hook-badge");
@@ -879,6 +894,7 @@ function rerenderDelightOnly() {
   const oldH = oldTray ? oldTray.offsetHeight : 0;
   slot.innerHTML = "";
   renderInto(slot, renderDelightTray);
+  localizeCardText(slot);
   const newTray = slot.querySelector(".delight-tray");
   if (newTray && oldH > 0) {
     const newH = newTray.offsetHeight;

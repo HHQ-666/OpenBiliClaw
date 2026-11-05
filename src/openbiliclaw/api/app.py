@@ -65,6 +65,11 @@ from openbiliclaw.api.models import (
     BilibiliCookieIn,
     BilibiliCookieResponse,
     BilibiliSourceConfigOut,
+    BlockedAuthorActionResponse,
+    BlockedAuthorIn,
+    BlockedAuthorOut,
+    CardTextTranslationIn,
+    CardTextTranslationOut,
     ChatIn,
     ChatSessionCreateIn,
     ChatSessionDetailResponse,
@@ -93,6 +98,12 @@ from openbiliclaw.api.models import (
     DelightAckResponse,
     DelightResponseIn,
     DialogueContextPreview,
+    DigestChannelResultOut,
+    DigestConfigOut,
+    DigestIssueDetailOut,
+    DigestIssueListOut,
+    DigestIssueOut,
+    DigestRunNowOut,
     DiscoveryConfigOut,
     DouyinCookieIn,
     DouyinCookieResponse,
@@ -220,6 +231,10 @@ from openbiliclaw.discovery.temporal import (
     is_complete_temporal_evidence_marker,
 )
 from openbiliclaw.llm.base import safe_llm_failure_message
+from openbiliclaw.recommendation.frontier import (
+    AI_FRONTIER_CHANNEL,
+    assess_ai_frontier_row,
+)
 from openbiliclaw.recommendation_runtime import (
     RECOMMENDATION_PORT_ENV,
     RECOMMENDATION_SOCK_ENV,
@@ -2046,6 +2061,12 @@ _SESSION_TITLE_SYSTEM_PROMPT = (
 # garbage-collect them mid-flight.
 _SESSION_TITLE_TASKS: set[asyncio.Task[None]] = set()
 
+# Card-text translation (/api/translate-texts) is a cosmetic first-paint path.
+# Two LLM batches per request bounds how long one render can hold provider
+# slots and how long the request itself can run; the next render asks for the
+# rest, and each rendering lands in the persistent cache once.
+CARD_TEXT_MAX_LLM_BATCHES = 2
+
 
 def fallback_session_title(message: str) -> str:
     """Truncated first-message prefix used when LLM titling is unavailable."""
@@ -2085,6 +2106,101 @@ async def generate_session_title(
     except Exception:
         logger.debug("Chat session title generation failed; using fallback", exc_info=True)
     return fallback_session_title(message)
+
+
+def generate_rss_feed(
+    items: list[dict[str, Any]],
+    *,
+    base_url: str = "http://127.0.0.1:8420",
+    channel_name: str = "all",
+) -> str:
+    """Format recommendation candidates into valid RSS 2.0 XML."""
+    import contextlib
+    import html
+    from datetime import UTC, datetime
+    from email.utils import format_datetime
+
+    now_rfc822 = format_datetime(datetime.now(UTC))
+    feed_title = "OpenBiliClaw 私人推荐目录"
+    if channel_name == "ai_frontier":
+        feed_title = "OpenBiliClaw · AI 前沿速递"
+
+    feed_url = f"{base_url.rstrip('/')}/api/feed/rss"
+    if channel_name and channel_name != "all":
+        feed_url += f"?channel={channel_name}"
+
+    item_blocks: list[str] = []
+    for item in items:
+        title = html.escape(str(item.get("title") or "无标题"))
+        url = str(item.get("content_url") or item.get("url") or "")
+        if not url:
+            bvid = str(item.get("bvid") or "")
+            url = f"https://www.bilibili.com/video/{bvid}" if bvid.startswith("BV") else base_url
+
+        url_escaped = html.escape(url)
+        author = html.escape(
+            str(
+                item.get("author_name")
+                or item.get("author")
+                or item.get("up_name")
+                or "OpenBiliClaw"
+            )
+        )
+        platform = html.escape(
+            str(item.get("source_platform") or item.get("platform") or "Bilibili")
+        )
+        reason = str(
+            item.get("relevance_reason") or item.get("pool_expression") or item.get("reason") or ""
+        )
+        desc = str(item.get("description") or item.get("desc") or item.get("summary") or "")
+
+        content_html = f"<p><strong>来源：</strong>{platform} · {author}</p>"
+        if reason:
+            content_html += f"<p><strong>编目批注：</strong>{html.escape(reason)}</p>"
+        if desc:
+            content_html += f"<p>{html.escape(desc)}</p>"
+
+        pub_date_val = item.get("published_at") or item.get("pubdate") or item.get("created_at")
+        pub_date_rfc = now_rfc822
+        if isinstance(pub_date_val, (int, float)) and pub_date_val > 0:
+            with contextlib.suppress(Exception):
+                pub_date_rfc = format_datetime(datetime.fromtimestamp(pub_date_val, tz=UTC))
+        elif isinstance(pub_date_val, datetime):
+            pub_date_rfc = format_datetime(pub_date_val)
+        elif isinstance(pub_date_val, str) and pub_date_val:
+            with contextlib.suppress(Exception):
+                dt = datetime.fromisoformat(pub_date_val.replace("Z", "+00:00"))
+                pub_date_rfc = format_datetime(dt)
+
+        guid = html.escape(str(item.get("item_key") or item.get("bvid") or item.get("id") or url))
+
+        item_blocks.append(
+            f"    <item>\n"
+            f"      <title>{title}</title>\n"
+            f"      <link>{url_escaped}</link>\n"
+            f'      <guid isPermaLink="false">{guid}</guid>\n'
+            f"      <pubDate>{pub_date_rfc}</pubDate>\n"
+            f"      <author>{author}</author>\n"
+            f"      <category>{platform}</category>\n"
+            f"      <description><![CDATA[{content_html}]]></description>\n"
+            f"    </item>"
+        )
+
+    items_joined = "\n".join(item_blocks)
+    return (
+        f'<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n'
+        f"  <channel>\n"
+        f"    <title>{feed_title}</title>\n"
+        f"    <link>{html.escape(base_url)}/web</link>\n"
+        f"    <description>本地优先的个人专属跨平台内容推荐与发现目录馆</description>\n"
+        f"    <language>zh-cn</language>\n"
+        f"    <lastBuildDate>{now_rfc822}</lastBuildDate>\n"
+        f'    <atom:link href="{html.escape(feed_url)}" rel="self" type="application/rss+xml" />\n'
+        f"{items_joined}\n"
+        f"  </channel>\n"
+        f"</rss>"
+    )
 
 
 def create_app(
@@ -2505,10 +2621,13 @@ def create_app(
     auto_replenishment_task: asyncio.Task[None] | None = None
     auto_replenishment_started_at = 0.0
     first_page_topup_attempted_at = 0.0
+    frontier_seed_last_at = 0.0
+    frontier_wire_last_at = 0.0
     recommendation_snapshot_cache: RecommendationListResponse | None = None
     recommendation_snapshot_cached_at = 0.0
     recommendation_snapshot_expires_at = 0.0
     recommendation_snapshot_dislike_digest = ""
+    recommendation_snapshot_channel = ""
     recommendation_snapshot_lock = asyncio.Lock()
     runtime_status_cache: RuntimeStatusResponse | None = None
     runtime_status_cached_at = 0.0
@@ -2519,10 +2638,12 @@ def create_app(
         nonlocal recommendation_snapshot_cache, recommendation_snapshot_cached_at
         nonlocal recommendation_snapshot_expires_at
         nonlocal recommendation_snapshot_dislike_digest
+        nonlocal recommendation_snapshot_channel
         recommendation_snapshot_cache = None
         recommendation_snapshot_cached_at = 0.0
         recommendation_snapshot_expires_at = 0.0
         recommendation_snapshot_dislike_digest = ""
+        recommendation_snapshot_channel = ""
 
     def _effective_recommendation_dislikes() -> tuple[list[str], str]:
         """Read the latest output-policy snapshot without waiting for rebuild."""
@@ -2810,6 +2931,10 @@ def create_app(
             or path == "/api/health"
             or path == "/api/runtime-status"
             or (path == "/api/content-history" and method == "GET")
+            # The curated article wire is LLM-independent: it only fetches
+            # public feeds and writes deterministic copy, so it remains
+            # usable while the chat/eval registry is being repaired.
+            or (path == "/api/channels/ai-frontier/refresh" and method == "POST")
             or path == "/favicon.ico"
             or path == "/api/autostart-status"
             or path == "/api/autostart/apply"
@@ -8606,46 +8731,63 @@ def create_app(
                 row = None
             return int(row.get("id", 0)) if row else 0
 
-        return [
-            RecommendationOut(
+        def out_for(item: Any) -> RecommendationOut:
+            content = item.content
+            assessment = assess_ai_frontier_row(
+                {
+                    "title": getattr(content, "title", ""),
+                    "body_text": getattr(content, "body_text", ""),
+                    "description": getattr(content, "description", ""),
+                    "topic": str(getattr(item, "topic_label", "") or ""),
+                    "tags": getattr(content, "tags", ()),
+                    "source_platform": getattr(content, "source_platform", ""),
+                    "content_type": getattr(content, "content_type", ""),
+                    "up_name": getattr(content, "up_name", ""),
+                    "author_name": getattr(content, "author_name", ""),
+                }
+            )
+            return RecommendationOut(
                 id=resolved_id_for(item),
-                bvid=str(item.content.bvid),
-                item_key=item_key_for(item.content),
-                title=str(item.content.title),
-                up_name=str(item.content.up_name),
-                cover_url=str(item.content.cover_url),
+                bvid=str(content.bvid),
+                item_key=item_key_for(content),
+                title=str(content.title),
+                up_name=str(content.up_name),
+                cover_url=str(content.cover_url),
                 expression=str(item.expression),
                 topic_label=str(item.topic_label),
                 presented=bool(item.presented),
                 feedback_type=str(getattr(item, "feedback_type", "") or ""),
-                content_id=str(getattr(item.content, "content_id", "") or item.content.bvid),
-                content_url=str(getattr(item.content, "content_url", "") or ""),
-                source_platform=str(getattr(item.content, "source_platform", "") or "bilibili"),
-                published_at=str(getattr(item.content, "published_at", "") or ""),
-                published_label=str(getattr(item.content, "published_label", "") or ""),
-                content_type=str(getattr(item.content, "content_type", "") or "video"),
-                body_text=str(getattr(item.content, "body_text", "") or ""),
+                content_id=str(getattr(content, "content_id", "") or content.bvid),
+                content_url=str(getattr(content, "content_url", "") or ""),
+                source_platform=str(getattr(content, "source_platform", "") or "bilibili"),
+                published_at=str(getattr(content, "published_at", "") or ""),
+                published_label=str(getattr(content, "published_label", "") or ""),
+                content_type=str(getattr(content, "content_type", "") or "video"),
+                body_text=str(getattr(content, "body_text", "") or ""),
                 source_metadata=_fail_closed_source_metadata(
-                    getattr(item.content, "source_metadata", {})
+                    getattr(content, "source_metadata", {})
                 ),
-                duration=int(getattr(item.content, "duration", 0) or 0),
-                view_count=int(getattr(item.content, "view_count", 0) or 0),
-                like_count=int(getattr(item.content, "like_count", 0) or 0),
-                danmaku_count=int(getattr(item.content, "danmaku_count", 0) or 0),
+                duration=int(getattr(content, "duration", 0) or 0),
+                view_count=int(getattr(content, "view_count", 0) or 0),
+                like_count=int(getattr(content, "like_count", 0) or 0),
+                danmaku_count=int(getattr(content, "danmaku_count", 0) or 0),
                 favorite_count=int(
-                    getattr(item.content, "favorite_count", 0)
-                    or getattr(item.content, "collect_count", 0)
+                    getattr(content, "favorite_count", 0)
+                    or getattr(content, "collect_count", 0)
                     or 0
                 ),
-                comment_count=int(getattr(item.content, "comment_count", 0) or 0),
-                share_count=int(getattr(item.content, "share_count", 0) or 0),
-                rating_score=float(getattr(item.content, "rating_score", 0.0) or 0.0),
-                rating_count=int(getattr(item.content, "rating_count", 0) or 0),
-                source_rank=int(getattr(item.content, "source_rank", 0) or 0),
-                up_mid=int(getattr(item.content, "up_mid", 0) or 0),
+                comment_count=int(getattr(content, "comment_count", 0) or 0),
+                share_count=int(getattr(content, "share_count", 0) or 0),
+                rating_score=float(getattr(content, "rating_score", 0.0) or 0.0),
+                rating_count=int(getattr(content, "rating_count", 0) or 0),
+                source_rank=int(getattr(content, "source_rank", 0) or 0),
+                up_mid=int(getattr(content, "up_mid", 0) or 0),
+                ai_frontier=assessment.is_frontier,
+                ai_frontier_score=assessment.score,
+                ai_frontier_tags=list(assessment.tags),
             )
-            for item in items
-        ]
+
+        return [out_for(item) for item in items]
 
     def _filter_recommendation_objects_for_latest_dislikes(items: list[Any]) -> list[Any]:
         """Recheck an in-flight serve batch at the final HTTP boundary."""
@@ -9091,11 +9233,13 @@ def create_app(
         if mbti_type:
             mbti_out = MBTIOut(
                 type=mbti_type,
+                identity=str(getattr(mbti_obj, "identity", "") or ""),
                 dimensions={
                     k: MBTIDimensionOut(pole=str(v.pole), strength=float(v.strength))
                     for k, v in getattr(mbti_obj, "dimensions", {}).items()
                 },
                 confidence=float(getattr(mbti_obj, "confidence", 0.0)),
+                declared=bool(getattr(mbti_obj, "declared", False)),
             )
 
         # ── Interest layer (tree structure) ──
@@ -9367,6 +9511,7 @@ def create_app(
                 value=payload.value,
                 parent=payload.parent,
                 weight=payload.weight,
+                mbti=payload.mbti.model_dump(exclude_none=True) if payload.mbti else None,
                 database=ctx.database,
             )
         except ProfileEditError as exc:
@@ -9557,8 +9702,15 @@ def create_app(
 
     async def _load_recommendations(
         disliked_topics: list[str] | None = None,
+        channel: str = "",
     ) -> tuple[RecommendationListResponse, float]:
-        nonlocal first_page_topup_attempted_at
+        nonlocal first_page_topup_attempted_at, frontier_seed_last_at
+
+        # The channel now mixes fresh arXiv/HF papers with the platform videos
+        # users have been served before. A 40-row history window is dominated
+        # by the newest wire batch; read a wider window and let the classifier
+        # + franchise cap produce the visible 20.
+        history_limit = 120 if channel == AI_FRONTIER_CHANNEL else 40
 
         def _admission_min_score() -> float:
             runtime_config = getattr(ctx, "config", None) or config
@@ -9590,8 +9742,10 @@ def create_app(
         # would leave gaps that other items further back in time would
         # have filled.
         rows = _filter_low_confidence(
-            ctx.database.get_recommendations(limit=40, exclude_processed=True)
+            ctx.database.get_recommendations(limit=history_limit, exclude_processed=True)
         )
+        if channel == AI_FRONTIER_CHANNEL:
+            rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]
 
         # Fresh-install bootstrap + thin-first-page top-up (issue #81):
         # ``recommendations`` table is the write-only history of items we've
@@ -9630,10 +9784,25 @@ def create_app(
                     first_page_topup_attempted_at = time.monotonic()
                     row_count_before = len(rows)
                     profile = await ctx.soul_engine.get_profile()
-                    await ctx.recommendation_engine.serve(profile, limit=10)
+                    if channel:
+                        # Channel-aware top-up: a general serve would write
+                        # non-frontier rows the channel immediately filters
+                        # out again, burning history slots for nothing.
+                        try:
+                            await ctx.recommendation_engine.serve(
+                                profile, limit=10, channel=channel
+                            )
+                        except TypeError:
+                            await ctx.recommendation_engine.serve(profile, limit=10)
+                    else:
+                        await ctx.recommendation_engine.serve(profile, limit=10)
                     rows = _filter_low_confidence(
-                        ctx.database.get_recommendations(limit=40, exclude_processed=True)
+                        ctx.database.get_recommendations(
+                            limit=history_limit, exclude_processed=True
+                        )
                     )
+                    if channel == AI_FRONTIER_CHANNEL:
+                        rows = [row for row in rows if assess_ai_frontier_row(row).is_frontier]
                     await _publish_pool_status_snapshot()
                     logger.info(
                         "GET /api/recommendations top-up: history had %d "
@@ -9643,6 +9812,29 @@ def create_app(
                         len(rows),
                     )
 
+        if channel == AI_FRONTIER_CHANNEL and len(rows) < 5 and not _init_active_now():
+            # The channel is a narrow view; a healthy general pool can still
+            # leave it dry. Seed the normal keyword store with the curated
+            # frontier pack (throttled), then wake the existing background
+            # replenishment. The fetch/eval pipeline stays exactly the same.
+            if time.monotonic() - frontier_seed_last_at >= 1800:
+                with suppress(Exception):
+                    profile = await ctx.soul_engine.get_profile()
+                    from openbiliclaw.discovery.frontier_seed import seed_frontier_keywords
+                    from openbiliclaw.discovery.keyword_digest import profile_kw_digest
+
+                    runtime_config = getattr(ctx, "config", None) or config
+                    seeded = await asyncio.to_thread(
+                        seed_frontier_keywords,
+                        ctx.database,
+                        profile_kw_digest(profile),
+                        sources=getattr(runtime_config, "sources", None),
+                    )
+                    frontier_seed_last_at = time.monotonic()
+                    logger.info("AI frontier channel seeded %d keyword(s)", seeded)
+            with suppress(Exception):
+                await _trigger_replenishment_if_needed(force=True)
+
         if disliked_topics:
             from openbiliclaw.recommendation.exclusion import filter_recommendation_rows
 
@@ -9650,47 +9842,54 @@ def create_app(
         rows, snapshot_expires_at = _recommendation_snapshot_rows_and_expiry(rows)
         rows = _cap_by_franchise(rows, max_per_franchise=2)[:20]
 
+        def _out_from_row(row: dict[str, Any]) -> RecommendationOut:
+            assessment = assess_ai_frontier_row(row)
+            return RecommendationOut(
+                id=int(row["id"]),
+                bvid=str(row.get("bvid", "")),
+                item_key=str(row.get("item_key", "")),
+                title=str(row.get("title", "")),
+                up_name=str(row.get("up_name", "")),
+                cover_url=str(row.get("cover_url", "")),
+                expression=str(row.get("expression", "")),
+                topic_label=str(row.get("topic", "")),
+                presented=bool(row.get("presented", 0)),
+                feedback_type=str(row.get("feedback_type", "") or ""),
+                content_id=str(row.get("content_id", "") or row.get("bvid", "")),
+                content_url=str(row.get("content_url", "") or ""),
+                source_platform=str(row.get("source_platform", "") or "bilibili"),
+                published_at=str(row.get("published_at", "") or ""),
+                published_label=str(row.get("published_label", "") or ""),
+                content_type=str(row.get("content_type", "") or "video"),
+                body_text=str(row.get("body_text", "") or ""),
+                source_metadata=_fail_closed_source_metadata(row.get("source_metadata", {})),
+                duration=int(row.get("duration", 0) or 0),
+                view_count=int(row.get("view_count", 0) or 0),
+                like_count=int(row.get("like_count", 0) or 0),
+                danmaku_count=int(row.get("danmaku_count", 0) or 0),
+                favorite_count=int(
+                    row.get("favorite_count", 0) or row.get("collect_count", 0) or 0
+                ),
+                comment_count=int(row.get("comment_count", 0) or 0),
+                share_count=int(row.get("share_count", 0) or 0),
+                rating_score=float(row.get("rating_score", 0.0) or 0.0),
+                rating_count=int(row.get("rating_count", 0) or 0),
+                source_rank=int(row.get("source_rank", 0) or 0),
+                up_mid=int(row.get("up_mid", 0) or 0),
+                ai_frontier=assessment.is_frontier,
+                ai_frontier_score=assessment.score,
+                ai_frontier_tags=list(assessment.tags),
+            )
+
+        items = [_out_from_row(row) for row in rows]
         return RecommendationListResponse(
-            items=[
-                RecommendationOut(
-                    id=int(row["id"]),
-                    bvid=str(row.get("bvid", "")),
-                    item_key=str(row.get("item_key", "")),
-                    title=str(row.get("title", "")),
-                    up_name=str(row.get("up_name", "")),
-                    cover_url=str(row.get("cover_url", "")),
-                    expression=str(row.get("expression", "")),
-                    topic_label=str(row.get("topic", "")),
-                    presented=bool(row.get("presented", 0)),
-                    feedback_type=str(row.get("feedback_type", "") or ""),
-                    content_id=str(row.get("content_id", "") or row.get("bvid", "")),
-                    content_url=str(row.get("content_url", "") or ""),
-                    source_platform=str(row.get("source_platform", "") or "bilibili"),
-                    published_at=str(row.get("published_at", "") or ""),
-                    published_label=str(row.get("published_label", "") or ""),
-                    content_type=str(row.get("content_type", "") or "video"),
-                    body_text=str(row.get("body_text", "") or ""),
-                    source_metadata=_fail_closed_source_metadata(row.get("source_metadata", {})),
-                    duration=int(row.get("duration", 0) or 0),
-                    view_count=int(row.get("view_count", 0) or 0),
-                    like_count=int(row.get("like_count", 0) or 0),
-                    danmaku_count=int(row.get("danmaku_count", 0) or 0),
-                    favorite_count=int(
-                        row.get("favorite_count", 0) or row.get("collect_count", 0) or 0
-                    ),
-                    comment_count=int(row.get("comment_count", 0) or 0),
-                    share_count=int(row.get("share_count", 0) or 0),
-                    rating_score=float(row.get("rating_score", 0.0) or 0.0),
-                    rating_count=int(row.get("rating_count", 0) or 0),
-                    source_rank=int(row.get("source_rank", 0) or 0),
-                    up_mid=int(row.get("up_mid", 0) or 0),
-                )
-                for row in rows
-            ]
+            items=items,
+            channel=channel,
+            ai_frontier_count=sum(1 for item in items if item.ai_frontier),
         ), snapshot_expires_at
 
     @app.get("/api/recommendations", response_model=RecommendationListResponse)
-    async def recommendations() -> RecommendationListResponse:
+    async def recommendations(channel: str = "") -> RecommendationListResponse:
         """Return one coalesced recommendation snapshot.
 
         Restored browser sessions can contain dozens of stale dashboard tabs.
@@ -9702,6 +9901,18 @@ def create_app(
         nonlocal recommendation_snapshot_cache, recommendation_snapshot_cached_at
         nonlocal recommendation_snapshot_expires_at
         nonlocal recommendation_snapshot_dislike_digest
+        nonlocal recommendation_snapshot_channel
+
+        normalized_channel = str(channel or "").strip().lower().replace("-", "_")
+        if normalized_channel not in {"", AI_FRONTIER_CHANNEL}:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"unsupported channel {normalized_channel!r}; "
+                    f"expected {AI_FRONTIER_CHANNEL!r} or an empty string"
+                ),
+            )
+        channel = normalized_channel
 
         now = time.monotonic()
         disliked_topics, dislike_digest = _effective_recommendation_dislikes()
@@ -9710,6 +9921,7 @@ def create_app(
             and now - recommendation_snapshot_cached_at < _RECOMMENDATION_SNAPSHOT_TTL_SECONDS
             and now < recommendation_snapshot_expires_at
             and recommendation_snapshot_dislike_digest == dislike_digest
+            and recommendation_snapshot_channel == channel
         ):
             return recommendation_snapshot_cache.model_copy(deep=True)
 
@@ -9721,18 +9933,73 @@ def create_app(
                 and now - recommendation_snapshot_cached_at < _RECOMMENDATION_SNAPSHOT_TTL_SECONDS
                 and now < recommendation_snapshot_expires_at
                 and recommendation_snapshot_dislike_digest == dislike_digest
+                and recommendation_snapshot_channel == channel
             ):
                 return recommendation_snapshot_cache.model_copy(deep=True)
-            snapshot, snapshot_expires_at = await _load_recommendations(disliked_topics)
+            snapshot, snapshot_expires_at = await _load_recommendations(
+                disliked_topics, channel=channel
+            )
             latest_topics, latest_digest = _effective_recommendation_dislikes()
             if latest_digest != dislike_digest:
-                snapshot, snapshot_expires_at = await _load_recommendations(latest_topics)
+                snapshot, snapshot_expires_at = await _load_recommendations(
+                    latest_topics, channel=channel
+                )
                 dislike_digest = latest_digest
             recommendation_snapshot_cache = snapshot.model_copy(deep=True)
             recommendation_snapshot_cached_at = time.monotonic()
             recommendation_snapshot_expires_at = snapshot_expires_at
             recommendation_snapshot_dislike_digest = dislike_digest
+            recommendation_snapshot_channel = channel
             return snapshot
+
+    @app.post("/api/channels/ai-frontier/refresh")
+    async def refresh_ai_frontier_channel() -> dict[str, Any]:
+        """Pull the curated high-quality article wire into the local pool.
+
+        This is the explicit "加载更多 AI 前沿" action. It is throttled so a
+        double click cannot hammer arXiv/Hugging Face/Hacker News; the caller
+        then re-reads ``GET /api/recommendations?channel=ai_frontier``.
+        """
+        nonlocal frontier_wire_last_at
+
+        if time.monotonic() - frontier_wire_last_at < 600:
+            return {
+                "ok": True,
+                "throttled": True,
+                "fetched": 0,
+                "inserted": 0,
+                "skipped": 0,
+                "failed": 0,
+                "retry_after_seconds": max(
+                    0, int(600 - (time.monotonic() - frontier_wire_last_at))
+                ),
+            }
+        from openbiliclaw.discovery.frontier_wire import (
+            fetch_frontier_wire,
+            ingest_frontier_wire,
+        )
+
+        try:
+            items = await asyncio.wait_for(
+                asyncio.to_thread(fetch_frontier_wire),
+                timeout=25,
+            )
+            result = await asyncio.to_thread(ingest_frontier_wire, ctx.database, items)
+        except Exception as exc:
+            logger.warning("AI frontier wire refresh failed: %s", exc)
+            return {"ok": False, "error": "wire_refresh_failed"}
+        frontier_wire_last_at = time.monotonic()
+        _invalidate_recommendation_snapshot()
+        return {
+            "ok": True,
+            "throttled": False,
+            "retry_after_seconds": 600,
+            "sources": {
+                platform: sum(1 for item in items if item.source_platform == platform)
+                for platform in {item.source_platform for item in items}
+            },
+            **result,
+        }
 
     def _content_history_item(row: dict[str, Any]) -> ContentHistoryItemOut:
         source_platform = _normalize_source_platform(
@@ -10679,15 +10946,18 @@ def create_app(
         source_platform: str,
         items: list[Any],
         limit: int,
+        channel: str = "",
     ) -> bool:
-        """Whether a platform-scoped request under-delivered.
+        """Whether a platform/channel-scoped request under-delivered.
 
-        A short scoped batch is the only signal that one platform ran dry
-        while the pool as a whole looks healthy, so it wakes the existing
-        replenishment entry point. This only requests a background refresh —
-        no discovery runs inside the HTTP request, and nothing here promises
-        the platform is refilled by the time the response returns.
+        A short scoped batch is the only signal that one platform or channel
+        ran dry while the pool as a whole looks healthy, so it wakes the
+        existing replenishment entry point. This only requests a background
+        refresh — no discovery runs inside the HTTP request, and nothing here
+        promises the scope is refilled by the time the response returns.
         """
+        if str(channel or "").strip():
+            return len(items) < max(0, int(limit))
         if not str(source_platform or "").strip():
             return False
         return len(items) < max(0, int(limit))
@@ -10760,7 +11030,10 @@ def create_app(
             )
         )
         source_platform = payload.source_platform if payload is not None else ""
+        channel = payload.channel if payload is not None else ""
         scope_kwargs = _platform_scope_kwargs(source_platform)
+        if channel:
+            scope_kwargs["channel"] = channel
         if callable(result_fn):
             serve_result = await result_fn(
                 profile=profile,
@@ -10812,7 +11085,8 @@ def create_app(
         _schedule_exact_pool_status_snapshot()
         available_after = counts_after.get("available")
         await _trigger_replenishment_if_needed(
-            force=available_after == 0 or _scoped_batch_came_up_short(source_platform, items, 10),
+            force=available_after == 0
+            or _scoped_batch_came_up_short(source_platform, items, 10, channel=channel),
             available_count=available_after,
         )
         pool_status = await _read_recommendation_pool_status()
@@ -10862,6 +11136,8 @@ def create_app(
             return RecommendationAppendResponse(items=[], has_more=False)
         profile_ms = (time.perf_counter() - profile_started) * 1000.0
         scope_kwargs = _platform_scope_kwargs(payload.source_platform)
+        if payload.channel:
+            scope_kwargs["channel"] = payload.channel
         if callable(result_fn):
             serve_result = await result_fn(
                 profile=profile,
@@ -10887,7 +11163,9 @@ def create_app(
         await _trigger_replenishment_if_needed(
             force=(
                 available_after == 0
-                or _scoped_batch_came_up_short(payload.source_platform, items, 10)
+                or _scoped_batch_came_up_short(
+                    payload.source_platform, items, 10, channel=payload.channel
+                )
             ),
             available_count=available_after,
         )
@@ -11248,6 +11526,192 @@ def create_app(
             raise HTTPException(status_code=404, detail="Cognition update not found.")
         save_cognition_updates(updates)
         return CognitionUpdateSeenResponse(ok=True, id=update_id)
+
+    # ------------------------------------------------------------------
+    # 每日日报（daily digest）：存档查看 + 手动触发。
+    # 调度推送在 runtime/digest.py 的 DigestScheduler（refresh loop 家族）。
+    # ------------------------------------------------------------------
+
+    def _digest_issue_detail_out(issue: Mapping[str, Any]) -> DigestIssueDetailOut:
+        """Map a digest_issues row to the detail response model."""
+        payload = issue.get("payload")
+        return DigestIssueDetailOut(
+            id=int(issue["id"]),
+            digest_date=str(issue["digest_date"]),
+            created_at=str(issue["created_at"]),
+            title=str(issue["title"]),
+            item_count=int(issue["item_count"]),
+            delivery=[
+                DigestChannelResultOut(
+                    channel=str(item.get("channel", "")),
+                    ok=bool(item.get("ok", False)),
+                    detail=str(item.get("detail", "")),
+                )
+                for item in (issue.get("delivery") or [])
+                if isinstance(item, Mapping)
+            ],
+            body_text=str(issue.get("body_text", "")),
+            payload=dict(payload) if isinstance(payload, Mapping) else {},
+        )
+
+    @app.get("/api/digest", response_model=DigestIssueListOut)
+    def list_digest_issues(limit: int = 14) -> DigestIssueListOut:
+        """List recent daily digests, newest first (archive view)."""
+        issues = ctx.database.get_digest_issues(limit=limit) or []
+        return DigestIssueListOut(
+            issues=[
+                DigestIssueOut(
+                    id=int(issue["id"]),
+                    digest_date=str(issue["digest_date"]),
+                    created_at=str(issue["created_at"]),
+                    title=str(issue["title"]),
+                    item_count=int(issue["item_count"]),
+                    delivery=[
+                        DigestChannelResultOut(
+                            channel=str(item.get("channel", "")),
+                            ok=bool(item.get("ok", False)),
+                            detail=str(item.get("detail", "")),
+                        )
+                        for item in (issue.get("delivery") or [])
+                        if isinstance(item, Mapping)
+                    ],
+                )
+                for issue in issues
+                if isinstance(issue, Mapping)
+            ]
+        )
+
+    @app.get("/api/digest/latest", response_model=DigestIssueDetailOut)
+    def latest_digest_issue() -> DigestIssueDetailOut:
+        """Return the newest digest issue (web archive default view)."""
+        issue = ctx.database.get_latest_digest_issue()
+        if issue is None:
+            raise HTTPException(status_code=404, detail="还没有日报。")
+        return _digest_issue_detail_out(issue)
+
+    @app.get("/api/digest/{digest_id}", response_model=DigestIssueDetailOut)
+    def get_digest_issue(digest_id: int) -> DigestIssueDetailOut:
+        """Return one digest issue by id (web archive history)."""
+        issue = ctx.database.get_digest_issue(digest_id)
+        if issue is None:
+            raise HTTPException(status_code=404, detail="日报不存在。")
+        return _digest_issue_detail_out(issue)
+
+    @app.post("/api/digest/run-now", response_model=DigestRunNowOut)
+    async def run_digest_now() -> DigestRunNowOut:
+        """Build, archive and push a digest immediately (manual trigger).
+
+        Ignores the daily time gate on purpose — it is the settings-page
+        "立即生成并发送" button and the setup smoke test. Same-day
+        idempotence still applies: a second run replaces today's issue.
+        """
+        from openbiliclaw.config import load_config
+        from openbiliclaw.runtime.digest import run_digest_once
+
+        result = await run_digest_once(
+            ctx.database,
+            ctx.memory_manager,
+            digest_config=load_config().digest,
+        )
+        return DigestRunNowOut(
+            created=bool(result.get("created")),
+            issue=(_digest_issue_detail_out(result["issue"]) if result.get("issue") else None),
+            delivery=[
+                DigestChannelResultOut(
+                    channel=str(item.get("channel", "")),
+                    ok=bool(item.get("ok", False)),
+                    detail=str(item.get("detail", "")),
+                )
+                for item in (result.get("delivery") or [])
+                if isinstance(item, Mapping)
+            ],
+            message=str(result.get("message", "")),
+        )
+
+    @app.get("/api/blocked-authors", response_model=list[BlockedAuthorOut])
+    def get_blocked_authors() -> list[BlockedAuthorOut]:
+        """Return all blocked authors ordered by creation time descending."""
+        if not getattr(ctx, "database", None):
+            return []
+        rows = ctx.database.get_blocked_authors()
+        return [BlockedAuthorOut(**row) for row in rows]
+
+    @app.post("/api/blocked-authors", response_model=BlockedAuthorActionResponse)
+    def add_blocked_author(payload: BlockedAuthorIn) -> BlockedAuthorActionResponse:
+        """Add an author to the blacklist and purge matching candidates from the active pool."""
+        if not getattr(ctx, "database", None):
+            raise HTTPException(status_code=503, detail="Database not ready")
+        try:
+            row_id = ctx.database.add_blocked_author(
+                author_name=payload.author_name,
+                source_platform=payload.source_platform,
+                author_id=payload.author_id,
+                reason=payload.reason,
+            )
+            purged = ctx.database.purge_pool_by_blocked_author(
+                author_name=payload.author_name,
+                source_platform=payload.source_platform,
+            )
+            return BlockedAuthorActionResponse(
+                ok=True,
+                id=row_id,
+                message=f"已成功屏蔽作者 {payload.author_name}",
+                purged_count=purged,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/blocked-authors/{blocked_id}", response_model=BlockedAuthorActionResponse)
+    def delete_blocked_author(blocked_id: int) -> BlockedAuthorActionResponse:
+        """Remove an author from the blacklist."""
+        if not getattr(ctx, "database", None):
+            raise HTTPException(status_code=503, detail="Database not ready")
+        ok = ctx.database.remove_blocked_author(blocked_id=blocked_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="未找到该屏蔽记录")
+        return BlockedAuthorActionResponse(ok=True, id=blocked_id, message="已解除屏蔽")
+
+    @app.get("/api/feed/rss")
+    def get_rss_feed(request: Request, channel: str = "all", limit: int = 30) -> Response:
+        """Serve personal recommendation feed as standard RSS 2.0 XML."""
+        if not getattr(ctx, "database", None):
+            xml_empty = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<rss version="2.0"><channel><title>OpenBiliClaw</title></channel></rss>'
+            )
+            return Response(content=xml_empty, media_type="application/xml; charset=utf-8")
+
+        candidates: list[dict[str, Any]] = []
+        try:
+            candidates = ctx.database.get_pool_candidates(limit=min(100, max(1, limit)))
+        except Exception:
+            candidates = []
+
+        if not candidates:
+            try:
+                candidates = ctx.database.get_cached_content(limit=min(100, max(1, limit)))
+            except Exception:
+                candidates = []
+
+        if channel == "ai_frontier":
+            candidates = [
+                c
+                for c in candidates
+                if str(c.get("source_platform") or c.get("platform")).lower()
+                in ("arxiv", "huggingface", "hackernews")
+                or "ai" in str(c.get("topic_key") or "").lower()
+            ]
+
+        base_url = str(request.base_url).rstrip("/")
+        xml_content = generate_rss_feed(candidates, base_url=base_url, channel_name=channel)
+        return Response(content=xml_content, media_type="application/xml; charset=utf-8")
+
+    @app.get("/api/search")
+    def search_content_items(q: str = "", limit: int = 30) -> list[dict[str, Any]]:
+        """Search content across the entire historical database."""
+        if not getattr(ctx, "database", None) or not q.strip():
+            return []
+        return ctx.database.search_content(q.strip(), limit=limit)
 
     @app.post("/api/delight/trigger")
     async def trigger_delight(payload: dict[str, Any] | None = None) -> Any:
@@ -15362,6 +15826,115 @@ def create_app(
             event_id=item_receipt.event_id,
             duplicate=item_receipt.duplicate,
             processing="queued",
+        )
+
+    @app.post("/api/translate-texts", response_model=CardTextTranslationOut)
+    async def translate_card_texts(payload: CardTextTranslationIn) -> CardTextTranslationOut:
+        """Render non-Chinese card text into Chinese for the surface to paint.
+
+        A card quotes its source verbatim, so every X / Reddit / GitHub card is
+        unreadable to a Chinese reader until its title and excerpt are
+        rendered. This answers from the persistent translation cache and, on a
+        miss, spends a bounded number of LLM calls filling it.
+
+        It is deliberately a best-effort cosmetic path: ids whose text is
+        already Chinese, too short to be worth rendering, or left over after
+        the batch budget come back untouched (the last group under
+        ``pending``), and a backend with no chat-capable LLM returns an empty
+        map rather than an error. The caller keeps painting the original text.
+        """
+        from openbiliclaw.llm.translation import (
+            chunk_translation_entries,
+            needs_translation,
+            translatable_excerpt,
+            translate_batch,
+        )
+        from openbiliclaw.storage.text_translation_cache import (
+            TextTranslationCache,
+            translation_cache_key,
+        )
+
+        def resolve_llm_service() -> Any | None:
+            """Find a service that can run the structured translation task."""
+
+            for owner in (
+                getattr(ctx, "recommendation_engine", None),
+                getattr(ctx, "agent_loop", None),
+                getattr(ctx, "dialogue", None),
+                getattr(ctx, "soul_engine", None),
+            ):
+                service = getattr(owner, "_llm", None) or getattr(owner, "_llm_service", None)
+                if service is not None and callable(
+                    getattr(service, "complete_structured_task", None)
+                ):
+                    return service
+            return None
+
+        # id → (cache key, excerpt) for the strings actually worth rendering.
+        # Two ids carrying the same words (a title that is also the excerpt)
+        # collapse onto one cache key, so one rendering serves both.
+        wanted: dict[str, tuple[str, str]] = {}
+        for item in payload.items:
+            text = str(item.text or "")
+            if not needs_translation(text):
+                continue
+            excerpt = translatable_excerpt(text)
+            wanted[str(item.id)] = (translation_cache_key(excerpt), excerpt)
+        if not wanted:
+            return CardTextTranslationOut()
+
+        cache = TextTranslationCache(ctx.database)
+        cached_by_key = cache.get_many(sorted({key for key, _ in wanted.values()}))
+
+        translations: dict[str, str] = {}
+        misses: dict[str, str] = {}
+        for item_id, (key, excerpt) in wanted.items():
+            hit = cached_by_key.get(key)
+            if hit:
+                translations[item_id] = hit
+            elif key not in misses:
+                misses[key] = excerpt
+
+        pending = sorted(
+            item_id for item_id, (key, _) in wanted.items() if key not in cached_by_key
+        )
+        if not misses:
+            return CardTextTranslationOut(translations=translations, pending=pending, cached=True)
+
+        llm_service = resolve_llm_service()
+        if llm_service is None:
+            return CardTextTranslationOut(translations=translations, pending=pending)
+
+        # Bounded work per request: the first screenful settles over a couple
+        # of calls, and whatever is left waits for the next render.
+        batches = chunk_translation_entries(list(misses.items()))[:CARD_TEXT_MAX_LLM_BATCHES]
+        rendered: dict[str, str] = {}
+        for batch in batches:
+            # The model gets positional ids, never the cache hashes: shorter
+            # prompts, and a 64-character digest in the payload invites a weak
+            # model to echo or invent instead of translating.
+            local_entries = [(str(index), text) for index, (_key, text) in enumerate(batch)]
+            answered = await translate_batch(llm_service, local_entries)
+            for index, (key, _text) in enumerate(batch):
+                answer = answered.get(str(index))
+                if answer:
+                    rendered[key] = answer
+        if rendered:
+            cache.put_many(
+                {key: (misses[key], zh) for key, zh in rendered.items() if key in misses},
+                model=str(getattr(getattr(llm_service, "registry", None), "default_provider", "")),
+            )
+        resolved_keys = set(rendered)
+        for item_id, (key, _) in wanted.items():
+            if item_id not in translations and key in rendered:
+                translations[item_id] = rendered[key]
+        return CardTextTranslationOut(
+            translations=translations,
+            pending=sorted(
+                item_id
+                for item_id, (key, _) in wanted.items()
+                if key not in cached_by_key and key not in resolved_keys
+            ),
         )
 
     @app.post("/api/insights/feedback", response_model=InsightFeedbackResponse)
@@ -20925,6 +21498,15 @@ def create_app(
             saved_sync=SavedSyncConfigOut(
                 auto_sync_enabled=cfg.saved_sync.auto_sync_enabled,
             ),
+            digest=DigestConfigOut(
+                enabled=cfg.digest.enabled,
+                send_time=cfg.digest.send_time,
+                top_n=cfg.digest.top_n,
+                include_delight=cfg.digest.include_delight,
+                include_cognition=cfg.digest.include_cognition,
+                webhook_url=cfg.digest.webhook_url,
+                bark_url=cfg.digest.bark_url,
+            ),
             tailnet=TailnetConfigOut(
                 enabled=cfg.tailnet.enabled,
                 hostname=cfg.tailnet.hostname,
@@ -24042,6 +24624,33 @@ def create_app(
             if "auto_sync_enabled" in saved_sync_data:
                 cfg.saved_sync.auto_sync_enabled = saved_sync_data["auto_sync_enabled"]
 
+        # Apply digest updates. send_time goes through the same normalizer as
+        # load time so an invalid HH:MM is canonicalized/fallback here too —
+        # pitfall rule 7: reject/repair at save time, not at fire time.
+        if "digest" in update:
+            digest_data = update["digest"]
+            from openbiliclaw.config import normalize_digest_send_time
+
+            if "enabled" in digest_data:
+                cfg.digest.enabled = bool(digest_data["enabled"])
+            if "send_time" in digest_data:
+                cfg.digest.send_time = normalize_digest_send_time(digest_data["send_time"])
+            if "top_n" in digest_data:
+                try:
+                    cfg.digest.top_n = max(1, min(50, int(digest_data["top_n"])))
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=422, detail="digest.top_n must be an integer"
+                    ) from None
+            if "include_delight" in digest_data:
+                cfg.digest.include_delight = bool(digest_data["include_delight"])
+            if "include_cognition" in digest_data:
+                cfg.digest.include_cognition = bool(digest_data["include_cognition"])
+            if "webhook_url" in digest_data:
+                cfg.digest.webhook_url = str(digest_data["webhook_url"] or "").strip()
+            if "bark_url" in digest_data:
+                cfg.digest.bark_url = str(digest_data["bark_url"] or "").strip()
+
         # Apply storage updates
         if "storage" in update:
             stdata = update["storage"]
@@ -24389,6 +24998,42 @@ def create_app(
 
     _web_dir = _Path(__file__).resolve().parent.parent / "web"
     _shared_web_dir = _web_dir / "shared"
+    # The one design system both web surfaces load (see web/shared/design).
+    _design_css_files = (
+        "design/tokens.css",
+        "design/base.css",
+        "design/world.css",
+        "design/pages/desktop.css",
+        "design/pages/mobile.css",
+        "design/pages/home.css",
+        "design/pages/library.css",
+        "design/pages/profile.css",
+        "design/pages/chat.css",
+        "design/pages/settings.css",
+    )
+
+    def _design_asset_version() -> str:
+        import hashlib
+
+        digest = hashlib.sha256()
+        for relative in _design_css_files:
+            path = _shared_web_dir / relative
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            digest.update(relative.encode("utf-8"))
+            digest.update(str(stat.st_mtime_ns).encode("ascii"))
+            digest.update(str(stat.st_size).encode("ascii"))
+        return digest.hexdigest()[:12]
+
+    def _versioned_design_html(html: str, version: str) -> str:
+        for relative in _design_css_files:
+            html = html.replace(
+                f'href="/shared/{relative}"',
+                f'href="/shared/{relative}?v={version}"',
+            )
+        return html
+
     if _web_dir.is_dir():
         _favicon_path = _web_dir / "icon-32.png"
 
@@ -24397,6 +25042,30 @@ def create_app(
             if not _favicon_path.is_file():
                 raise HTTPException(status_code=404, detail="favicon not found")
             return FileResponse(_favicon_path, media_type="image/png")
+
+        _mobile_index_path = _web_dir / "index.html"
+
+        def _mobile_index_response() -> Response:
+            if not _mobile_index_path.is_file():
+                raise HTTPException(status_code=404, detail="mobile web index not found")
+            html = _mobile_index_path.read_text(encoding="utf-8")
+            # Without a version the browser keeps serving the previous design
+            # system after an upgrade until its cache expires.
+            return Response(
+                _versioned_design_html(html, _design_asset_version()),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-store"},
+            )
+
+        # Registered before the mount: an un-versioned index here would hand the
+        # browser last release's stylesheets.
+        @app.get("/m", include_in_schema=False)
+        def _mobile_index_no_slash() -> Response:
+            return _mobile_index_response()
+
+        @app.get("/m/", include_in_schema=False)
+        def _mobile_index_slash() -> Response:
+            return _mobile_index_response()
 
         app.mount("/m", _StaticFiles(directory=_web_dir, html=True), name="mobile-web")
 
@@ -24421,13 +25090,12 @@ def create_app(
             # which live outside it — an upgrade that only changed
             # shared renderers would otherwise be served from cache forever.
             for relative, root in (
-                ("assets/css/app.css", _desktop_dir),
-                ("assets/css/classic.css", _desktop_dir),
                 ("assets/js/app.js", _desktop_dir),
                 ("assets/js/chat-agent-core.js", _desktop_dir),
                 ("agent-chat.js", _shared_web_dir),
                 ("dialogue-confirmation.js", _shared_web_dir),
                 ("source-status.js", _shared_web_dir),
+                *((relative, _shared_web_dir) for relative in _design_css_files),
             ):
                 path = root / relative
                 if not path.is_file():
@@ -24442,15 +25110,7 @@ def create_app(
             if not _desktop_index_path.is_file():
                 raise HTTPException(status_code=404, detail="desktop web index not found")
             version = _desktop_asset_version()
-            html = _desktop_index_path.read_text(encoding="utf-8")
-            html = html.replace(
-                'href="/web/assets/css/app.css"',
-                f'href="/web/assets/css/app.css?v={version}"',
-            )
-            html = html.replace(
-                'href="/web/assets/css/classic.css"',
-                f'href="/web/assets/css/classic.css?v={version}"',
-            )
+            html = _versioned_design_html(_desktop_index_path.read_text(encoding="utf-8"), version)
             html = html.replace(
                 'src="/web/assets/js/app.js"',
                 f'src="/web/assets/js/app.js?v={version}"',

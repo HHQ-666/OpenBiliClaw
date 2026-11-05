@@ -1,0 +1,342 @@
+/* ══════════════════════════════════════════════════════════════════
+   OpenBiliClaw · 私人卡片目录馆 / Personal Card Catalog
+   tokens.css — the single token source for every surface
+   (desktop /web, mobile /m, extension side panel)
+
+   World: a private card catalog on a reading desk. Card stock,
+   printed hairlines, brass drawer labels, one stamp-red accent,
+   typed (mono) metadata. Nothing glows; everything is printed.
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: light;
+
+  /* —— 纸张 / paper: 素白台 is the default. The catalog's furniture (cards,
+     printed rules, drawer labels, one stamp) is fixed; the material it is cut
+     from is the palette. 暖纸 and 青苔 re-cut the same world in other stock —
+     see the [data-palette] blocks below. —— */
+
+  /* —— the desk: page ground and wells —— */
+  --desk: #eef0f2;
+  --desk-deep: #e2e6e9;
+  --desk-line: rgba(23, 26, 31, 0.06);
+
+  /* —— card stock —— */
+  --card: #ffffff;
+  --card-hi: #ffffff;
+  --card-sunk: #f4f6f7;
+
+  /* the accent chain legacy renderers still paint with */
+  --accent: var(--brand);
+  --accent-subtle: var(--stamp-soft);
+  --star-active: var(--brass);
+  --overlay: color-mix(in srgb, var(--ink) 78%, transparent);
+  /* 平台品牌墨：来源标记靠它被一眼认出，属于数据而非世界配色 */
+  --src-bilibili: #fb7299;
+  --src-xiaohongshu: #ff2442;
+  --src-zhihu: #0084ff;
+  --src-reddit: #ff4500;
+  --src-bangumi: #f09199;
+  --src-douyin: #fe2c55;
+  --src-youtube: #ff0000;
+  --src-github: #24292f;
+  --src-weibo: #e6162d;
+  --src-twitter: #1d9bf0;
+  --muted: var(--ink-3);
+  --accent-strong: var(--brand-strong);
+
+  /* —— ink (never pure black) —— */
+  --ink: #171a1f;
+  --ink-2: #565c65;
+  --ink-3: #878e97;
+  --ink-inv: #ffffff;
+
+  /* —— printed rules —— */
+  --rule: #d8dce1;
+  --rule-soft: #e7eaed;
+  --rule-strong: #aeb5bd;
+
+  /* —— the one accent: the stamp. Each palette carries its own default hue;
+     an explicit 印章色相 choice (--hue-primary set inline by the settings page)
+     wins over it. —— */
+  --hue-primary: 212;
+  --hue: var(--hue-primary);
+  --stamp: hsl(var(--hue) 56% 41%);
+  --stamp-deep: hsl(var(--hue) 58% 32%);
+  --stamp-soft: hsl(var(--hue) 56% 41% / 0.12);
+  --stamp-ink: hsl(var(--hue) 52% 36% / 0.9);
+
+  /* —— hardware: drawer labels, rails (brass in 暖纸, steel in 素白) —— */
+  --brass: #5c636e;
+  --brass-hi: #7b838f;
+  --brass-soft: rgba(92, 99, 110, 0.1);
+  --brass-edge: rgba(92, 99, 110, 0.4);
+
+  /* —— status inks (stamped, never neon) —— */
+  --ok: #2f6f55;
+  --ok-soft: rgba(47, 111, 85, 0.12);
+  --warn: #8a6a17;
+  --warn-soft: rgba(138, 106, 23, 0.13);
+  --danger: var(--stamp-deep);
+  --danger-soft: var(--stamp-soft);
+
+  /* —— type —— */
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+  /* 标题用衬线：目录卡是印出来的，书脊与标签上的字是刻的。界面里只有标题、
+     区块抬头和惊喜卡的文案用它，正文与元数据保持无衬线/等宽，避免整页发软。 */
+  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", Georgia,
+    "Times New Roman", serif;
+
+  --fs-display: 28px;
+  --fs-h2: 21px;
+  --fs-h3: 16.5px;
+  --fs-title: 15.5px;
+  --fs-body: 14px;
+  --fs-note: 13px;
+  --fs-meta: 11.5px;
+  --fs-label: 10.5px;
+
+  --lh-tight: 1.3;
+  --lh-body: 1.72;
+
+  --track-label: 0.14em;
+  --track-meta: 0.05em;
+  --track-title: -0.005em;
+
+  /* —— space scale —— */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 44px;
+
+  /* —— geometry: printed matter is square —— */
+  --r-card: 2px;
+  --r-ctl: 2px;
+  --r-pill: 999px;
+
+  /* —— elevation: paper lift only, never glow —— */
+  --lift: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
+  --lift-hi: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
+  --lift-pressed: inset 0 1px 2px rgba(31, 38, 46, 0.16);
+  /* 卡片边缘：纸切口的那道高光。比阴影便宜，但一眼就把卡片从台面上"抬"起来。 */
+  --card-edge: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  /* 台面的印刷网点：9px 点阵，密度低到只在侧光下显形 */
+  --desk-grain: radial-gradient(circle at 1px 1px, rgba(31, 38, 46, 0.055) 1px, transparent 0);
+  --desk-grain-size: 9px 9px;
+  /* 印章色的浅洗：区块抬头、选中导航、惊喜卡的底纹用它，永远是很薄的一层 */
+  --stamp-wash: linear-gradient(180deg, var(--stamp-soft), transparent 78%);
+  --rule-fade: linear-gradient(90deg, var(--rule-strong), var(--rule) 40%, transparent);
+
+  /* —— motion: impressions, not transitions —— */
+  --imp: 170ms cubic-bezier(0.2, 0.85, 0.3, 1);
+  --imp-slow: 300ms cubic-bezier(0.2, 0.85, 0.3, 1);
+  --imp-stamp: 260ms cubic-bezier(0.34, 1.4, 0.44, 1);
+
+  /* —— layout —— */
+  --rail-w: 268px;
+  /* 与 desktop.css 的内容区上限同值：加载更多哨兵要跟卡盘同宽 */
+  --recommendation-grid-max: 1680px;
+  --sidenote-w: 300px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  --focus-ring: 0 0 0 2px var(--card), 0 0 0 4px var(--stamp);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   纸张 / paper palettes — the same catalog on other stock
+
+   The world does not change with the paper: cards still sit on a desk,
+   rules are still hairlines, the drawer labels are still metal, and there
+   is still exactly one stamp. What changes is the material those are cut
+   from, plus the stamp's default hue. 素白 (the :root default above) is
+   the sober one: white card stock on a cool desk, steel instead of brass,
+   an ink-blue stamp.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* —— 暖纸 the original reading-desk paper: greige desk, cream stock, brass,
+   a seal-red stamp. —— */
+:root[data-palette="paper"] {
+  --desk: #d9d4c8;
+  --desk-deep: #cbc5b6;
+  --desk-line: rgba(31, 38, 46, 0.07);
+
+  --card: #f7f5ef;
+  --card-hi: #fdfcf9;
+  --card-sunk: #efebe1;
+
+  --ink: #1f262e;
+  --ink-2: #58606a;
+  --ink-3: #8b9199;
+  --ink-inv: #f8f6f0;
+
+  --rule: #c6bfb0;
+  --rule-soft: #dcd7ca;
+  --rule-strong: #a49c8c;
+
+  --hue-primary: 8;
+
+  --brass: #8f7339;
+  --brass-hi: #b09155;
+  --brass-soft: rgba(143, 115, 57, 0.13);
+  --brass-edge: rgba(143, 115, 57, 0.45);
+
+  --lift: 0 1px 0 rgba(31, 38, 46, 0.05), 0 6px 14px -10px rgba(31, 38, 46, 0.4);
+  --lift-hi: 0 1px 0 rgba(31, 38, 46, 0.06), 0 12px 26px -16px rgba(31, 38, 46, 0.5);
+  --card-edge: inset 0 1px 0 rgba(255, 253, 246, 0.75);
+}
+
+/* —— 青苔 green-grey stock, weathered brass, a moss-green stamp. —— */
+:root[data-palette="moss"] {
+  --desk: #e4e8e2;
+  --desk-deep: #d5dbd3;
+  --desk-line: rgba(27, 35, 32, 0.06);
+
+  --card: #fbfcfa;
+  --card-hi: #ffffff;
+  --card-sunk: #f0f3ee;
+
+  --ink: #1b2320;
+  --ink-2: #4f5b55;
+  --ink-3: #7f8a84;
+  --ink-inv: #fbfcfa;
+
+  --rule: #ccd4cb;
+  --rule-soft: #dfe5dd;
+  --rule-strong: #a8b3a6;
+
+  --hue-primary: 152;
+
+  --brass: #6f6a3d;
+  --brass-hi: #8d8757;
+  --brass-soft: rgba(111, 106, 61, 0.12);
+  --brass-edge: rgba(111, 106, 61, 0.42);
+}
+
+/* —— night reading room —— */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --desk: #15191d;
+    --desk-deep: #101418;
+    --desk-line: rgba(240, 236, 224, 0.06);
+
+    --card: #1d2329;
+    --card-hi: #232a31;
+    --card-sunk: #191f24;
+
+    --ink: #e8e4d8;
+    --ink-2: #a7aeb6;
+    --ink-3: #767d85;
+    --ink-inv: #15191d;
+
+    --rule: #363d45;
+    --rule-soft: #2a3037;
+    --rule-strong: #4d5560;
+
+    --stamp: hsl(var(--hue) 52% 52%);
+    --stamp-deep: hsl(var(--hue) 54% 62%);
+    --stamp-soft: hsl(var(--hue) 52% 52% / 0.16);
+    --stamp-ink: hsl(var(--hue) 52% 60% / 0.92);
+
+    --brass: #a98f56;
+    --brass-hi: #c4a86c;
+    --brass-soft: rgba(169, 143, 86, 0.14);
+    --brass-edge: rgba(169, 143, 86, 0.4);
+
+    --ok: #5da184;
+    --ok-soft: rgba(93, 161, 132, 0.14);
+    --warn: #c1a157;
+    --warn-soft: rgba(193, 161, 87, 0.14);
+
+--lift: 0 1px 0 rgba(0, 0, 0, 0.35), 0 8px 18px -12px rgba(0, 0, 0, 0.7);
+  --lift-hi: 0 1px 0 rgba(0, 0, 0, 0.4), 0 14px 30px -18px rgba(0, 0, 0, 0.8);
+  --focus-ring: 0 0 0 2px var(--card), 0 0 0 4px var(--stamp);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Legacy token bridge — renderers still paint inline styles with the
+   retired palette names. Mapping them onto the catalog world keeps
+   every JS-built block in print without touching the renderers.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg-base: var(--desk);
+  --bg-sky: var(--card-sunk);
+  --surface: var(--card);
+  --surface-strong: var(--card-hi);
+  --surface-soft: var(--card-sunk);
+  --surface-warm: var(--brass-soft);
+  --line: var(--rule);
+  --line-strong: var(--rule-strong);
+  --text-main: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--ink-3);
+  --brand: var(--stamp);
+  --brand-strong: var(--stamp-deep);
+  --brand-soft: var(--stamp-soft);
+  --accent: var(--brand);
+  --accent-strong: var(--stamp-deep);
+  --accent-on: var(--ink-inv);
+  --sky: var(--brass);
+  --sky-soft: var(--brass-soft);
+  --lime-soft: var(--ok-soft);
+  --warning: var(--warn);
+  --warning-soft: var(--warn-soft);
+  --success: var(--ok);
+  --danger: var(--stamp-deep);
+  --danger-soft: var(--stamp-soft);
+  --fg: var(--ink);
+  --fg-2: var(--ink-2);
+  --fg-3: var(--ink-3);
+  --bg: var(--card);
+  --shadow-lg: var(--lift-hi);
+  --shadow-sm: var(--lift);
+}
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --desk: #15191d;
+  --desk-deep: #101418;
+  --desk-line: rgba(240, 236, 224, 0.06);
+
+  --card: #1d2329;
+  --card-hi: #232a31;
+  --card-sunk: #191f24;
+
+  --ink: #e8e4d8;
+  --ink-2: #a7aeb6;
+  --ink-3: #767d85;
+  --ink-inv: #15191d;
+
+  --rule: #363d45;
+  --rule-soft: #2a3037;
+  --rule-strong: #4d5560;
+
+  --stamp: hsl(var(--hue) 52% 52%);
+  --stamp-deep: hsl(var(--hue) 54% 62%);
+  --stamp-soft: hsl(var(--hue) 52% 52% / 0.16);
+  --stamp-ink: hsl(var(--hue) 52% 60% / 0.92);
+
+  --brass: #a98f56;
+  --brass-hi: #c4a86c;
+  --brass-soft: rgba(169, 143, 86, 0.14);
+  --brass-edge: rgba(169, 143, 86, 0.4);
+
+  --ok: #5da184;
+  --ok-soft: rgba(93, 161, 132, 0.14);
+  --warn: #c1a157;
+  --warn-soft: rgba(193, 161, 87, 0.14);
+
+  --lift: 0 1px 0 rgba(0, 0, 0, 0.35), 0 8px 18px -12px rgba(0, 0, 0, 0.7);
+  --lift-hi: 0 1px 0 rgba(0, 0, 0, 0.4), 0 14px 30px -18px rgba(0, 0, 0, 0.8);
+}

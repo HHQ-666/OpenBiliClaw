@@ -7,13 +7,15 @@
 import re
 from pathlib import Path
 
+from tests._design_css import read_desktop_css
+
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
+APP_CSS = read_desktop_css()
 
 
-def _read(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def _read(source) -> str:
+    return source if isinstance(source, str) else source.read_text(encoding="utf-8")
 
 
 def _function_body(source: str, name: str) -> str:
@@ -104,8 +106,11 @@ def test_auto_load_gate_uses_active_platform_inventory() -> None:
     # 平台库存未知（首次快照未成功 / 旧后端没有该接口）回退到全局库存，保持既有行为。
     assert "state.runtimeStatus?.pool_available_count > 0" in body
 
-    # 手动「加载更多」在库存为 0 时仍然可点：它负责唤醒后端已有的补货链路。
-    assert 'safeBind("#loadMoreBtn", "click", appendMore);' in app_js
+    # 手动「加载更多」在库存为 0 时仍然可点：AI 前沿走策展文章源，
+    # 其它 Tab 继续走原来的 append / 补货链路。
+    assert 'safeBind("#loadMoreBtn", "click", () => {' in app_js
+    assert "refreshAiFrontierWire();" in app_js
+    assert "void appendMore();" in app_js
     append_body = _function_body(app_js, "appendMore")
     assert "autoLoadBlockReason" not in append_body
     assert "pool_available_count" not in append_body
@@ -118,9 +123,13 @@ def test_scoped_reshuffle_and_append_send_canonical_platform() -> None:
     append = _function_body(app_js, "appendMore")
 
     for body in (reshuffle, append):
-        assert "const requestPlatform = activePlatformSlug();" in body
+        # Capture both scopes before the request: the AI-frontier channel is
+        # not a platform, so a channel request must not send source_platform.
+        assert 'const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";' in body
+        assert 'const requestPlatform = requestChannel ? "" : activePlatformSlug();' in body
         # 「全部」不带 source_platform：旧后端 / 旧契约的请求形状必须保持不变。
         assert "if (requestPlatform) requestBody.source_platform = requestPlatform;" in body
+        assert "if (requestChannel) requestBody.channel = requestChannel;" in body
         assert "excluded_bvids" in body
 
     slug_fn = _function_body(app_js, "platformSlugForFilterLabel")
@@ -160,7 +169,9 @@ def test_scoped_response_handling_uses_request_start_scope() -> None:
     append = _function_body(app_js, "appendMore")
 
     for body in (reshuffle, append):
-        capture = body.index("const requestPlatform = activePlatformSlug();")
+        capture = body.index(
+            'const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";'
+        )
         request = body.index("await requestJson")
         assert capture < request
         after_response = body[request:]
@@ -211,3 +222,19 @@ def test_reshuffle_invalidates_inflight_append_responses() -> None:
     assert "const listVersionAtRequest = recommendationListVersion;" in append
     assert "if (listVersionAtRequest !== recommendationListVersion) return;" in append
     assert "recommendationListVersion += 1;" in snapshot
+
+
+def test_content_type_filter_is_rendered_only_for_mixed_lists() -> None:
+    app_js = _read(APP_JS)
+    index_html = _read(INDEX_HTML)
+
+    assert 'id="typeFilterRow"' in index_html
+    assert 'aria-label="内容类型"' in index_html
+    assert "const TYPE_FILTER_ORDER" in app_js
+    assert "function contentTypeGroup(" in app_js
+    assert "function recommendationBaseItems(" in app_js
+    assert "function renderTypeFilters(" in app_js
+    assert "renderFilters, renderTypeFilters, renderVideos" in app_js
+    assert "if (groups.length <= 1)" in app_js
+    assert 'state.typeFilter = "全部"' in app_js
+    assert 'if (state.typeFilter === "全部") return items;' in app_js

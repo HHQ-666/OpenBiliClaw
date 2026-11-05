@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._design_css import read_mobile_css
+
 INDEX_HTML = Path("src/openbiliclaw/web/index.html")
-APP_CSS = Path("src/openbiliclaw/web/css/app.css")
+APP_CSS = read_mobile_css()
 API_JS = Path("src/openbiliclaw/web/js/api.js")
 CHAT_JS = Path("src/openbiliclaw/web/js/views/chat.js")
 PROFILE_JS = Path("src/openbiliclaw/web/js/views/profile.js")
@@ -48,7 +50,7 @@ def test_mobile_dialogue_keeps_reader_state_across_live_renders() -> None:
 
 
 def test_mobile_long_lists_have_bounded_independent_scrollers() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert ".chat-pending {" in css
     assert "max-height: min(30dvh, 240px);" in css

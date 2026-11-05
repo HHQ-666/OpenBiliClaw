@@ -1,46 +1,162 @@
+"""The catalog's theme contract.
+
+One token system owns both appearances: ``tokens.css`` prints the light
+room and the night reading room, the only colour control the user keeps is
+the stamp hue, and every surface draws from tokens rather than literals.
+"""
+
 import re
 from pathlib import Path
 
-APP_CSS = Path("src/openbiliclaw/web/desktop/assets/css/app.css")
-CLASSIC_CSS = Path("src/openbiliclaw/web/desktop/assets/css/classic.css")
+from tests._design_css import DESIGN_DIR, read_desktop_css
+
+APP_CSS = read_desktop_css()
+TOKENS_CSS = (DESIGN_DIR / "tokens.css").read_text(encoding="utf-8")
 APP_JS = Path("src/openbiliclaw/web/desktop/assets/js/app.js")
 INDEX_HTML = Path("src/openbiliclaw/web/desktop/index.html")
 
-
-def test_dark_mode_css_declares_explicit_and_auto_token_blocks() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
-
-    assert ':root[data-theme="dark"] {' in css
-    assert "@media (prefers-color-scheme: dark)" in css
-    assert ':root:not([data-theme="light"])' in css
-    assert "keep both blocks in sync -- no build step to dedupe" in css
-    assert "color-scheme: dark;" in css
-
-
-def test_dark_mode_css_tokenizes_theme_color_stragglers() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
-
-    assert "--probe-challenge:" in css
-    assert "--probe-avoidance:" in css
-    assert "--star-active:" in css
-    assert "--overlay-faint:" in css
-    assert "color: #6d28d9;" not in css
-    assert "color: #1d4ed8;" not in css
-    assert '.favorite-btn[aria-pressed="true"] { color: var(--star-active); }' in css
+# What a paper owns: ground, stock, ink, rules, hardware, its stamp default.
+MATERIAL_TOKENS = (
+    "--desk:",
+    "--desk-deep:",
+    "--desk-line:",
+    "--card:",
+    "--card-hi:",
+    "--card-sunk:",
+    "--ink:",
+    "--ink-2:",
+    "--ink-3:",
+    "--rule:",
+    "--rule-soft:",
+    "--rule-strong:",
+    "--brass:",
+    "--hue-primary:",
+)
 
 
-def test_index_bootstraps_theme_before_stylesheet_without_flash() -> None:
+def _root_block() -> str:
+    match = re.search(r":root \{(?P<body>.*?)\n\}", TOKENS_CSS, flags=re.S)
+    assert match is not None, ":root block not found"
+    return match.group("body")
+
+
+def _palette_block(name: str) -> str:
+    match = re.search(
+        rf':root\[data-palette="{name}"\]\s*\{{(?P<body>.*?)\n\}}',
+        TOKENS_CSS,
+        flags=re.S,
+    )
+    assert match is not None, f"paper block not found: {name}"
+    return match.group("body")
+
+
+def _hue_of(block: str) -> int:
+    match = re.search(r"--hue-primary:\s*(\d+);", block)
+    assert match is not None, "--hue-primary missing"
+    return int(match.group(1))
+
+
+def test_tokens_declare_explicit_and_auto_dark_blocks() -> None:
+    assert ':root[data-theme="dark"] {' in TOKENS_CSS
+    assert "@media (prefers-color-scheme: dark)" in TOKENS_CSS
+    assert ':root:not([data-theme="light"])' in TOKENS_CSS
+    assert "color-scheme: dark;" in TOKENS_CSS
+    assert "color-scheme: light;" in TOKENS_CSS
+
+
+def test_only_tokens_carry_literal_colors() -> None:
+    """Every surface prints from tokens; hex literals live in tokens.css alone."""
+    offenders: list[str] = []
+    for path in sorted(DESIGN_DIR.rglob("*.css")):
+        if path.name == "tokens.css":
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            code = line.split("/*", 1)[0]
+            if re.search(r"#[0-9a-fA-F]{3,8}\b", code):
+                offenders.append(f"{path.parent.name}/{path.name}: {line.strip()}")
+    assert not offenders, offenders
+
+
+def test_the_stamp_hue_is_the_only_accent_rotation() -> None:
+    """The only per-user colour knob is the stamp's hue.
+
+    Paper (``data-palette``) picks the *material* — desk, stock, metal; the
+    stamp's colour still comes from one hue number, and every palette carries a
+    default for it so a fresh install is never left without an accent.
+    """
+
+    assert "--hue: var(--hue-primary);" in TOKENS_CSS
+    assert "--stamp: hsl(var(--hue)" in TOKENS_CSS
+    assert "--stamp-soft: hsl(var(--hue)" in TOKENS_CSS
+    for name in ("paper", "moss"):
+        assert re.search(r"--hue-primary:\s*\d+;", _palette_block(name)) is not None
+    assert re.search(r"--hue-primary:\s*\d+;", _root_block()) is not None
+
+
+def test_every_paper_repaints_the_whole_material() -> None:
+    """A paper may not be half-applied: each owns every material token.
+
+    素白 has no ``[data-palette]`` block because it IS the ``:root`` default.
+    """
+
+    for name in ("paper", "moss"):
+        block = _palette_block(name)
+        for token in MATERIAL_TOKENS:
+            assert token in block, (name, token)
+    root = _root_block()
+    for token in MATERIAL_TOKENS:
+        assert token in root, token
+
+
+def test_paper_default_hues_match_the_frontend_map() -> None:
+    """tokens.css and app.js must agree on what each paper stamps with."""
+
+    js = APP_JS.read_text(encoding="utf-8")
+    match = re.search(r"const PALETTE_DEFAULT_HUE = \{([^}]*)\};", js)
+    assert match is not None, "PALETTE_DEFAULT_HUE map missing"
+    frontend = {key: int(value) for key, value in re.findall(r"(\w+):\s*(\d+)", match.group(1))}
+    stylesheet = {
+        "plain": _hue_of(_root_block()),
+        "paper": _hue_of(_palette_block("paper")),
+        "moss": _hue_of(_palette_block("moss")),
+    }
+    assert frontend == stylesheet
+    assert set(frontend) == {"plain", "paper", "moss"}
+
+
+def test_index_bootstraps_theme_before_design_layer_without_flash() -> None:
     html = INDEX_HTML.read_text(encoding="utf-8")
 
     assert '<meta name="color-scheme" content="light dark">' in html
     assert "obc.theme" in html
     assert "document.documentElement.dataset.theme" in html
-    assert html.index("obc.theme") < html.index(
-        '<link rel="stylesheet" href="/web/assets/css/app.css">'
-    )
+    first_sheet = html.index('href="/shared/design/tokens.css"')
+    assert html.index("obc.theme") < first_sheet
+    assert "<script src=" not in html[:first_sheet]
+
+
+def test_paper_choice_is_exposed_in_settings_and_applied_before_paint() -> None:
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    js = APP_JS.read_text(encoding="utf-8")
+
+    assert 'id="themePaletteSetting" role="radiogroup"' in html
+    assert html.count("data-palette-choice=") == 3
+    for name in ("素白", "暖纸", "青苔"):
+        assert name in html
+    # the paper is read in the blocking boot script, not after the sheets load
+    first_sheet = html.index('href="/shared/design/tokens.css"')
+    assert "obc.palette" in html
+    assert html.index("obc.palette") < first_sheet
+
+    assert 'const PALETTE_STORAGE_KEY = "obc.palette";' in js
+    assert 'const PALETTE_OPTIONS = ["plain", "paper", "moss"];' in js
+    assert "document.documentElement.dataset.palette = state.palette;" in js
+    # An unset hue must not pin a colour: the paper's own default has to win.
+    assert 'root.style.removeProperty("--hue-primary")' in js
+    assert 'safeBind("#themeHueReset", "click"' in js
     assert (
-        "<script src="
-        not in html[: html.index('<link rel="stylesheet" href="/web/assets/css/app.css">')]
+        'storageSet(THEME_HUE_STORAGE_KEY, state.themeHueExplicit ? String(state.themeHue) : "");'
+        in js
     )
 
 
@@ -70,85 +186,46 @@ def test_theme_controls_exist_in_topbar_and_frontend_settings() -> None:
     assert "renderThemeControls();" in js
 
 
-def test_accent_bootstrap_defaults_classic_and_migrates_existing_hue_before_css() -> None:
+def test_retired_accent_engine_and_notice_are_gone() -> None:
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert "classic.css" not in html
+    assert "data-accent-choice" not in html
+    assert 'id="themeAccentSetting"' not in html
+    assert 'id="themeNotice"' not in html
+    assert html.index("obc.theme") < html.index('href="/shared/design/tokens.css"')
+
+
+def test_hue_control_stays_keyboard_accessible() -> None:
     html = INDEX_HTML.read_text(encoding="utf-8")
     js = APP_JS.read_text(encoding="utf-8")
-    bootstrap = html[: html.index('<link rel="stylesheet" href="/web/assets/css/app.css">')]
-
-    assert 'let accent = "classic";' in bootstrap
-    assert 'storage?.getItem("obc.accentStyle")' in bootstrap
-    assert 'const hasCustomHue = hue !== null && hue !== "";' in bootstrap
-    assert 'hasCustomHue ? "modern" : "classic"' in bootstrap
-    assert 'storage?.setItem("obc.accentStyle", accent)' in bootstrap
-    assert 'document.documentElement.dataset.accent = "classic"' in bootstrap
-    assert html.index("obc.accentStyle") < html.index(
-        '<link rel="stylesheet" href="/web/assets/css/classic.css">'
-    )
-
-    assert 'const ACCENT_OPTIONS = ["modern", "classic"];' in js
-    assert 'const _hasCustomHue = storageGet(THEME_HUE_STORAGE_KEY) !== "";' in js
-    assert "ACCENT_OPTIONS.includes(_storedAccent)" in js
-    assert "storageSet(ACCENT_STORAGE_KEY, state.accentStyle);" in js
-
-
-def test_classic_theme_notice_is_transient_and_separate_from_action_toasts() -> None:
-    html = INDEX_HTML.read_text(encoding="utf-8")
-    js = APP_JS.read_text(encoding="utf-8")
-    notice_start = html.index('id="themeNotice"')
-    notice_end = html.index("</aside>", notice_start)
-    toast_start = html.index('id="toastContainer"')
-
-    assert notice_end < toast_start
-    assert 'id="themeNoticeDismiss"' in html
-    assert 'id="themeNoticeSettings"' in html
-    assert 'const THEME_NOTICE_DISMISSED_KEY = "obc.noticeDismissed";' in js
-    assert "storageGet(THEME_NOTICE_DISMISSED_KEY)" in js
-    assert 'storageSet(THEME_NOTICE_DISMISSED_KEY, "1")' in js
-    assert "const THEME_NOTICE_DURATION_MS = 8000;" in js
-    assert 'notice.addEventListener("focusin", clearTimer)' in js
-    assert "showNoticeToast" not in js
-    assert 'localStorage.getItem("obc.noticeDismissed")' not in js
-
-
-def test_theme_choices_and_native_selects_keep_keyboard_accessibility() -> None:
-    html = INDEX_HTML.read_text(encoding="utf-8")
-    js = APP_JS.read_text(encoding="utf-8")
-    css = APP_CSS.read_text(encoding="utf-8")
-    classic_css = CLASSIC_CSS.read_text(encoding="utf-8")
+    css = APP_CSS
 
     assert 'id="themeModeSetting" role="radiogroup"' in html
-    assert 'id="themeAccentSetting" role="radiogroup"' in html
     assert 'id="themeHueSetting" role="radiogroup"' in html
-    assert html.count('role="radio"') >= 17
+    assert html.count('role="radio"') >= 15
     assert "bindRovingChoiceGroup" in js
     for key in ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"):
         assert key in js
     assert "enhanceSelects" not in js
     assert ".custom-select" not in css
-    assert ".settings-field select:focus-visible" in css
-    assert "border-color: var(--contrast-strong);" in classic_css
-    assert "box-shadow: var(--focus-ring);" in classic_css
+    assert "select:focus-visible" in css
+    assert "outline: none;" in css and "box-shadow: var(--focus-ring);" in css
 
 
-def test_coarse_pointer_save_controls_keep_minimum_touch_targets() -> None:
-    css = APP_CSS.read_text(encoding="utf-8")
-
-    assert "@media (max-width: 820px), (pointer: coarse)" in css
-    assert ".feedback-icon-btn.watch-later-btn" in css
-    assert ".feedback-icon-btn.favorite-btn" in css
-    assert "flex-basis: 44px; width: 44px; min-width: 44px;" in css
+def test_coarse_pointer_controls_keep_minimum_touch_targets() -> None:
+    assert "@media (pointer: coarse), (max-width: 820px)" in APP_CSS
+    assert ".feedback-icon-btn" in APP_CSS
+    assert "min-height: 44px;" in APP_CSS
 
 
-def test_classic_primary_text_meets_wcag_aa_contrast() -> None:
-    css = CLASSIC_CSS.read_text(encoding="utf-8")
-    light_block = css.split(':root[data-accent="classic"] {', 1)[1].split("}", 1)[0]
-    dark_block = css.split(':root[data-accent="classic"][data-theme="dark"] {', 1)[1].split("}", 1)[
-        0
-    ]
+def test_ink_on_card_meets_wcag_aaa_contrast_in_both_themes() -> None:
+    def block(selector: str) -> str:
+        return TOKENS_CSS.split(selector, 1)[1].split("}", 1)[0]
 
-    def hex_token(block: str, name: str) -> str:
-        match = re.search(rf"--{name}:\s*(#[0-9a-fA-F]{{6}});", block)
-        assert match is not None
+    def hex_token(source: str, name: str) -> str:
+        match = re.search(rf"--{name}:\s*(#[0-9a-fA-F]{{6}});", source)
+        assert match is not None, name
         return match.group(1)
 
     def luminance(color: str) -> float:
@@ -159,11 +236,10 @@ def test_classic_primary_text_meets_wcag_aa_contrast() -> None:
         ]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
 
-    for block in (light_block, dark_block):
-        accent_luminance = luminance(hex_token(block, "accent"))
-        for foreground in ("accent-on", "badge-on"):
-            foreground_luminance = luminance(hex_token(block, foreground))
-            ratio = (max(accent_luminance, foreground_luminance) + 0.05) / (
-                min(accent_luminance, foreground_luminance) + 0.05
-            )
-            assert ratio >= 4.5
+    light = block(":root {")
+    dark = block(':root[data-theme="dark"] {')
+    for source in (light, dark):
+        ink = luminance(hex_token(source, "ink"))
+        card = luminance(hex_token(source, "card"))
+        ratio = (max(ink, card) + 0.05) / (min(ink, card) + 0.05)
+        assert ratio >= 7, ratio

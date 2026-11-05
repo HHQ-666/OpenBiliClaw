@@ -1,5 +1,11 @@
 # Mobile Web — Spec & Plan
 
+> 现状（2026-10）：移动 Web 与桌面 Web 共用一套设计系统
+> `src/openbiliclaw/web/shared/design/`（私人卡片目录馆），入口
+> `index.html` 直接链接 `/shared/design/*.css`，`/m` 的索引与桌面一样带
+> 资源版本指纹。本文其余部分保留立项时的设计约定，令牌来源已由「复用插件
+> CSS」改为共享设计层，见 [设计系统记录](../../DESIGN.md)。
+
 ## 目标
 
 在同局域网内通过手机浏览器访问 OpenBiliClaw，查看推荐、画像、对话，体验对齐浏览器插件。

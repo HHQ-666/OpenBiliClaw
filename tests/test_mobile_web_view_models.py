@@ -9,6 +9,8 @@ from textwrap import dedent
 
 import pytest
 
+from tests._design_css import read_mobile_css
+
 _NODE = shutil.which("node")
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -552,7 +554,7 @@ class TestMobileWebViewModels:
             assert.equal(getSourceLabel(post.source_platform), "微博");
             assert.equal(buildContentUrl(post), "https://m.weibo.cn/detail/5023456789012345");
             assert.equal(getRecommendationCardKind(post).kind, "text");
-            assert.match(recommendationStats(post), /🔁 321/);
+            assert.match(recommendationStats(post), /分享 321/);
             assert.equal(
               normalizeSourcePlatform({ content_url: "https://weibo.com/u/123" }),
               "weibo",
@@ -574,7 +576,7 @@ class TestMobileWebViewModels:
     def test_mobile_cover_templates_use_wrapper_fallbacks(self) -> None:
         recommend_js = Path("src/openbiliclaw/web/js/views/recommend.js").read_text()
         chat_js = Path("src/openbiliclaw/web/js/views/chat.js").read_text()
-        app_css = Path("src/openbiliclaw/web/css/app.css").read_text()
+        app_css = read_mobile_css()
 
         assert 'referrerpolicy="${cover.referrerPolicy}"' not in recommend_js
         assert 'referrerpolicy="${cover.referrerPolicy}"' not in chat_js

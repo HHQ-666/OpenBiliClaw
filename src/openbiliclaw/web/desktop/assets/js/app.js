@@ -53,8 +53,12 @@
       migrationStatus: "/migration/status",
       watchLater: "/watch-later",
       favorites: "/favorites",
+      digest: "/digest",
+      digestLatest: "/digest/latest",
+      digestRunNow: "/digest/run-now",
       profileEdit: "/profile/edit",
-      profileEditState: "/profile/edit-state"
+      profileEditState: "/profile/edit-state",
+      translateTexts: "/translate-texts"
     };
     const SHARED_CHAT_SESSION = "popup";
     const CHAT_HISTORY_REFRESH_INTERVAL_MS = 2500;
@@ -101,9 +105,21 @@
     const CHAT_SCROLL_BOTTOM_TOLERANCE_PX = 48;
     let hasOpenedDialogueChatPage = false;
 
+    const AI_FRONTIER_FILTER = "AI 前沿";
+    const AI_FRONTIER_CHANNEL = "ai_frontier";
+    // Secondary content-type filter. It is rendered only when the current
+    // source/channel view actually contains more than one group.
+    const TYPE_FILTER_ORDER = ["文章", "视频", "帖子", "项目", "其他"];
     const state = {
       query: "",
       filter: "全部",
+      typeFilter: "全部",
+      // The AI-frontier channel is a separate server-side view over the same
+      // pool. Keep its cards out of state.videos so switching back to "全部"
+      // never loses the general feed, and vice versa.
+      channelVideos: [],
+      channelLoading: false,
+      channelWireTried: false,
       activeFeedback: null,
       profile: null,
       editingProfile: false,
@@ -244,6 +260,9 @@
       { key: "weibo", label: "微博" },
       { key: "youtube", label: "YouTube" },
       { key: "tiktok", label: "TikTok" },
+      { key: "arxiv", label: "arXiv" },
+      { key: "huggingface", label: "Hugging Face" },
+      { key: "hackernews", label: "Hacker News" },
       { key: "twitter", label: "X (Twitter)" },
       { key: "github", label: "GitHub" },
       { key: "zhihu", label: "知乎" },
@@ -257,22 +276,25 @@
     // 首次成功读到库存快照之前是"未知"，不能把还没读到伪装成 0。
     const PLATFORM_COUNT_UNKNOWN_TEXT = "—";
     const PLATFORM_COUNT_UNKNOWN_LABEL = "库存待读取";
-    const platformLabel = { bilibili: "B 站", youtube: "YouTube", tiktok: "TikTok", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
-    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "tiktok", tt: "tiktok", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
+    const platformLabel = { bilibili: "B 站", youtube: "YouTube", tiktok: "TikTok", arxiv: "arXiv", huggingface: "Hugging Face", hf: "Hugging Face", hackernews: "Hacker News", hn: "Hacker News", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
+    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "tiktok", tt: "tiktok", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", arxiv: "arxiv", huggingface: "huggingface", hf: "huggingface", hackernews: "hackernews", hn: "hackernews", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
     const PLATFORM_BRAND_ICONS = {
       bilibili: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.81 4.65h.85c1.51 0 2.77.84 3.3 2.05.33.75.39 1.6.39 2.47v7.54c0 .87-.06 1.72-.39 2.47-.53 1.21-1.79 2.05-3.3 2.05H5.33c-1.51 0-2.77-.84-3.3-2.05-.33-.75-.39-1.6-.39-2.47V9.17c0-.87.06-1.72.39-2.47.53-1.21 1.79-2.05 3.3-2.05h.85L4.85 2.67a.8.8 0 0 1 .24-.92.78.78 0 0 1 .91-.02l3.24 2.92h5.52l3.24-2.92a.78.78 0 0 1 .91.02.8.8 0 0 1 .24.92L17.81 4.65zm-10.48 5.68c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25zm9.34 0c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25z"/></svg>',
       tiktok: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 1 1-2.59-2.5 2.73 2.73 0 0 1 .52.05V9.77a5.72 5.72 0 0 0-.52-.02 5.75 5.75 0 1 0 5.75 5.75V8.6a7.37 7.37 0 0 0 4.39 1.44V6.9a4.29 4.29 0 0 1-3.4-1.08z"/></svg>',
       github: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>',
-      linuxdo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C9.5 2 7.5 4 7.5 6.5c0 1.6.8 3.1 2 4-2.8 1.4-4.5 4.1-4.5 7.5 0 1 .8 2 2.5 2.5 1.5.5 3.5.5 5 .5s3.5 0 5-.5c1.7-.5 2.5-1.5 2.5-2.5 0-3.4-1.7-6.1-4.5-7.5 1.2-.9 2-2.4 2-4C16.5 4 14.5 2 12 2zm-1.8 4.2c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm3.6 0c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm-1.8 3.3c1 0 1.7.5 1.7 1.2h-3.4c0-.7.7-1.2 1.7-1.2z"/></svg>',
+      linuxdo: '<svg viewBox="0 0 24 24" aria-hidden="true"><g style="clip-path:circle(50% at 50% 50%)"><rect x="0" y="0" width="24" height="8" fill="#1c1c1e"/><rect x="0" y="8" width="24" height="8" fill="#f0f0f0"/><rect x="0" y="16" width="24" height="8" fill="#ffb003"/></g></svg>',
       zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.3 4C4.6 4 4 4.6 4 5.3v9.4C4 15.4 4.6 16 5.3 16h3.2v3.6c0 .4.5.6.8.3L13 16h5.7c.7 0 1.3-.6 1.3-1.3V5.3C20 4.6 19.4 4 18.7 4H5.3zm4 2.8h5.4c.4 0 .7.3.7.7v4.4c0 .4-.3.7-.7.7H9.3a.7.7 0 0 1-.7-.7V7.5c0-.4.3-.7.7-.7z"/></svg>',
       douyin: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.7 7.2a4.8 4.8 0 0 1-3.2-2.1V15a4.7 4.7 0 1 1-4.7-4.7c.4 0 .8.1 1.2.2v2.8a2 2 0 1 0 1 1.7V2.5h2.8c.2 1.8 1.4 3.3 2.9 3.8v.9z"/></svg>',
       xiaohongshu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.5 13.8c-.3.4-.8.7-1.4.7-.7 0-1.2-.4-1.6-.9l-.5-.7-.5.7c-.4.5-.9.9-1.6.9-.6 0-1.1-.3-1.4-.7-.4-.5-.5-1.2-.3-1.9l.7-2.3H8.5c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h1.8l.5-1.8c.1-.4.5-.7.9-.7s.7.3.9.7l.4 1.8h2.3c.4 0 .7.3.7.7s-.3.7-.7.7h-1.9l.7 2.3c.2.7.1 1.4-.3 1.9z"/></svg>',
-      weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.1 4c-4.4 0-8 2.8-8 6.2 0 4.2 5.5 7.8 11.2 7.8 1.8 0 3.3-.4 4.5-1.1 2.9.9 5.2.2 5.2.2s-.9-1.4-.7-2.7c1.1-1.3 1.7-2.8 1.7-4.2 0-3.4-3.6-6.2-8-6.2h-5.9zm1.1 10.3c-2.8 0-5.1-1.8-5.1-4s2.3-4 5.1-4 5.1 1.8 5.1 4-2.3 4-5.1 4zm8.6-8c-.3-.2-.7-.1-.9.2-.2.3-.1.7.2.9.9.6 1.4 1.5 1.4 2.6 0 .4.3.7.7.7s.7-.3.7-.7c0-1.6-.8-3-2.1-3.7z"/></svg>',
+      weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.737 5.439l-.002.004zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.18.601l.014-.028zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.57-.18-.405-.615.375-.977.42-1.804 0-2.404-.781-1.112-2.915-1.053-5.364-.03 0 0-.766.331-.571-.271.376-1.217.315-2.224-.27-2.809-1.338-1.337-4.869.045-7.888 3.08C1.309 10.87 0 13.273 0 15.348c0 3.981 5.099 6.395 10.086 6.395 6.536 0 10.888-3.801 10.888-6.82 0-1.822-1.547-2.854-2.915-3.284v.01zm1.908-5.092c-.766-.856-1.908-1.187-2.96-.962-.436.09-.706.511-.616.932.09.42.511.691.932.602.511-.105 1.067.044 1.442.465.376.421.466.977.316 1.473-.136.406.089.856.51.992.405.119.857-.105.992-.512.33-1.021.12-2.178-.646-3.035l.03.045zm2.418-2.195c-1.576-1.757-3.905-2.419-6.054-1.968-.496.104-.812.587-.706 1.081.104.496.586.813 1.082.707 1.532-.331 3.185.15 4.296 1.383 1.112 1.246 1.429 2.943.947 4.416-.165.48.106 1.007.586 1.157.479.165.991-.104 1.157-.586.675-2.088.241-4.478-1.338-6.235l.03.045z"/></svg>',
       youtube: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.6 7.2c-.2-.9-.9-1.6-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4c-.9.2-1.6.9-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8c.2.9.9 1.6 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3L10 15z"/></svg>',
       twitter: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.2 3h2.9l-6.3 7.2 7.4 9.8h-5.8l-4.5-5.9-5.2 5.9H3.8l6.7-7.7L3.4 3h6l4.1 5.4L18.2 3zm-1 15.3h1.6L7.1 4.6H5.4l11.8 13.7z"/></svg>',
       reddit: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5.7 10.7a2 2 0 0 1 .3 1c0 2.2-2.7 4-6 4s-6-1.8-6-4a2 2 0 0 1 .3-1 1.7 1.7 0 0 1-.3-1 1.8 1.8 0 0 1 3-1.3 7.4 7.4 0 0 1 3.5-.9l.7-3.3 2.3.5a1.4 1.4 0 1 1 1.3 1.8l-1.8-.4-.5 2.3a7.4 7.4 0 0 1 3.5.9 1.8 1.8 0 0 1 3 1.3 1.7 1.7 0 0 1-.3 1.1zm-7.7 2.3c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1zm4 0c-.6 0-1.1-.4-1.1-1s.5-1 1.1-1 1.1.4 1.1 1-.5 1-1.1 1z"/></svg>',
       bangumi: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8.5 7h4a3 3 0 0 1 0 6H9m0 0h4a3 3 0 0 1 0 6H8.5V7z" fill="none" stroke="#fff" stroke-width="2"/></svg>',
       v2ex: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 9 4 6 4-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      arxiv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7l5 5v12H6z"/><path d="M13 3.5v5h5"/><path d="M9 13h6M9 16.5h4"/></svg>',
+      huggingface: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M8.2 14.2c1.1 1.6 2.4 2.4 3.8 2.4s2.7-.8 3.8-2.4"/></svg>',
+      hackernews: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h2.3l2.7 5.1L14.7 5H17l-3.8 7.1V19h-2.4v-6.9z"/></svg>',
       instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
       fallback: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>'
     };
@@ -280,7 +302,7 @@
       const slug = canonicalPlatformSlug(value);
       return PLATFORM_BRAND_ICONS[slug] || PLATFORM_BRAND_ICONS.fallback;
     }
-    const textCardContentTypes = new Set(["tweet", "thread", "answer", "article", "question", "post", "comment", "repository"]);
+    const textCardContentTypes = new Set(["tweet", "thread", "answer", "article", "paper", "question", "post", "comment", "repository"]);
     // v0.3.118+: bilibili is selectable like every other source — default
     // checked (recommended) but no longer forced. At least one source must
     // stay checked to start.
@@ -644,15 +666,15 @@
         $("#runtimeSummary").textContent = "库存状态读取失败；这不代表候选池真的为空。";
       } else {
         $("#runtimeSummary").textContent = exhausted
-          ? "库存状态同步失败；当前显示的是上次成功读取的库存，点击库存数可重试。"
-          : "库存状态同步失败，正在重试；当前显示的是上次成功读取的库存。";
+          ? "候选池状态同步失败；当前显示的是上次成功读取的数字，点击「池中素材」可重试。"
+          : "候选池状态同步失败，正在重试；当前显示的是上次成功读取的数字。";
       }
-      $("#poolRefreshState").textContent = exhausted ? "同步失败，点击库存重试" : "状态重试中";
+      $("#poolRefreshState").textContent = exhausted ? "同步失败，点击素材数重试" : "状态重试中";
       if (exhausted) {
         const poolAvailable = $("#poolAvailable");
         poolAvailable.setAttribute("role", "button");
         poolAvailable.setAttribute("tabindex", "0");
-        poolAvailable.setAttribute("aria-label", "库存状态同步失败，重新加载");
+        poolAvailable.setAttribute("aria-label", "候选池状态同步失败，重新加载");
         poolAvailable.onclick = restartDesktopFailedRecoveries;
         poolAvailable.onkeydown = (event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -967,9 +989,18 @@
     const THEME_LABELS = { auto: "跟随系统", light: "浅色", dark: "深色" };
     const THEME_GLYPHS = { auto: "◐", light: "☼", dark: "☾" };
     state.themeMode = THEME_OPTIONS.includes(storageGet(THEME_STORAGE_KEY)) ? storageGet(THEME_STORAGE_KEY) : "auto";
+    // 纸张：卡纸与台面的材质。素白（默认）是冷中性的白纸 + 钢制标签；暖纸是原来的
+    // 目录馆米色纸 + 黄铜；青苔介于两者之间。色相随纸张走，除非用户自己挑过印章色。
+    const PALETTE_STORAGE_KEY = "obc.palette";
+    const PALETTE_OPTIONS = ["plain", "paper", "moss"];
+    const PALETTE_LABELS = { plain: "素白", paper: "暖纸", moss: "青苔" };
+    const PALETTE_DEFAULT_HUE = { plain: 212, paper: 8, moss: 152 };
+    state.palette = PALETTE_OPTIONS.includes(storageGet(PALETTE_STORAGE_KEY)) ? storageGet(PALETTE_STORAGE_KEY) : "plain";
     const _storedHue = parseInt(storageGet(THEME_HUE_STORAGE_KEY), 10);
-    // Number.isFinite guard so a persisted hue of 0 (烈焰红) survives reload instead of falling back to 20.
-    state.themeHue = Number.isFinite(_storedHue) ? _storedHue : 20;
+    // 只有用户真的挑过印章色相才算显式；否则色相由纸张决定，不写 --hue-primary。
+    // Number.isFinite guard so a persisted hue of 0 (烈焰红) survives reload.
+    state.themeHueExplicit = Number.isFinite(_storedHue);
+    state.themeHue = state.themeHueExplicit ? _storedHue : PALETTE_DEFAULT_HUE[state.palette];
     const ACCENT_STORAGE_KEY = "obc.accentStyle";
     const ACCENT_OPTIONS = ["modern", "classic"];
     const THEME_NOTICE_DISMISSED_KEY = "obc.noticeDismissed";
@@ -1137,6 +1168,7 @@
       const configuredLimit = config.scheduler?.delight_queue_limit;
       const limit = configuredLimit || storageGet(DELIGHT_QUEUE_LIMIT_KEY) || "20";
       setInput("delightQueueLimit", String(limit));
+      applyPalette(state.palette);
       applyThemeMode(state.themeMode);
       applyThemeHue(state.themeHue);
       applyAccentStyle(state.accentStyle);
@@ -1151,10 +1183,13 @@
       setInput("delightQueueLimit", String(limit));
       storageSet(DELIGHT_QUEUE_LIMIT_KEY, String(limit));
       storageSet(THEME_STORAGE_KEY, state.themeMode);
-      storageSet(THEME_HUE_STORAGE_KEY, String(state.themeHue));
+      // 只在用户挑过色相时落盘：写死一个数字会让「跟着纸张走」变成一次性选择。
+      storageSet(THEME_HUE_STORAGE_KEY, state.themeHueExplicit ? String(state.themeHue) : "");
+      storageSet(PALETTE_STORAGE_KEY, state.palette);
       storageSet(ACCENT_STORAGE_KEY, state.accentStyle);
       storageSet(AUTO_LOAD_ON_SCROLL_KEY, state.autoLoadOnScroll ? "1" : "0");
       storageSet(SHOW_PENDING_CHAT_COUNT_KEY, state.showPendingChatCount ? "1" : "0");
+      applyPalette(state.palette);
       applyThemeMode(state.themeMode);
       applyThemeHue(state.themeHue);
       applyAccentStyle(state.accentStyle);
@@ -1162,7 +1197,7 @@
       renderAutoLoadOnScrollToggle();
       renderShowPendingChatCountToggle();
       syncAutoLoadObserver();
-      return { delightQueueLimit: limit, themeMode: state.themeMode, accentStyle: state.accentStyle, autoLoadOnScroll: state.autoLoadOnScroll, showPendingChatCount: state.showPendingChatCount };
+      return { delightQueueLimit: limit, themeMode: state.themeMode, palette: state.palette, accentStyle: state.accentStyle, autoLoadOnScroll: state.autoLoadOnScroll, showPendingChatCount: state.showPendingChatCount };
     }
 
     function getRuntimeStreamUrl() {
@@ -1476,6 +1511,11 @@
         presented: Boolean(item?.presented),
         feedback_type: String(item?.feedback_type ?? item?.feedback ?? ""),
         pool_status: String(item?.pool_status ?? item?.status ?? ""),
+        ai_frontier: Boolean(item?.ai_frontier),
+        ai_frontier_score: Number(item?.ai_frontier_score ?? 0) || 0,
+        ai_frontier_tags: Array.isArray(item?.ai_frontier_tags)
+          ? item.ai_frontier_tags.map((tag) => String(tag)).filter(Boolean)
+          : [],
         reason: decodeHtmlEntities(item?.expression ?? item?.reason ?? "后端暂未返回解释。")
       };
     }
@@ -1550,6 +1590,26 @@
     let migrationBusy = false;
     const MIGRATION_FRONTEND_APPLIED_KEY = "openbiliclaw.webui.appliedMigrationFrontend";
 
+    // 卡片照抄的原文（X 推文正文、英文标题）交给 shared/text-localize.js 换成中文：
+    // 请求复用同一个 requestJsonStrict（cookie/bearer + CSRF 头），只重写卡片里的文本
+    // 节点，不参与卡片对账，也不阻塞首屏 —— 译文到了就替换，没到就继续显示原文。
+    function localizeCardText(root) {
+      const localizer = window.OpenBiliClawTextLocalize;
+      if (!localizer) return;
+      localizer.localizeWithin(root || document, { request: requestJsonStrict });
+    }
+
+    // 批注被真的截断时才挂「展开全文」——排版层量不出来，只能比较 scrollHeight。
+    // 已展开的批注跳过：展开后两者相等，再量一次会把 is-clampable 抹掉，连「收起」一起丢。
+    function markClampedReasons(root) {
+      const scope = root || document;
+      scope.querySelectorAll(".reason").forEach((reason) => {
+        if (reason.classList.contains("is-expanded")) return;
+        const source = reason.querySelector(".reason-text") || reason;
+        reason.classList.toggle("is-clampable", source.scrollHeight > source.clientHeight + 1);
+      });
+    }
+
     function setMigrationStatus(message, tone = "neutral") {
       const status = $("#migrationStatus");
       if (status) {
@@ -1580,6 +1640,7 @@
     function collectMigrationFrontendSettings() {
       return {
         theme_mode: normalizeThemeMode(state.themeMode),
+        palette: PALETTE_OPTIONS.includes(state.palette) ? state.palette : "plain",
         theme_hue: Number.isFinite(state.themeHue) ? Math.max(0, Math.min(360, Math.round(state.themeHue))) : 20,
         accent_style: ACCENT_OPTIONS.includes(state.accentStyle) ? state.accentStyle : "classic",
         auto_load_on_scroll: Boolean(state.autoLoadOnScroll),
@@ -1591,6 +1652,9 @@
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       if (THEME_OPTIONS.includes(value.theme_mode)) {
         setThemeMode(value.theme_mode, { persist: true });
+      }
+      if (PALETTE_OPTIONS.includes(value.palette)) {
+        setThemePalette(value.palette, { persist: true });
       }
       if (Number.isInteger(value.theme_hue) && value.theme_hue >= 0 && value.theme_hue <= 360) {
         setThemeHue(value.theme_hue, { persist: true });
@@ -1968,8 +2032,17 @@
       showToast("模型配置不可用，已打开恢复设置");
     }
 
+    // 提示条：每条自己计时，最多同时挂 3 条，同一条话在窗口期内只出现一次。
+    //
+    // 之前只有最底下那条会开始倒计时（_reposition 里 `first` 分支），上面叠着的
+    // 每一条都永远等不到计时器 —— 补货重试几轮之后，右下角就挂了一列永不消失的
+    // 提示。现在每条创建即计时；同文案 20 秒内只提示一次（补货轮询每几秒重复一次
+    // 同一句话），超过 3 条时挤掉最旧的一条。
+    const TOAST_GAP_PX = 8;
+    const TOAST_MAX_VISIBLE = 3;
+    const TOAST_DEDUPE_MS = 20000;
     const toastManager = {
-      items: [], gap: 8, container: null,
+      items: [], gap: TOAST_GAP_PX, container: null, recent: new Map(),
       init() {
         this.container = document.getElementById("toastContainer");
         if (!this.container) {
@@ -1978,34 +2051,49 @@
           document.body.appendChild(this.container);
         }
       },
-      showToast(msg, { duration = 2600 } = {}) {
+      showToast(msg, { duration = 2600, dedupeMs = TOAST_DEDUPE_MS } = {}) {
+        const text = String(msg ?? "").trim();
+        if (!text) return null;
+        const live = this.items.find((it) => !it.exiting && it.text === text);
+        if (live) {
+          // Same sentence still on screen: restart its clock instead of stacking.
+          live.remaining = Math.max(live.remaining, duration);
+          if (!live.paused) this._startTimer(live);
+          return live;
+        }
+        const lastShownAt = this.recent.get(text) || 0;
+        if (dedupeMs > 0 && Date.now() - lastShownAt < dedupeMs) return null;
+        this.recent.set(text, Date.now());
+        if (this.recent.size > 40) {
+          const cutoff = Date.now() - TOAST_DEDUPE_MS;
+          for (const [key, at] of this.recent) if (at < cutoff) this.recent.delete(key);
+        }
+
         const el = document.createElement("div");
         el.className = "toast-item entering";
-        el.textContent = msg;
-        el.addEventListener("click", (e) => this.dismiss(el));
+        el.textContent = text;
+        el.addEventListener("click", () => this.dismiss(el));
         el.addEventListener("mouseenter", () => { const i = this.items.find(it => it.el === el); if (i) this._pause(i); });
         el.addEventListener("mouseleave", () => { const i = this.items.find(it => it.el === el); if (i) this._resume(i); });
         this.container.appendChild(el);
-        const item = { el, timer: null, remaining: duration, started: Date.now(), paused: false, exiting: false };
+        const item = { el, text, timer: null, remaining: duration, started: Date.now(), paused: false, exiting: false };
         this.items.push(item);
+        while (this.items.filter((it) => !it.exiting).length > TOAST_MAX_VISIBLE) {
+          const oldest = this.items.find((it) => !it.exiting);
+          if (!oldest || oldest === item) break;
+          this.dismiss(oldest.el);
+        }
         this._reposition();
         void el.offsetHeight;
         el.classList.remove("entering");
+        if (!item.paused) this._startTimer(item);
         return item;
       },
       _reposition() {
         let bottom = 0;
         for (const item of this.items) {
           if (item.exiting) continue;
-          const first = bottom === 0;
           item.el.style.bottom = bottom + "px";
-          if (first && !item.reachedBottom) {
-            item.reachedBottom = true;
-            const elapsed = Date.now() - item.started;
-            const actual = Math.max(0, item.remaining - elapsed);
-            if (actual < 2000) item.remaining = actual + 2000;
-            if (!item.paused) this._startTimer(item);
-          }
           bottom += item.el.offsetHeight + this.gap;
         }
       },
@@ -2021,26 +2109,35 @@
           el.remove();
           this._reposition();
         }, { once: true });
+        // 过渡被 reduced-motion 关掉时 transitionend 不会来，兜底清一次。
+        window.setTimeout(() => {
+          const idx = this.items.indexOf(item);
+          if (idx >= 0) {
+            this.items.splice(idx, 1);
+            el.remove();
+            this._reposition();
+          }
+        }, 400);
       },
       _startTimer(item) {
         this._clearTimer(item);
         item.started = Date.now();
-        item.timer = setTimeout(() => this.dismiss(item.el), item.remaining);
+        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 600));
       },
       _clearTimer(item) {
         if (item.timer) { clearTimeout(item.timer); item.timer = null; }
       },
       _pause(item) {
-        if (item.paused || item.exiting || !item.reachedBottom) return;
+        if (item.paused || item.exiting) return;
         this._clearTimer(item);
         item.remaining -= Date.now() - item.started;
         item.paused = true;
       },
       _resume(item) {
-        if (!item.paused || item.exiting || !item.reachedBottom) return;
+        if (!item.paused || item.exiting) return;
         item.paused = false;
         item.started = Date.now();
-        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 2000));
+        item.timer = setTimeout(() => this.dismiss(item.el), Math.max(item.remaining, 600));
       }
     };
 
@@ -3188,6 +3285,8 @@
       void lanAuthControl?.reload();
       void bootAutostartControl?.reload();
       void refreshUpdateStatus();
+      const rssInput = $("#rssFeedUrlInput");
+      if (rssInput) rssInput.value = window.location.origin + "/api/feed/rss";
     }
 
     // ── Saved pages: 稍后再看 (watch-later) & 收藏 (favorites) ──────
@@ -3428,6 +3527,8 @@ ${savedCardFeedbackBarHtml(listKind)}
       if (window.OpenBiliClawSavedSync.restoreSavedFocus(focusRoot, focusToken)) {
         desktopSavedPendingFocus[listKind] = null;
       }
+      localizeCardText(grid);
+      markClampedReasons(grid);
     }
 
     async function runDesktopSavedSync(listKind, selected, activeButton, reload, confirmBatch = false) {
@@ -3857,13 +3958,23 @@ ${savedCardFeedbackBarHtml(listKind)}
     function platformSlugForFilterLabel(label) {
       const name = String(label || "").trim();
       if (!name || name === "全部") return "";
+      if (name === AI_FRONTIER_FILTER) return "";
       const known = sourceFilterDefinitions.find((source) => source.label === name);
       if (known) return known.key;
       return canonicalPlatformSlug(name);
     }
 
+    function isAiFrontierFilter() {
+      return state.filter === AI_FRONTIER_FILTER;
+    }
+
     function activePlatformSlug() {
+      if (isAiFrontierFilter()) return "";
       return platformSlugForFilterLabel(state.filter);
+    }
+
+    function activeFeedItems() {
+      return isAiFrontierFilter() ? state.channelVideos : state.videos;
     }
 
     // 返回该平台「可立即推荐」的剩余数量；null = 未知（尚无成功快照）。
@@ -3948,17 +4059,54 @@ ${savedCardFeedbackBarHtml(listKind)}
       }
       const sources = sourceFilterOrder.filter((name) => sourceSet.has(name));
       const otherSources = [...sourceSet].filter((name) => !sourceFilterOrder.includes(name)).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
-      return ["全部", ...sources, ...otherSources];
+      // The AI-frontier channel is always available, even when its current
+      // view is empty: the empty state is the entry point for "补货".
+      return ["全部", AI_FRONTIER_FILTER, ...sources, ...otherSources];
+    }
+
+    function contentTypeGroup(item) {
+      const type = String(item?.content_type || "").toLowerCase();
+      if (type === "video" || Number(item?.duration) > 0) return "视频";
+      if (type === "paper" || type === "article") return "文章";
+      if (["tweet", "thread", "answer", "question", "post", "comment"].includes(type)) return "帖子";
+      if (type === "repository") return "项目";
+      return "其他";
+    }
+
+    // The items visible in the current primary scope (全部 / 来源 Tab / AI 前沿)
+    // after the search query, but before the content-type filter. Type chips and
+    // the grid both derive from here so their counts cannot drift.
+    function recommendationBaseItems() {
+      const q = state.query.trim().toLowerCase();
+      const inChannel = isAiFrontierFilter();
+      const sourceItems = inChannel ? state.channelVideos : state.videos;
+      return sourceItems.filter((item) => {
+        const label = platformName(item.platform);
+        const filterOk = inChannel || state.filter === "全部" || state.filter === label;
+        const queryOk = !q || [item.title, item.up, item.topic, item.reason, label]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+        return filterOk && queryOk;
+      });
+    }
+
+    function typeFilterCounts(items) {
+      const counts = {};
+      for (const item of items) {
+        const group = contentTypeGroup(item);
+        counts[group] = (counts[group] || 0) + 1;
+      }
+      return counts;
     }
 
     function filteredVideos() {
-      const q = state.query.trim().toLowerCase();
-      return state.videos.filter((item) => {
-        const label = platformName(item.platform);
-        const filterOk = state.filter === "全部" || state.filter === label;
-        const queryOk = !q || [item.title, item.up, item.topic, item.reason, label].join(" ").toLowerCase().includes(q);
-        return filterOk && queryOk;
-      });
+      if (Array.isArray(state.searchResults)) {
+        return state.searchResults;
+      }
+      const items = recommendationBaseItems();
+      if (state.typeFilter === "全部") return items;
+      return items.filter((item) => contentTypeGroup(item) === state.typeFilter);
     }
 
     function normalizeThemeMode(value) {
@@ -3977,12 +4125,59 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     function applyThemeHue(hue = state.themeHue) {
       state.themeHue = hue;
-      document.documentElement.style.setProperty("--hue-primary", hue);
+      const root = document.documentElement;
+      // 没挑过色相时不写 --hue-primary：让所选纸张自带的默认色相生效（tokens.css）。
+      if (state.themeHueExplicit) root.style.setProperty("--hue-primary", String(hue));
+      else root.style.removeProperty("--hue-primary");
+    }
+
+    function applyPalette(palette = state.palette) {
+      state.palette = PALETTE_OPTIONS.includes(palette) ? palette : "plain";
+      document.documentElement.dataset.palette = state.palette;
+      if (!state.themeHueExplicit) {
+        // 换纸张时把跟着纸走的色相一起更新，设置页的滑块才显示真实生效值。
+        state.themeHue = PALETTE_DEFAULT_HUE[state.palette];
+        applyThemeHue(state.themeHue);
+      }
+      renderThemePaletteControls();
+      renderThemeHueControls();
+    }
+
+    function setThemePalette(palette, { persist = true, toast = false } = {}) {
+      applyPalette(palette);
+      if (persist) storageSet(PALETTE_STORAGE_KEY, state.palette);
+      if (toast) showToast(`纸张已换成${PALETTE_LABELS[state.palette] || state.palette}`);
+    }
+
+    function resetThemeHue({ persist = true, toast = false } = {}) {
+      state.themeHueExplicit = false;
+      if (persist) storageSet(THEME_HUE_STORAGE_KEY, "");
+      state.themeHue = PALETTE_DEFAULT_HUE[state.palette];
+      applyThemeHue(state.themeHue);
+      renderThemeHueControls();
+      renderThemePaletteControls();
+      if (toast) showToast(`印章颜色跟随「${PALETTE_LABELS[state.palette] || state.palette}」纸张`);
+    }
+
+    function renderThemePaletteControls() {
+      document.querySelectorAll("[data-palette-choice]").forEach((button) => {
+        const isActive = button.dataset.paletteChoice === state.palette;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-checked", isActive ? "true" : "false");
+        button.tabIndex = isActive ? 0 : -1;
+      });
+      const reset = $("#themeHueReset");
+      if (reset) reset.hidden = state.themeHueExplicit !== true;
     }
 
     function setThemeHue(hue, { persist = true, toast = false, render = true } = {}) {
+      state.themeHueExplicit = true;
       applyThemeHue(hue);
-      if (render) renderThemeHueControls();
+      if (render) {
+        renderThemeHueControls();
+        // 「跟随纸张」只在用户挑过色相时出现，显式性变了就得重画。
+        renderThemePaletteControls();
+      }
       if (persist) storageSet(THEME_HUE_STORAGE_KEY, String(state.themeHue));
       if (toast) {
         const names = { 20: "暖陶土", 210: "极客蓝", 340: "元气粉", 150: "自然绿", 280: "暗夜紫", 45: "活力橙" };
@@ -3998,7 +4193,8 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     function cycleThemeMode() {
       const index = THEME_OPTIONS.indexOf(normalizeThemeMode(state.themeMode));
-      setThemeMode(THEME_OPTIONS[(index + 1) % THEME_OPTIONS.length], { toast: true });
+      // 主题切换本身就看得见（顶栏字形 + 整页配色），不再弹提示。
+      setThemeMode(THEME_OPTIONS[(index + 1) % THEME_OPTIONS.length]);
     }
 
     function bindRovingChoiceGroup(selector, onChoose) {
@@ -4045,17 +4241,16 @@ ${savedCardFeedbackBarHtml(listKind)}
         button.setAttribute("aria-checked", isActive ? "true" : "false");
         button.tabIndex = isActive ? 0 : -1;
       });
+      // 色相不再是「经典配色」的附加项：每张纸都带默认色相，用户随时可以改。
       const hueSection = document.querySelector(".settings-hue-field");
       if (!hueSection) return;
-      const isClassic = state.accentStyle === "classic";
-      hueSection.classList.toggle("is-disabled", isClassic);
+      hueSection.classList.remove("is-disabled");
       hueSection.querySelectorAll("button, input").forEach((el) => {
-        if (el.matches("[data-accent-choice]")) return;
-        el.disabled = isClassic;
-        el.setAttribute("aria-disabled", isClassic ? "true" : "false");
+        el.disabled = false;
+        el.setAttribute("aria-disabled", "false");
       });
       const hint = hueSection.querySelector(".settings-hue-hint");
-      if (hint) hint.hidden = !isClassic;
+      if (hint) hint.hidden = false;
     }
 
     function renderThemeControls() {
@@ -4077,8 +4272,8 @@ ${savedCardFeedbackBarHtml(listKind)}
     }
 
     function renderThemeHueControls() {
-      // Number.isFinite so hue 0 (烈焰红) renders as active instead of falling back to 20.
-      const hue = Number.isFinite(state.themeHue) ? state.themeHue : 20;
+      // Number.isFinite so hue 0 (烈焰红) renders as active instead of falling back to the palette.
+      const hue = Number.isFinite(state.themeHue) ? state.themeHue : PALETTE_DEFAULT_HUE[state.palette];
       const buttons = Array.from(document.querySelectorAll("[data-hue]"));
       const activeIndex = buttons.findIndex((button) => parseInt(button.dataset.hue, 10) === hue);
       buttons.forEach((button, index) => {
@@ -4209,10 +4404,11 @@ ${savedCardFeedbackBarHtml(listKind)}
         ? state.runtimeStatus?.pool_available_count > 0
         : scopedAvailable > 0;
       if (!hasStock) return "pool-empty";
-      const exhaustedAt = emptyAppendInventory.get(activePlatformSlug());
+      const appendScopeKey = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : activePlatformSlug();
+      const exhaustedAt = emptyAppendInventory.get(appendScopeKey);
       const available = scopedAvailable ?? state.runtimeStatus?.pool_available_count ?? 0;
       if (exhaustedAt !== undefined && available <= exhaustedAt) return "awaiting-refill";
-      emptyAppendInventory.delete(activePlatformSlug());
+      emptyAppendInventory.delete(appendScopeKey);
       const homePage = $("#homePage");
       if (!homePage || homePage.hidden) return "not-home";
       const loadMore = $("#loadMoreBtn");
@@ -4272,9 +4468,88 @@ ${savedCardFeedbackBarHtml(listKind)}
 
     // 切换 Tab 只改变视图，不发任何推荐请求（设计文档 §5.2）。自动激活后 chip 会
     // 被重建，所以键盘路径需要把 focus 还给新的同名 chip。
+    async function loadAiFrontierChannel({ force = false, merge = false } = {}) {
+      if (state.channelLoading) return;
+      if (!force && state.channelVideos.length) return;
+      state.channelLoading = true;
+      // Do NOT rebuild the chip row here: setActiveFilter() is also the
+      // keyboard-navigation path, and replacing the chips mid-request steals
+      // focus from the tab the user just arrowed onto. The final renderAll()
+      // updates the count; the empty state explains the in-flight load.
+      try {
+        const payload = await requestJsonStrict(
+          `${ENDPOINTS.recommendations}?channel=${encodeURIComponent(AI_FRONTIER_CHANNEL)}`,
+          { timeoutMs: 25000 }
+        );
+        const next = normalizeRecommendationList(
+          Array.isArray(payload) ? payload : payload?.items
+        );
+        if (merge) {
+          const seen = new Set(state.channelVideos.map((item) => recommendationKey(item)));
+          state.channelVideos = state.channelVideos.concat(
+            next.filter((item) => !seen.has(recommendationKey(item)))
+          );
+        } else {
+          state.channelVideos = next;
+        }
+      } catch {
+        if (!state.channelVideos.length) {
+          showToast("AI 前沿暂时加载失败，稍后再试");
+        }
+      } finally {
+        state.channelLoading = false;
+        renderAll();
+        // A narrow channel can legitimately start with one or two items. Pull
+        // the curated article wire once per page session instead of making the
+        // reader discover the button first.
+        if (!force && state.channelVideos.length < 3 && !state.channelWireTried) {
+          state.channelWireTried = true;
+          void refreshAiFrontierWire();
+        }
+      }
+    }
+
+    async function refreshAiFrontierWire() {
+      const button = $("#loadMoreBtn");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "正在找更多 AI 前沿…";
+      }
+      try {
+        const result = await requestJson("/channels/ai-frontier/refresh", {
+          method: "POST",
+          timeoutMs: 30000,
+        });
+        if (!result?.ok) {
+          showToast("AI 前沿补货失败，稍后再试");
+          return;
+        }
+        await loadAiFrontierChannel({ force: true, merge: true });
+        if (Number(result.inserted) > 0) {
+          showToast(`已补充 ${Number(result.inserted)} 条 AI 前沿内容`);
+        } else {
+          showToast(result.throttled ? "刚刚找过一批，稍后再试" : "暂时没有新的高质量内容");
+        }
+      } catch {
+        showToast("AI 前沿补货失败，稍后再试");
+      } finally {
+        if (button) button.disabled = false;
+        updateLoadMoreLabel();
+      }
+    }
+
+    function updateLoadMoreLabel() {
+      const button = $("#loadMoreBtn");
+      if (!button) return;
+      button.textContent = isAiFrontierFilter() ? "加载更多 AI 前沿" : "加载更多推荐";
+    }
+
     function setActiveFilter(name, { restoreFocus = false } = {}) {
       state.filter = name;
       renderAll();
+      if (name === AI_FRONTIER_FILTER) {
+        void loadAiFrontierChannel();
+      }
       if (!restoreFocus) return;
       const chips = Array.from(document.querySelectorAll("#filterRow .chip"));
       chips.find((chip) => chip.dataset.filter === name)?.focus();
@@ -4302,24 +4577,62 @@ ${savedCardFeedbackBarHtml(listKind)}
       row.replaceChildren(...filters.map((name, index) => {
         const btn = document.createElement("button");
         const selected = state.filter === name;
-        const slug = platformSlugForFilterLabel(name);
-        const count = platformAvailableCount(slug);
-        btn.className = `chip${selected ? " is-active" : ""}`;
+        const isChannel = name === AI_FRONTIER_FILTER;
+        const slug = isChannel ? "" : platformSlugForFilterLabel(name);
+        // Channel count is "how many cards this view has loaded", not the
+        // platform stock badge. It starts as "…" until the first channel
+        // request returns, so 0 never reads as "there is no AI content".
+        const count = isChannel ? state.channelVideos.length : platformAvailableCount(slug);
+        btn.className = `chip${selected ? " is-active" : ""}${isChannel ? " chip-channel" : ""}`;
         btn.type = "button";
         btn.dataset.filter = name;
         btn.dataset.platform = slug;
+        if (isChannel) btn.dataset.channel = AI_FRONTIER_CHANNEL;
         // role=tab + aria-selected：选中态不能只靠颜色表达，AT 也要能读到。
         btn.setAttribute("role", "tab");
         btn.setAttribute("aria-selected", selected ? "true" : "false");
-        btn.setAttribute("aria-label", `${name}，可推荐 ${count === null ? PLATFORM_COUNT_UNKNOWN_LABEL : `${count} 条`}`);
+        // 徽标是后端还能换的库存，不是这一屏的卡片数：0 常见于来源关着或补货
+        // 还没回来，所以用 title/aria 说明它为什么会是 0（列表里已装入的卡片
+        // 不会因为库存归零就消失，数字也就没必要跟着变）。
+        const countLabel = isChannel
+          ? state.channelLoading
+            ? "正在加载 AI 前沿"
+            : `本期 AI 前沿 ${count} 条`
+          : count === null
+            ? PLATFORM_COUNT_UNKNOWN_LABEL
+            : count > 0
+              ? `${count} 条可换`
+              : "暂时没有可换库存，后台补货中";
+        btn.setAttribute("aria-label", `${name}，${countLabel}`);
+        btn.title = isChannel
+          ? "AI 前沿频道：跨平台汇总前沿模型、论文、开源工程与视频"
+          : count === 0
+            ? `${name}暂时没有可换的新内容，后台会继续补货`
+            : `还能换 ${count === null ? "待读取" : count} 条`;
         btn.tabIndex = selected ? 0 : -1;
         const labelSpan = document.createElement("span");
         labelSpan.className = "chip-label";
         labelSpan.textContent = name;
         const countSpan = document.createElement("span");
         countSpan.className = "chip-count";
-        countSpan.dataset.state = count === null ? "unknown" : "known";
-        countSpan.textContent = count === null ? PLATFORM_COUNT_UNKNOWN_TEXT : String(count);
+        countSpan.dataset.state = isChannel
+          ? state.channelLoading
+            ? "unknown"
+            : count > 0
+              ? "known"
+              : "zero"
+          : count === null
+            ? "unknown"
+            : count > 0
+              ? "known"
+              : "zero";
+        countSpan.textContent = isChannel
+          ? state.channelLoading
+            ? "…"
+            : String(count)
+          : count === null
+            ? PLATFORM_COUNT_UNKNOWN_TEXT
+            : String(count);
         countSpan.setAttribute("aria-hidden", "true");
         btn.replaceChildren(labelSpan, countSpan);
         btn.addEventListener("click", () => setActiveFilter(name));
@@ -4335,7 +4648,82 @@ ${savedCardFeedbackBarHtml(listKind)}
         restored?.focus({ preventScroll: true });
       }
       const resetButton = $("#resetFiltersBtn");
-      if (resetButton) resetButton.hidden = state.filter === "全部" && !String(state.query || "").trim();
+      if (resetButton) {
+        resetButton.hidden =
+          state.filter === "全部" &&
+          state.typeFilter === "全部" &&
+          !String(state.query || "").trim();
+      }
+    }
+
+    function setActiveTypeFilter(name, { restoreFocus = false } = {}) {
+      state.typeFilter = name;
+      renderAll();
+      if (!restoreFocus) return;
+      const chips = Array.from(document.querySelectorAll("#typeFilterRow .chip"));
+      chips.find((chip) => chip.dataset.typeFilter === name)?.focus();
+    }
+
+    function handleTypeFilterKeydown(event, filters, index) {
+      const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      let next = index;
+      if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = filters.length - 1;
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + filters.length) % filters.length;
+      else next = (index + 1) % filters.length;
+      setActiveTypeFilter(filters[next], { restoreFocus: true });
+    }
+
+    function renderTypeFilters() {
+      const row = $("#typeFilterRow");
+      if (!row) return;
+      const base = recommendationBaseItems();
+      const counts = typeFilterCounts(base);
+      const groups = TYPE_FILTER_ORDER.filter((name) => (counts[name] || 0) > 0);
+      if (groups.length <= 1) {
+        row.hidden = true;
+        row.replaceChildren();
+        state.typeFilter = "全部";
+        return;
+      }
+      row.hidden = false;
+      const filters = ["全部", ...groups];
+      if (!filters.includes(state.typeFilter)) state.typeFilter = "全部";
+      const focusedType = row.contains(document.activeElement)
+        ? String(document.activeElement.dataset.typeFilter || "")
+        : "";
+      row.replaceChildren(...filters.map((name, index) => {
+        const btn = document.createElement("button");
+        const selected = state.typeFilter === name;
+        const count = name === "全部" ? base.length : counts[name] || 0;
+        btn.className = `chip${selected ? " is-active" : ""}`;
+        btn.type = "button";
+        btn.dataset.typeFilter = name;
+        btn.setAttribute("role", "tab");
+        btn.setAttribute("aria-selected", selected ? "true" : "false");
+        btn.setAttribute("aria-label", `${name}，${count} 条`);
+        btn.tabIndex = selected ? 0 : -1;
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "chip-label";
+        labelSpan.textContent = name;
+        const countSpan = document.createElement("span");
+        countSpan.className = "chip-count";
+        countSpan.dataset.state = count > 0 ? "known" : "zero";
+        countSpan.textContent = String(count);
+        countSpan.setAttribute("aria-hidden", "true");
+        btn.replaceChildren(labelSpan, countSpan);
+        btn.addEventListener("click", () => setActiveTypeFilter(name));
+        btn.addEventListener("keydown", (event) => handleTypeFilterKeydown(event, filters, index));
+        return btn;
+      }));
+      if (focusedType) {
+        const chips = Array.from(row.querySelectorAll(".chip"));
+        const restored = chips.find((chip) => chip.dataset.typeFilter === focusedType)
+          || chips.find((chip) => chip.dataset.typeFilter === state.typeFilter);
+        restored?.focus({ preventScroll: true });
+      }
     }
 
     function normalizeImageUrl(value) {
@@ -4721,6 +5109,8 @@ ${savedCardFeedbackBarHtml(listKind)}
       if (!root) return;
       root.innerHTML = CONTENT_HISTORY_SECTIONS.map(contentHistorySectionHtml).join("");
       bindContentHistoryCards();
+      localizeCardText(root);
+      markClampedReasons(root);
     }
 
     async function loadContentHistoryCategory(category, append, generation = contentHistoryGeneration, focusToken = null) {
@@ -4854,11 +5244,13 @@ ${savedCardFeedbackBarHtml(listKind)}
     function recommendationStats(item) {
       const segments = [];
       const sourceRank = Math.trunc(Number(item.source_rank) || 0);
-      if (item.view_count > 0) segments.push(`▶ ${formatCountCn(item.view_count)}`);
-      if (item.like_count > 0) segments.push(`👍 ${formatCountCn(item.like_count)}`);
-      if (item.comment_count > 0) segments.push(`💬 ${formatCountCn(item.comment_count)}`);
-      if (item.share_count > 0) segments.push(`🔁 ${formatCountCn(item.share_count)}`);
-      if (item.favorite_count > 0) segments.push(`⭐ ${formatCountCn(item.favorite_count)}`);
+      // 与手机端 view-models.js 同一套等宽中文标签：彩色 emoji 破坏「只有印章是
+      // 彩色」这条世界规则，也让元数据行看起来像模板输出。
+      if (item.view_count > 0) segments.push(`播放 ${formatCountCn(item.view_count)}`);
+      if (item.like_count > 0) segments.push(`点赞 ${formatCountCn(item.like_count)}`);
+      if (item.comment_count > 0) segments.push(`评论 ${formatCountCn(item.comment_count)}`);
+      if (item.share_count > 0) segments.push(`分享 ${formatCountCn(item.share_count)}`);
+      if (item.favorite_count > 0) segments.push(`收藏 ${formatCountCn(item.favorite_count)}`);
       if (item.danmaku_count > 0) segments.push(`弹幕 ${formatCountCn(item.danmaku_count)}`);
       if (item.rating_score > 0) segments.push(`评分 ${item.rating_score.toFixed(1)}`);
       if (item.rating_count > 0) segments.push(`${formatCountCn(item.rating_count)} 人评分`);
@@ -4899,32 +5291,33 @@ ${savedCardFeedbackBarHtml(listKind)}
     };
 
     // Shared recommendation-card feedback action bar markup.
+    // 印章一排不再用「/」分隔：分隔符既占宽度又让整排像调试输出。图标统一
+    // 1.7 描边 + 圆角端点，五个章在一行里必须能在 280px 卡宽内放下。
     function cardFeedbackBarHtml() {
       return `          <div class="card-actions" aria-label="推荐反馈操作">
             <div class="card-feedback-icons" aria-label="喜欢或不感兴趣">
               <button class="feedback-icon-btn" data-action="like" type="button" aria-label="喜欢" title="喜欢">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M7 10v10"/><path d="M15 5.2 14 10h5.4a1.8 1.8 0 0 1 1.7 2.2l-1.5 6A2.4 2.4 0 0 1 17.3 20H7"/><path d="M7 10l4.5-5.3A2 2 0 0 1 15 6v4"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5.4a3 3 0 0 0-3-3l-4 8.6V21h11.1a2 2 0 0 0 2-1.7l1.4-8.6a2 2 0 0 0-2-2.3H14Z"/><path d="M7 21H4.4A1.4 1.4 0 0 1 3 19.6v-6.2A1.4 1.4 0 0 1 4.4 12H7"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn" data-action="dislike" type="button" aria-label="不感兴趣" title="不感兴趣">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M17 14V4"/><path d="M9 18.8 10 14H4.6a1.8 1.8 0 0 1-1.7-2.2l1.5-6A2.4 2.4 0 0 1 6.7 4H17"/><path d="M17 14l-4.5 5.3A2 2 0 0 1 9 18v-4"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v3.6a3 3 0 0 0 3 3l4-8.6V3H5.9a2 2 0 0 0-2 1.7L2.5 13.3a2 2 0 0 0 2 2.3H10Z"/><path d="M17 12h2.6A1.4 1.4 0 0 0 21 10.6V4.4A1.4 1.4 0 0 0 19.6 3H17"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn" data-action="dismiss" type="button" aria-label="忽略" title="忽略">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M9.84 9.91A3 3 0 0 0 12 15c.82 0 1.57-.33 2.11-.87M6.5 6.65A10.45 10.45 0 0 0 2.46 12C3.73 16.06 7.52 19 12 19c1.99 0 3.84-.58 5.4-1.58M11 5.05c.33-.03.66-.05 1-.05 4.48 0 8.27 2.94 9.54 7a10.5 10.5 0 0 1-1.19 2.5"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M6 6l12 12"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn watch-later-btn" data-action="watch-later" type="button" aria-label="稍后再看" title="稍后再看" aria-pressed="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 1.9"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.2 1.9"/></svg>
               </button>
-              <span class="feedback-separator" aria-hidden="true">/</span>
               <button class="feedback-icon-btn favorite-btn" data-action="favorite" type="button" aria-label="收藏" title="收藏" aria-pressed="false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.65 5.37 5.93.86-4.29 4.18 1.01 5.9L12 17.1l-5.31 2.8 1.01-5.9L3.41 9.83l5.93-.86z"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.65l-5.1 2.65.97-5.68L3.75 9.6l5.7-.83L12 3.6Z"/></svg>
               </button>
             </div>
             <div class="comment-field"><input placeholder="想围绕这条聊什么？" aria-label="想围绕这条聊什么？"></div>
             <button class="small-btn composer-cancel" data-action="cancel-comment" type="button" aria-label="返回" title="返回">‹</button>
-            <button class="small-btn chat-action" data-action="comment" type="button">聊一聊</button>
+            <button class="small-btn chat-action" data-action="comment" type="button" aria-label="聊一句" title="聊一句">
+              <span class="chat-action-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-8.4 8.4H8L4 22l1.1-3.6A8.4 8.4 0 1 1 21 11.5Z"/></svg></span>
+              <span class="chat-action-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 12 20 4l-5 16-3.2-6.8L4 12Z"/><path d="m11.8 13.2 3.7-3.7"/></svg></span>
+            </button>
           </div>
           <p class="status-line" aria-live="polite"></p>`;
     }
@@ -5108,6 +5501,473 @@ ${savedCardFeedbackBarHtml(listKind)}
     // recommendation key -> { node, html }：上一轮渲染出来的卡片。只有 markup 真的
     // 变了才会重建节点，其余情况原样复用 —— 见 syncRecommendationCards 的注释。
     const renderedRecommendationCards = new Map();
+    let focusedCardIndex = -1;
+
+    const SEEN_CARDS_STORAGE_KEY = "openbiliclaw.webui.seenCards";
+    const SEEN_CARDS_LIMIT = 500;
+    const seenCardIds = new Set();
+
+    function loadSeenCards() {
+      try {
+        const raw = localStorage.getItem(SEEN_CARDS_STORAGE_KEY);
+        if (!raw) return;
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach((id) => {
+            if (id) seenCardIds.add(String(id));
+          });
+        }
+      } catch {}
+    }
+
+    function saveSeenCards() {
+      try {
+        const list = Array.from(seenCardIds).slice(-SEEN_CARDS_LIMIT);
+        localStorage.setItem(SEEN_CARDS_STORAGE_KEY, JSON.stringify(list));
+      } catch {}
+    }
+
+    function recommendationSeenKey(item) {
+      if (!item) return "";
+      return String(item.bvid || item.content_id || item.id || "").trim();
+    }
+
+    function isRecommendationSeen(item) {
+      const key = recommendationSeenKey(item);
+      return key ? seenCardIds.has(key) : false;
+    }
+
+    function markRecommendationSeen(item, card = null) {
+      const key = recommendationSeenKey(item);
+      if (key) {
+        seenCardIds.add(key);
+        saveSeenCards();
+      }
+      if (card && card.classList) {
+        card.classList.add("is-seen");
+      }
+    }
+
+    async function loadBlockedAuthors() {
+      try {
+        const res = await requestJson("/api/blocked-authors");
+        return Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    }
+
+    async function blockAuthor(authorName, sourcePlatform = "") {
+      if (!authorName) return;
+      const cleanName = String(authorName).trim();
+      const confirmed = window.confirm(`确定要屏蔽作者「${cleanName}」吗？\n屏蔽后来自该作者的内容将不再推荐。`);
+      if (!confirmed) return;
+      try {
+        await requestJson("/api/blocked-authors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author_name: cleanName,
+            source_platform: sourcePlatform || "",
+          }),
+        });
+        showToast(`已屏蔽作者：${cleanName}`);
+        const grid = $("#videoGrid");
+        if (grid) {
+          grid.querySelectorAll(".video-card").forEach((c) => {
+            const it = c._recommendationItem;
+            if (it && (it.author === cleanName || it.up_name === cleanName)) {
+              c.remove();
+            }
+          });
+        }
+        closePanel("cardDetailDrawer");
+        void renderBlockedAuthorsList();
+      } catch (err) {
+        showToast(`屏蔽失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    async function unblockAuthor(id, authorName = "") {
+      try {
+        await requestJson(`/api/blocked-authors/${id}`, { method: "DELETE" });
+        showToast(`已解除屏蔽：${authorName || id}`);
+        void renderBlockedAuthorsList();
+      } catch (err) {
+        showToast(`解除失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    async function renderBlockedAuthorsList() {
+      const container = $("#blockedAuthorsList");
+      if (!container) return;
+      const authors = await loadBlockedAuthors();
+      if (!authors.length) {
+        container.innerHTML = `<p class="video-meta">目前没有被屏蔽的作者。</p>`;
+        return;
+      }
+      container.innerHTML = authors.map((a) => `
+        <div class="blocked-author-row">
+          <div class="blocked-author-info">
+            <strong>${escapeHtml(a.author_name)}</strong>
+            <span class="blocked-author-meta">${a.source_platform ? escapeHtml(platformName(a.source_platform)) : "全平台"} · ${escapeHtml(a.created_at ? a.created_at.slice(0, 10) : "")}</span>
+          </div>
+          <button class="small-btn" data-unblock-id="${a.id}" data-unblock-name="${escapeHtml(a.author_name)}" type="button">解除屏蔽</button>
+        </div>
+      `).join("");
+
+      container.querySelectorAll("[data-unblock-id]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          void unblockAuthor(btn.dataset.unblockId, btn.dataset.unblockName);
+        });
+      });
+    }
+
+    function generateShareCard(item) {
+      if (!item) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = 750;
+      canvas.height = 1060;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const palette = document.documentElement.dataset.palette || "default";
+      let bgGrad = "#f7f8f9";
+      let cardBg = "#ffffff";
+      let ink = "#171a1f";
+      let inkMuted = "#606873";
+      let stampColor = "#2e65a3";
+      let ruleColor = "#d8dce1";
+
+      if (palette === "warm" || palette === "paper") {
+        bgGrad = "#f0ece3";
+        cardBg = "#f7f5ef";
+        ink = "#1f262e";
+        inkMuted = "#766d5e";
+        stampColor = "#b83828";
+        ruleColor = "#c6bfb0";
+      } else if (palette === "moss" || palette === "green") {
+        bgGrad = "#eaeee8";
+        cardBg = "#fbfcfa";
+        ink = "#1b2320";
+        inkMuted = "#5c6961";
+        stampColor = "#2f6f55";
+        ruleColor = "#ccd4cb";
+      }
+
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const pad = 36;
+      const cardW = canvas.width - pad * 2;
+      const cardH = canvas.height - pad * 2;
+      ctx.fillStyle = cardBg;
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 2;
+      ctx.fillRect(pad, pad, cardW, cardH);
+      ctx.strokeRect(pad, pad, cardW, cardH);
+
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad + 8, pad + 8, cardW - 16, cardH - 16);
+
+      ctx.font = "bold 20px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      ctx.fillText(`平台 · ${platformName(item.platform || "bilibili")}`, pad + 32, pad + 48);
+
+      ctx.save();
+      ctx.translate(canvas.width - pad - 120, pad + 52);
+      ctx.rotate(-0.06);
+      ctx.strokeStyle = stampColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-10, -22, 108, 34);
+      ctx.fillStyle = stampColor;
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText("目录馆 · 编目", 0, 0);
+      ctx.restore();
+
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad + 32, pad + 72);
+      ctx.lineTo(canvas.width - pad - 32, pad + 72);
+      ctx.stroke();
+
+      ctx.fillStyle = ink;
+      ctx.font = "bold 32px Songti SC, Source Han Serif SC, Georgia, serif";
+      const title = String(item.title || "无标题");
+      const titleWords = title.split("");
+      let line = "";
+      let titleY = pad + 120;
+      const maxTitleW = cardW - 64;
+
+      for (let n = 0; n < titleWords.length; n++) {
+        const testLine = line + titleWords[n];
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxTitleW && n > 0) {
+          ctx.fillText(line, pad + 32, titleY);
+          line = titleWords[n];
+          titleY += 44;
+          if (titleY > pad + 210) {
+            line += "…";
+            break;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, pad + 32, titleY);
+
+      ctx.font = "16px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      titleY += 40;
+      const authorText = `作者：${item.author || item.up_name || "未知"}  |  发布：${item.pubdate ? formatTime(item.pubdate) : "近期"}`;
+      ctx.fillText(authorText, pad + 32, titleY);
+
+      titleY += 30;
+      const reasonBoxY = titleY;
+      const reasonBoxH = 150;
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(pad + 32, reasonBoxY, cardW - 64, reasonBoxH);
+      ctx.fillStyle = stampColor;
+      ctx.fillRect(pad + 32, reasonBoxY, 4, reasonBoxH);
+
+      ctx.fillStyle = stampColor;
+      ctx.font = "bold 15px monospace, monospace";
+      ctx.fillText("编目批注 · 为什么推荐给你", pad + 48, reasonBoxY + 30);
+
+      ctx.fillStyle = ink;
+      ctx.font = "18px sans-serif";
+      const reasonText = String(item.reason || "基于近期口味与深度兴趣发现。");
+      let rLine = "";
+      let rY = reasonBoxY + 62;
+      for (let n = 0; n < reasonText.length; n++) {
+        const testLine = rLine + reasonText[n];
+        if (ctx.measureText(testLine).width > cardW - 100 && n > 0) {
+          ctx.fillText(rLine, pad + 48, rY);
+          rLine = reasonText[n];
+          rY += 28;
+          if (rY > reasonBoxY + 130) {
+            rLine += "…";
+            break;
+          }
+        } else {
+          rLine = testLine;
+        }
+      }
+      ctx.fillText(rLine, pad + 48, rY);
+
+      titleY = reasonBoxY + reasonBoxH + 30;
+      ctx.fillStyle = inkMuted;
+      ctx.font = "bold 15px monospace, monospace";
+      ctx.fillText("内容纲要 / 摘要", pad + 32, titleY);
+      titleY += 25;
+
+      ctx.fillStyle = ink;
+      ctx.font = "16px sans-serif";
+      const summaryText = String(item.summary || item.desc || item.description || "暂无文字摘要。");
+      let sLine = "";
+      let sY = titleY + 10;
+      for (let n = 0; n < summaryText.length; n++) {
+        const testLine = sLine + summaryText[n];
+        if (ctx.measureText(testLine).width > cardW - 64 && n > 0) {
+          ctx.fillText(sLine, pad + 32, sY);
+          sLine = summaryText[n];
+          sY += 26;
+          if (sY > canvas.height - pad - 120) {
+            sLine += "…";
+            break;
+          }
+        } else {
+          sLine = testLine;
+        }
+      }
+      ctx.fillText(sLine, pad + 32, sY);
+
+      const footerY = canvas.height - pad - 40;
+      ctx.strokeStyle = ruleColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad + 32, footerY - 20);
+      ctx.lineTo(canvas.width - pad - 32, footerY - 20);
+      ctx.stroke();
+
+      ctx.font = "bold 14px monospace, monospace";
+      ctx.fillStyle = inkMuted;
+      ctx.fillText("OPENBILICLAW · 私人卡片目录馆", pad + 32, footerY + 8);
+      ctx.textAlign = "right";
+      ctx.fillText(new Date().toISOString().slice(0, 10), canvas.width - pad - 32, footerY + 8);
+      ctx.textAlign = "left";
+
+      const a = document.createElement("a");
+      const safeTitle = (item.title || "card").replace(/[^\w\u4e00-\u9fa5]/g, "_").slice(0, 20);
+      a.download = `openbiliclaw-${safeTitle}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      showToast("已生成并下载书签卡片图片");
+    }
+
+    function openCardDetail(item, card = null) {
+      if (!item) return;
+      markRecommendationSeen(item, card);
+
+      const url = contentUrl(item);
+      const platformSlug = canonicalPlatformSlug(item.platform || "bilibili");
+      const platformTitle = platformName(item.platform);
+      const durationBadge = item.content_type === "video" && item.duration > 0
+        ? ` · ⏱ ${formatDuration(item.duration)}`
+        : "";
+      const stats = recommendationStats(item);
+      const reasonText = item.reason || "基于你的近期口味与兴趣发现";
+      const summaryText = item.summary || item.desc || item.description || "暂无更详细的文字摘要，建议点击上方链接直接浏览原文。";
+
+      const platformHeader = $("#cardDetailPlatform");
+      if (platformHeader) {
+        platformHeader.innerHTML = `${platformLogoSvg(item.platform)} <span style="vertical-align: middle;">${escapeHtml(platformTitle)}</span>`;
+      }
+      const titleHeader = $("#cardDetailDrawerTitle");
+      if (titleHeader) {
+        titleHeader.textContent = item.title || "卡片详注";
+      }
+
+      const container = $("#cardDetailContent");
+      if (container) {
+        const coverHtml = item.cover_url
+          ? `<div class="card-detail-cover">
+               <img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title || "")}" loading="lazy">
+             </div>`
+          : "";
+
+        container.innerHTML = `
+          ${coverHtml}
+          <div>
+            <h3 class="card-detail-title">${escapeHtml(item.title || "")}</h3>
+            <div class="card-detail-meta">
+              <span>作者：${escapeHtml(item.author || "未知")}</span>
+              ${item.pubdate ? `<span>发布：${escapeHtml(formatTime(item.pubdate))}</span>` : ""}
+              ${durationBadge ? `<span>${escapeHtml(durationBadge)}</span>` : ""}
+              ${stats ? `<span>${escapeHtml(stats)}</span>` : ""}
+            </div>
+          </div>
+
+          <div class="card-detail-actions-row">
+            ${url ? `<a class="pill-btn primary card-external-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">跳转查看原文 ↗</a>` : `<span>暂无外链</span>`}
+            <div class="card-actions" data-detail-actions>
+              <button class="small-btn" data-detail-action="share-card" type="button" title="导出为精美书签分享图">生成分享卡</button>
+              <button class="small-btn danger" data-detail-action="block-author" type="button" title="屏蔽此作者，不再推荐其内容">屏蔽作者</button>
+              <button class="feedback-icon-btn" data-detail-action="like" type="button" aria-label="喜欢" title="喜欢">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="dislike" type="button" aria-label="不感兴趣" title="不感兴趣">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="watch-later" type="button" aria-label="稍后再看" title="稍后再看">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </button>
+              <button class="feedback-icon-btn" data-detail-action="favorite" type="button" aria-label="收藏" title="收藏">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="card-detail-section">
+            <p class="eyebrow">编目批注 · 为什么推给你</p>
+            <div class="reason is-expanded">
+              <span class="reason-text">${escapeHtml(reasonText)}</span>
+            </div>
+          </div>
+
+          <div class="card-detail-section">
+            <p class="eyebrow">内容纲要 / 摘要</p>
+            <div class="card-detail-summary">${escapeHtml(summaryText)}</div>
+          </div>
+
+          <div class="card-detail-section card-detail-chat">
+            <p class="eyebrow">研读对话 · 围绕此内容提问</p>
+            <form class="card-detail-chat-form" id="cardDetailChatForm">
+              <input type="text" class="card-detail-chat-input" id="cardDetailChatInput" placeholder="向阿B提问：这篇内容主要讲了什么？有哪些亮点？">
+              <button class="pill-btn primary" type="submit">提问</button>
+            </form>
+            <div class="card-detail-chat-reply" id="cardDetailChatReply" hidden></div>
+          </div>
+        `;
+
+        const extLink = container.querySelector(".card-external-link");
+        if (extLink) {
+          extLink.addEventListener("click", () => {
+            trackRecommendationClick(item);
+            markRecommendationSeen(item, card);
+          });
+        }
+
+        const actionsContainer = container.querySelector("[data-detail-actions]");
+        if (actionsContainer) {
+          actionsContainer.querySelectorAll("[data-detail-action]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const action = btn.dataset.detailAction;
+              if (action === "share-card") {
+                generateShareCard(item);
+                return;
+              }
+              if (action === "block-author") {
+                const authorName = item.author || item.up_name;
+                if (!authorName) {
+                  showToast("该内容没有作者信息");
+                  return;
+                }
+                void blockAuthor(authorName, item.platform);
+                return;
+              }
+              if (action === "watch-later" || action === "favorite") {
+                const kind = action === "watch-later" ? "watch_later" : "favorite";
+                const savedItem = desktopSavedItem(item);
+                void desktopSavedMutations.toggle(kind, savedItem).then(() => {
+                  const isSaved = desktopSavedMutations.isSaved(kind, savedItem.item_key);
+                  btn.setAttribute("aria-pressed", isSaved ? "true" : "false");
+                  showToast(isSaved ? `已${kind === "favorite" ? "收藏" : "加入稍后再看"}` : "已移除");
+                  if (card) {
+                    const cardBtn = card.querySelector(`[data-action="${action}"]`);
+                    if (cardBtn) cardBtn.setAttribute("aria-pressed", isSaved ? "true" : "false");
+                  }
+                });
+              } else if (action === "like" || action === "dislike") {
+                void submitFeedback(item, action).then(() => {
+                  showToast(action === "like" ? "已记录喜欢" : "已记录不感兴趣");
+                });
+              }
+            });
+          });
+        }
+
+        const chatForm = container.querySelector("#cardDetailChatForm");
+        const chatInput = container.querySelector("#cardDetailChatInput");
+        const chatReply = container.querySelector("#cardDetailChatReply");
+        if (chatForm && chatInput && chatReply) {
+          chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const text = chatInput.value.trim();
+            if (!text) return;
+            chatInput.value = "";
+            chatReply.hidden = false;
+            chatReply.textContent = "阿B 正在思考…";
+            try {
+              await sendChat(text, {
+                scope: "recommendation",
+                subjectId: String(item.bvid || item.content_id || item.id || ""),
+                subjectTitle: item.title || "",
+                contextPrefix: `用户正在研读内容《${item.title}》（来自 ${platformName(item.platform)}，理由：${item.reason}）。请围绕该内容解答用户问题：`
+              });
+              const lastMsg = state.chat[state.chat.length - 1];
+              chatReply.textContent = lastMsg?.text || "已完成思考并记录。";
+            } catch (err) {
+              chatReply.textContent = `提问未成功：${err?.message || "后端服务异常"}`;
+            }
+          });
+        }
+      }
+
+      openPanel("cardDetailDrawer");
+    }
 
     function recommendationCardHtml(item, index) {
       const url = contentUrl(item);
@@ -5131,7 +5991,7 @@ ${savedCardFeedbackBarHtml(listKind)}
             ${durationBadge}
           </button>`}
           <div>
-            <p class="video-title">${escapeHtml(item.title)}</p>
+            <p class="video-title" role="button" tabindex="0" title="点击展开卡片详览与速读">${escapeHtml(item.title)}</p>
             <p class="video-meta">${recommendationMetaHtml(item)}</p>
             ${stats ? `<p class="video-stats">${escapeHtml(stats)}</p>` : ""}
           </div>
@@ -5139,13 +5999,29 @@ ${savedCardFeedbackBarHtml(listKind)}
 ${cardFeedbackBarHtml()}`;
     }
 
-    function createRecommendationCard(item, html) {
+    function createRecommendationCard(item, html, index = 0) {
       const card = document.createElement("article");
       card.className = recommendationIsTextCard(item) && !recommendationTextCardBackdrop(item)
         ? "video-card is-text-only"
         : "video-card";
+      if (isRecommendationSeen(item)) {
+        card.classList.add("is-seen");
+      }
+      card._recommendationItem = item;
+      // 进场错峰：同一批卡片按位置依次落下（CSS 只读这个变量，序号不参与对账）。
+      card.style.setProperty("--card-index", String(Math.min(index, 11)));
       card.dataset.bvid = item.bvid || item.id;
       card.innerHTML = html;
+      const titleEl = card.querySelector(".video-title");
+      if (titleEl) {
+        titleEl.addEventListener("click", () => openCardDetail(item, card));
+        titleEl.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openCardDetail(item, card);
+          }
+        });
+      }
       const reason = card.querySelector(".reason");
       const toggleReason = () => {
         const expanded = reason.classList.toggle("is-expanded");
@@ -5217,7 +6093,7 @@ ${cardFeedbackBarHtml()}`;
         const node =
           cached && cached.html === html && cached.id === item.id && cached.node.parentNode === grid
             ? cached.node
-            : createRecommendationCard(item, html);
+            : createRecommendationCard(item, html, index);
         next.set(key, { node, html, id: item.id });
         const target = cursor ? cursor.nextSibling : grid.firstChild;
         if (node !== target) grid.insertBefore(node, target);
@@ -5231,6 +6107,10 @@ ${cardFeedbackBarHtml()}`;
       for (const skeleton of skeletons) grid.appendChild(skeleton);
       previous.clear();
       for (const [key, entry] of next) previous.set(key, entry);
+      // 卡片建好之后再补中文，不进对账循环：这一句只往 text-localize 的队列里塞几个
+      // 文本节点，幂等且不产生 DOM 结构变化。
+      localizeCardText(grid);
+      markClampedReasons(grid);
     }
 
     function renderVideos() {
@@ -5241,34 +6121,48 @@ ${cardFeedbackBarHtml()}`;
       }
       const loadMore = $("#loadMoreBtn");
       if (loadMore) loadMore.hidden = false;
+      updateLoadMoreLabel();
       const items = filteredVideos();
       if (!items.length) {
         // 平台 Tab 的空态要区分「本会话还没装入」和「该平台暂时没有新候选」，
         // 用的是同一份可推库存快照，不是 DOM 卡片数。
         const activePlatform = activePlatformSlug();
         const activePlatformCount = platformAvailableCount(activePlatform);
+        const activeItems = activeFeedItems();
         const loadFailed = desktopRecommendationLoadState === "failed" || desktopRecommendationLoadState === "failed-exhausted";
         const runtime = normalizeRuntimeStatus(state.runtimeStatus);
-        const discoveryFailure = !state.videos.length && !loadFailed && runtime?.manual_refresh_state !== "running"
+        const discoveryFailure = !activeItems.length && !loadFailed && runtime?.manual_refresh_state !== "running"
           && runtime?.pool_available_count === 0
           ? runtime.manual_refresh_state === "failed"
             ? runtime.manual_refresh_message || "内容发现未完成，请检查来源连接后重试内容发现。"
             : runtime.discovery_failure_message
+          : "";
+        const typeMessage = state.typeFilter !== "全部"
+          ? `当前「${escapeHtml(state.typeFilter)}」筛选下没有内容，切换「全部」看看。`
+          : "";
+        const channelMessage = isAiFrontierFilter() && !loadFailed
+          ? state.channelLoading
+            ? "正在加载 AI 前沿…"
+            : "AI 前沿暂时没有新内容，后台会继续补货；也可以点「加载更多 AI 前沿」再找一批。"
           : "";
         const platformMessage = activePlatform && !loadFailed
           ? activePlatformCount === null
             ? `${escapeHtml(platformName(activePlatform))}还没有装入推荐，可以点「加载更多推荐」试试。`
             : activePlatformCount > 0
               ? `${escapeHtml(platformName(activePlatform))}还有 ${activePlatformCount} 条候选没装进来，点「加载更多推荐」即可。`
-              : `${escapeHtml(platformName(activePlatform))}暂时没有新候选，后台会继续补货。`
+              : `${escapeHtml(platformName(activePlatform))}暂时没有新候选，后台会继续补货；补上后会直接出现在这里。`
           : "";
         const message = state.query.trim()
           ? `没有找到包含“${escapeHtml(state.query.trim())}”的推荐。`
           : discoveryFailure
             ? escapeHtml(discoveryFailure)
+          : typeMessage
+            ? typeMessage
+          : channelMessage
+            ? channelMessage
           : platformMessage
             ? platformMessage
-            : state.videos.length
+            : activeItems.length
               ? "当前筛选下没有推荐。"
               : desktopRecommendationLoadState === "failed"
                 ? "推荐加载失败，正在重试；这不代表候选池真的为空。"
@@ -5279,7 +6173,8 @@ ${cardFeedbackBarHtml()}`;
           ? '<button class="small-btn" id="retryEmptyRecommendations" type="button">重新加载</button>'
           : "";
         renderedRecommendationCards.clear();
-        grid.innerHTML = `<div class="empty-state">${message}${retry}</div>`;
+        // 空态也是一张卡位：画出来的空槽标记，不用 emoji（emoji 一眼就是模板货）。
+        grid.innerHTML = `<div class="empty-state"><span class="empty-state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h13v11h-13z"/><path d="M6.5 4.5h13v11"/><path d="M6.5 11h7"/></svg></span><span class="empty-state-text">${message}${retry}</span></div>`;
         $("#retryEmptyRecommendations")?.addEventListener("click", restartDesktopFailedRecoveries);
         return;
       }
@@ -5324,6 +6219,7 @@ ${cardFeedbackBarHtml()}`;
     function openRecommendation(item, card) {
       const url = contentUrl(item);
       trackRecommendationClick(item);
+      markRecommendationSeen(item, card);
       card.querySelector(".status-line").textContent = url ? "已打开真实内容链接，点击信号会在后台记录。" : "后端没有返回可打开链接；点击信号会在后台记录。";
       showToast(url ? `打开：${item.title}` : "后端没有返回可打开链接");
     }
@@ -5475,9 +6371,10 @@ ${cardFeedbackBarHtml()}`;
       const actions = card.querySelector(".card-actions");
       const button = card.querySelector(".chat-action");
       actions.classList.add("is-composing");
+      // 同一个按钮承担入口与发送：换图标靠 .is-send 在 CSS 里切（markup 里两个 span
+      // 都在），不再用 innerHTML 覆写，关掉时才不会把入口图标也一起丢掉。
       button.classList.add("is-send");
       button.dataset.action = "send-comment";
-      button.innerHTML = sendIcon;
       button.setAttribute("aria-label", "发送");
       button.setAttribute("title", "发送");
       requestAnimationFrame(() => card.querySelector(".comment-field input")?.focus());
@@ -5489,9 +6386,8 @@ ${cardFeedbackBarHtml()}`;
       actions.classList.remove("is-composing");
       button.classList.remove("is-send");
       button.dataset.action = "comment";
-      button.textContent = "聊一聊";
-      button.removeAttribute("aria-label");
-      button.removeAttribute("title");
+      button.setAttribute("aria-label", "聊一句");
+      button.setAttribute("title", "聊一句");
     }
 
     // Collapse an open composer back to the 聊一聊 button when focus leaves it
@@ -5735,7 +6631,9 @@ ${cardFeedbackBarHtml()}`;
     function formatPersonalityType(value) {
       if (!value) return "";
       if (typeof value !== "object") return String(value);
-      return String(value.type || value.mbti || value.name || value.label || "");
+      const base = String(value.type || value.mbti || value.name || value.label || "");
+      const identity = String(value.identity || "").toUpperCase();
+      return base && identity ? `${base}-${identity}` : base;
     }
 
     function formatProfileObject(value) {
@@ -5833,14 +6731,20 @@ ${cardFeedbackBarHtml()}`;
     function mbtiHtml(value) {
       if (!value) return `<p class="video-meta">MBTI 还没推断出来，再多看一阵。</p>`;
       if (typeof value !== "object") return `<p class="video-meta">${escapeHtml(value)}</p>`;
-      const type = value.type || value.mbti || value.name || "—";
+      const identity = String(value.identity || "").toUpperCase();
+      const baseType = value.type || value.mbti || value.name || "—";
+      const type = `${baseType}${identity ? `-${identity}` : ""}`;
+      // 自测结果和模型推断要一眼分得开：一个是「你测过的」，一个是「我看出来的」。
+      const sourceLine = value.declared
+        ? `<span class="mbti-source-badge">你自测</span>`
+        : `<span class="mbti-confidence">整体可信度 ${formatPercent(value.confidence)}</span>`;
       const axes = [
         { key: "EI", left: "E", right: "I", leftName: "外向", rightName: "内向" },
         { key: "SN", left: "S", right: "N", leftName: "实感", rightName: "直觉" },
         { key: "TF", left: "T", right: "F", leftName: "思考", rightName: "情感" },
         { key: "JP", left: "J", right: "P", leftName: "判断", rightName: "知觉" }
       ].map((config) => mbtiAxisHtml(value, config)).filter(Boolean).join("");
-      return `<div class="mbti-block"><div class="mbti-type-row"><span class="mbti-type-label">${escapeHtml(type)}</span>${value.confidence ? `<span class="mbti-confidence">整体可信度 ${formatPercent(value.confidence)}</span>` : ""}</div>${axes ? `<div class="mbti-dimensions">${axes}</div>` : ""}</div>`;
+      return `<div class="mbti-block"><div class="mbti-type-row"><span class="mbti-type-label">${escapeHtml(type)}</span>${sourceLine}</div>${axes ? `<div class="mbti-dimensions">${axes}</div>` : ""}</div>`;
     }
 
     function interestTreeHtml(value, fallback) {
@@ -5994,7 +6898,10 @@ ${cardFeedbackBarHtml()}`;
         profileLayer("Core — 比较稳定的底色", [
           profileItem("核心特质", chipsHtml(profile.core_traits, "这部分还在慢慢补。")),
           profileItem("深层需求", chipsHtml(profile.deep_needs, "这块还要再多看一点。")),
-          profileItem("MBTI / 人格推断", mbtiHtml(firstValue(profile.mbti, profile.personality_type)))
+          profileItem(
+            (firstValue(profile.mbti, profile.personality_type) || {}).declared ? "MBTI / 你自测的结果" : "MBTI / 人格推断",
+            mbtiHtml(firstValue(profile.mbti, profile.personality_type))
+          )
         ]),
         profileLayer("Values — 你在内容里长期在找什么", [
           profileItem("价值偏好", chipsHtml(firstValue(profile.values, profile.value_preferences), "价值偏好还在继续归拢。")),
@@ -6036,6 +6943,7 @@ ${cardFeedbackBarHtml()}`;
       personality_portrait: "人格素描",
       "core.core_traits": "核心特质",
       "core.deep_needs": "深层需求",
+      "core.mbti": "MBTI 人格",
       "values_layer.values": "价值偏好",
       "values_layer.motivational_drivers": "内在驱动力",
       likes: "感兴趣的方向",
@@ -6053,6 +6961,7 @@ ${cardFeedbackBarHtml()}`;
       "personality_portrait",
       "core.core_traits",
       "core.deep_needs",
+      "core.mbti",
       "values_layer.values",
       "values_layer.motivational_drivers",
       "likes",
@@ -6134,6 +7043,69 @@ ${cardFeedbackBarHtml()}`;
           <div class="edit-field-actions">
             <button class="pill-btn primary" type="button" data-edit-save-scalar="${escapeHtml(path)}">保存</button>
             ${pinned ? `<button class="edit-reset-btn" type="button" data-edit-reset="${escapeHtml(path)}">恢复 AI 建议</button>` : ""}
+          </div>
+        </div>`;
+    }
+
+    // 自测 MBTI：四个滑杆就是四组二分维度，类型由滑块直接推出来（左极百分比 >= 50
+    // 取左字母），所以不需要让用户手打 "INFJ" 再和滑块对不上。第五维度 A/T 单独一格。
+    const MBTI_AXES = [
+      { key: "EI", left: "E", leftName: "外向", right: "I", rightName: "内向" },
+      { key: "SN", left: "S", leftName: "实感", right: "N", rightName: "直觉" },
+      { key: "TF", left: "T", leftName: "思考", right: "F", rightName: "情感" },
+      { key: "JP", left: "J", leftName: "判断", right: "P", rightName: "知觉" }
+    ];
+
+    function mbtiAxesFromField(field) {
+      const dims = (field && typeof field.value === "object" && field.value?.dimensions) || {};
+      const type = String((field?.value && field.value.type) || "INFJ").toUpperCase();
+      return MBTI_AXES.map((axis, index) => {
+        const stored = Number(dims[axis.key]);
+        const dominant = type[index] || axis.right;
+        // 存的是「主导极强度」，滑杆用的是「左极百分比」，这里换算一次。
+        const dominantStrength = Number.isFinite(stored) ? Math.max(0, Math.min(1, stored)) : 0.6;
+        const leftPct = dominant === axis.left
+          ? Math.round(dominantStrength * 100)
+          : Math.round((1 - dominantStrength) * 100);
+        return { ...axis, leftPct };
+      });
+    }
+
+    function mbtiTypeFromAxes(axes) {
+      return axes.map((axis) => (axis.leftPct >= 50 ? axis.left : axis.right)).join("");
+    }
+
+    function profileEditMbtiField(path, label, field) {
+      const pinned = Boolean(field.pinned);
+      const axes = mbtiAxesFromField(field);
+      const identity = String((field?.value && field.value.identity) || "").toUpperCase();
+      const suggestion = field.ai_suggestion && typeof field.ai_suggestion === "object"
+        ? String(field.ai_suggestion.type || "")
+        : "";
+      const rows = axes.map((axis) => `
+            <div class="edit-mbti-axis">
+              <span class="edit-mbti-pole${axis.leftPct >= 50 ? " is-dominant" : ""}">${axis.left} <small>${axis.leftName}</small></span>
+              <input class="edit-scalar-input" type="range" min="0" max="100" step="1" value="${axis.leftPct}" data-edit-mbti-axis="${axis.key}" aria-label="${axis.leftName} / ${axis.rightName}" />
+              <span class="edit-mbti-pole${axis.leftPct < 50 ? " is-dominant" : ""}">${axis.right} <small>${axis.rightName}</small></span>
+              <span class="edit-scalar-value" data-edit-mbti-pct="${axis.key}">${axis.leftPct >= 50 ? axis.left : axis.right} ${axis.leftPct >= 50 ? axis.leftPct : 100 - axis.leftPct}%</span>
+            </div>`).join("");
+      return `
+        <div class="edit-field edit-mbti-field">
+          <div class="edit-field-head">
+            <span class="edit-field-label">${escapeHtml(label)}</span>
+            ${pinned ? `<span class="edit-badge">你自测</span>` : ""}
+            <span class="edit-mbti-type" data-edit-mbti-type>${escapeHtml(mbtiTypeFromAxes(axes))}${identity ? `-${escapeHtml(identity)}` : ""}</span>
+          </div>
+          <p class="edit-mbti-note">照着 16Personalities 之类的自测结果拖四个滑杆即可；类型由滑杆直接算出来。写进画像后不会被后续自动推断覆盖。</p>
+          ${rows}
+          <div class="edit-mbti-identity" role="radiogroup" aria-label="第五维度">
+            <span class="edit-mbti-identity-label">第五维度</span>
+            ${["", "A", "T"].map((value) => `<button type="button" role="radio" class="edit-mbti-identity-btn${value === identity ? " is-active" : ""}" data-edit-mbti-identity="${value}" aria-checked="${value === identity ? "true" : "false"}">${value === "" ? "不填" : value}</button>`).join("")}
+          </div>
+          ${suggestion ? `<p class="edit-drift-hint">系统现在推断为：${escapeHtml(suggestion)}</p>` : ""}
+          <div class="edit-field-actions">
+            <button class="pill-btn primary" type="button" data-edit-mbti-save="${escapeHtml(path)}">保存自测结果</button>
+            ${pinned ? `<button class="edit-reset-btn" type="button" data-edit-reset="${escapeHtml(path)}">恢复系统推断</button>` : ""}
           </div>
         </div>`;
     }
@@ -6227,6 +7199,7 @@ ${cardFeedbackBarHtml()}`;
         else if (field.type === "scalar") html += profileEditScalarField(path, label, field);
         else if (field.type === "list") html += profileEditListField(path, label, field);
         else if (field.type === "interest") html += profileEditInterestField(path, label, field);
+        else if (field.type === "mbti") html += profileEditMbtiField(path, label, field);
       }
       return html;
     }
@@ -6257,6 +7230,82 @@ ${cardFeedbackBarHtml()}`;
             op: "remove",
             value: btn.dataset.editValue,
             parent: btn.dataset.editParent || ""
+          });
+        });
+      });
+      // 自测 MBTI：滑杆即时改标签 + 推出来的类型；保存时把「左极百分比」换算回
+      // 「主导极强度」，类型也由当时的两极大小决定 —— 前端不做第二套语义。
+      root.querySelectorAll("[data-edit-mbti-axis]").forEach((slider) => {
+        slider.addEventListener("input", () => {
+          const fieldEl = slider.closest(".edit-mbti-field");
+          if (!fieldEl) return;
+          const axes = MBTI_AXES.map((axis) => {
+            const el = fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`);
+            const leftPct = Math.max(0, Math.min(100, Number.parseInt(el?.value || "50", 10)));
+            const pctEl = fieldEl.querySelector(`[data-edit-mbti-pct="${axis.key}"]`);
+            const dominantLetter = leftPct >= 50 ? axis.left : axis.right;
+            const dominantPct = leftPct >= 50 ? leftPct : 100 - leftPct;
+            if (pctEl) pctEl.textContent = `${dominantLetter} ${dominantPct}%`;
+            const poles = fieldEl.querySelectorAll(`[data-edit-mbti-axis="${axis.key}"]`);
+            const row = poles.length ? poles[0].closest(".edit-mbti-axis") : null;
+            if (row) {
+              const poleEls = row.querySelectorAll(".edit-mbti-pole");
+              poleEls[0]?.classList.toggle("is-dominant", leftPct >= 50);
+              poleEls[1]?.classList.toggle("is-dominant", leftPct < 50);
+            }
+            return { key: axis.key, left: axis.left, right: axis.right, leftPct };
+          });
+          const typeEl = fieldEl.querySelector("[data-edit-mbti-type]");
+          if (typeEl) {
+            const identityBtn = fieldEl.querySelector(".edit-mbti-identity-btn.is-active");
+            const identity = identityBtn?.dataset.editMbtiIdentity || "";
+            typeEl.textContent = `${mbtiTypeFromAxes(axes)}${identity ? `-${identity}` : ""}`;
+          }
+        });
+      });
+      root.querySelectorAll("[data-edit-mbti-identity]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const fieldEl = btn.closest(".edit-mbti-field");
+          fieldEl?.querySelectorAll("[data-edit-mbti-identity]").forEach((other) => {
+            const active = other === btn;
+            other.classList.toggle("is-active", active);
+            other.setAttribute("aria-checked", active ? "true" : "false");
+          });
+          const typeEl = fieldEl?.querySelector("[data-edit-mbti-type]");
+          if (!typeEl || !fieldEl) return;
+          const axes = MBTI_AXES.map((axis) => ({
+            ...axis,
+            leftPct: Number.parseInt(fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`)?.value || "50", 10)
+          }));
+          const identity = btn.dataset.editMbtiIdentity || "";
+          typeEl.textContent = `${mbtiTypeFromAxes(axes)}${identity ? `-${identity}` : ""}`;
+        });
+      });
+      root.querySelectorAll("[data-edit-mbti-save]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (btn.disabled) return;
+          const fieldEl = btn.closest(".edit-mbti-field");
+          if (!fieldEl) return;
+          const dimensions = {};
+          const letters = [];
+          for (const axis of MBTI_AXES) {
+            const leftPct = Math.max(0, Math.min(100, Number.parseInt(fieldEl.querySelector(`[data-edit-mbti-axis="${axis.key}"]`)?.value || "50", 10)));
+            const dominant = leftPct >= 50 ? axis.left : axis.right;
+            letters.push(dominant);
+            dimensions[axis.key] = Math.round((leftPct >= 50 ? leftPct : 100 - leftPct)) / 100;
+          }
+          const identityBtn = fieldEl.querySelector(".edit-mbti-identity-btn.is-active");
+          btn.disabled = true;
+          await applyProfileEdit({
+            target: btn.dataset.editMbtiSave,
+            op: "set",
+            mbti: {
+              type: letters.join(""),
+              identity: identityBtn?.dataset.editMbtiIdentity || "",
+              dimensions,
+              confidence: 1,
+              source: "用户自测"
+            }
           });
         });
       });
@@ -9088,21 +10137,25 @@ ${cardFeedbackBarHtml()}`;
 
     async function reshuffle() {
       const reshuffleButton = $("#reshuffleBtn");
-      // 请求发出前捕获当时选中的平台：用户在请求期间切 Tab 不能把响应写进错误批次。
-      const requestPlatform = activePlatformSlug();
+      // 请求发出前捕获当时选中的平台/频道：用户在请求期间切 Tab 不能把响应写进错误批次。
+      const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";
+      const requestPlatform = requestChannel ? "" : activePlatformSlug();
       // 当前可见卡片始终是本次换一批的排除集；平台定向时覆盖该平台
       // 本会话已加载的全部内容（不止可见的那些）。
       const visibleForExclusion = filteredVideos().filter((item) => item?.id != null);
       const visibleKeys = new Set(visibleForExclusion.map((item) => recommendationKey(item)));
-      const scopedForExclusion = requestPlatform
-        ? state.videos.filter((item) => item?.id != null && recommendationPlatformSlug(item) === requestPlatform)
-        : visibleForExclusion;
+      const scopedForExclusion = requestChannel
+        ? state.channelVideos.filter((item) => item?.id != null)
+        : requestPlatform
+          ? state.videos.filter((item) => item?.id != null && recommendationPlatformSlug(item) === requestPlatform)
+          : visibleForExclusion;
       if (reshuffleButton) reshuffleButton.disabled = true;
       try {
         const excludedBvids = scopedForExclusion.map((item) => item.bvid).filter(Boolean);
         const requestBody = { excluded_bvids: excludedBvids };
         // "全部" 不带 source_platform：旧客户端 / 兼容路径的请求形状保持不变。
         if (requestPlatform) requestBody.source_platform = requestPlatform;
+        if (requestChannel) requestBody.channel = requestChannel;
         const payload = await requestJson(ENDPOINTS.reshuffle, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -9115,11 +10168,14 @@ ${cardFeedbackBarHtml()}`;
         // 后端返回空数组时保留现有卡片，不制造空屏。
         if (fresh.length) {
           recommendationListVersion += 1;
-          state.videos = requestPlatform ? replacePlatformCards(state.videos, requestPlatform, fresh) : fresh;
+          state.channelVideos = requestChannel ? fresh : state.channelVideos;
+          if (!requestChannel) {
+            state.videos = requestPlatform ? replacePlatformCards(state.videos, requestPlatform, fresh) : fresh;
+          }
           renderAll();
-          showToast("已换一批推荐");
+          showToast(requestChannel ? "已换一批 AI 前沿" : "已换一批推荐");
         } else {
-          showToast("暂时没有更多新推荐了");
+          showToast(requestChannel ? "AI 前沿暂时没有更多新内容" : "暂时没有更多新推荐了");
         }
       } finally {
         schedulePlatformAvailabilityRefresh();
@@ -9131,7 +10187,7 @@ ${cardFeedbackBarHtml()}`;
     // 它负责唤醒后端已有的补货链路；只有自动续页会被库存 gate 拦下。
     function rememberEmptyAppend(platform) {
       const inventory = state.platformAvailability;
-      const available = platform
+      const available = platform && platform !== AI_FRONTIER_CHANNEL
         ? inventory?.by_platform?.[platform] ?? 0
         : inventory?.total_available ?? state.runtimeStatus?.pool_available_count ?? 0;
       emptyAppendInventory.set(platform, available);
@@ -9140,13 +10196,17 @@ ${cardFeedbackBarHtml()}`;
     async function appendMore() {
       if (appendMoreInFlight) return;
       appendMoreInFlight = true;
-      // 与换一批同理：捕获请求开始时的平台，响应到达时不再读 state.filter。
-      const requestPlatform = activePlatformSlug();
+      // 与换一批同理：捕获请求开始时的平台/频道，响应到达时不再读 state.filter。
+      const requestChannel = isAiFrontierFilter() ? AI_FRONTIER_CHANNEL : "";
+      const requestPlatform = requestChannel ? "" : activePlatformSlug();
+      const activeItems = requestChannel ? state.channelVideos : state.videos;
+      const appendScopeKey = requestPlatform || requestChannel;
       showAppendSkeletons();
       const listVersionAtRequest = recommendationListVersion;
       try {
-        const requestBody = { excluded_bvids: state.videos.map((v) => v.bvid) };
+        const requestBody = { excluded_bvids: activeItems.map((v) => v.bvid) };
         if (requestPlatform) requestBody.source_platform = requestPlatform;
+        if (requestChannel) requestBody.channel = requestChannel;
         const payload = await requestJson(ENDPOINTS.append, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) });
         if (!payload) {
           showToast("加载更多失败，请稍后重试");
@@ -9159,31 +10219,43 @@ ${cardFeedbackBarHtml()}`;
           const returned = normalizeRecommendationList(payload.items);
           if (requestPlatform && reportPlatformScopeLeak("加载更多", requestPlatform, returned)) return;
           // 按稳定 recommendation key 去重后再追加。
-          const loadedKeys = new Set(state.videos.map((item) => recommendationKey(item)));
+          const loadedKeys = new Set(activeItems.map((item) => recommendationKey(item)));
           const freshItems = returned.filter((item) => {
             const key = recommendationKey(item);
             if (!key || loadedKeys.has(key)) return false;
             loadedKeys.add(key);
             return true;
           });
-          if (freshItems.length) emptyAppendInventory.delete(requestPlatform);
-          else rememberEmptyAppend(requestPlatform);
+          if (freshItems.length) emptyAppendInventory.delete(appendScopeKey);
+          else rememberEmptyAppend(appendScopeKey);
           const appendCameUpShort = freshItems.length < APPEND_BATCH_SIZE;
-          state.videos = state.videos.concat(freshItems);
+          if (requestChannel) {
+            state.channelVideos = state.channelVideos.concat(freshItems);
+          } else {
+            state.videos = state.videos.concat(freshItems);
+          }
           renderAll();
           // Keep decoding off the interaction path: slow first-miss covers should
           // not delay the new recommendation cards from appearing.
           void warmCoverImages(freshItems, { waitForDecode: true }).catch(() => {});
-          if (!appendCameUpShort) {
-            showToast("已加载更多推荐");
-          } else if (freshItems.length) {
+          // 卡片自己出现在列表里就是反馈；满批加载不再弹提示（用户明确不想要这条）。
+          // 只有「本批见底 / 都已反馈过」才说话，且同一句话 20 秒内只出现一次。
+          if (appendCameUpShort && freshItems.length) {
             showToast(`已加载 ${freshItems.length} 条，候选池暂时见底，后台正在补货，${retryHint}`);
-          } else {
+          } else if (!freshItems.length) {
             showToast(`这批内容都已反馈过，后台正在补货，${retryHint}`);
           }
         } else {
-          rememberEmptyAppend(requestPlatform);
-          showToast(`候选池暂时没有新内容，已请求后台补货，${retryHint}`);
+          rememberEmptyAppend(appendScopeKey);
+          // 列表空态里已经写了同一句「后台会继续补货」；再弹一条 toast 就是同一句话
+          // 说两遍。只有列表还在（只是这批没新货）时才用 toast 补一句。
+          if (!$("#videoGrid .empty-state")) {
+            showToast(
+              requestChannel
+                ? "AI 前沿暂时没有更多内容，点「加载更多 AI 前沿」再找一批"
+                : `候选池暂时没有新内容，已请求后台补货，${retryHint}`
+            );
+          }
         }
       } finally {
         removeAppendSkeletons();
@@ -9218,6 +10290,7 @@ ${cardFeedbackBarHtml()}`;
         pool_available_count: Number(state.platformAvailability?.total_available ?? merged.pool_available_count ?? merged.pool_available ?? merged.available_count ?? 0),
         pool_pending_count: Number(merged.pool_pending_count ?? 0),
         pool_target_count: Number(merged.pool_target_count ?? state.config?.scheduler?.pool_target_count ?? 0),
+        pool_raw_count: Number(merged.pool_raw_count ?? 0),
         last_discovered_count: Number(merged.last_discovered_count ?? 0),
         last_replenished_count: Number(merged.last_replenished_count ?? 0),
         recent_pool_topics: Array.isArray(merged.recent_pool_topics) ? merged.recent_pool_topics.map(String).filter(Boolean) : [],
@@ -9338,9 +10411,41 @@ ${cardFeedbackBarHtml()}`;
       if (runtime.manual_refresh_state === "running") return runtime.pool_available_count > 0 ? "后台继续补货中" : "正在补货";
       if (runtime.manual_refresh_state === "success") return "刚同步完成";
       if (runtime.manual_refresh_state === "failed") return "刷新失败";
-      if (runtime.pending_signal_events > 0) return `已记下 ${runtime.pending_signal_events} 个新动作`;
+      if (runtime.pending_signal_events > 0) return `刚记下你 ${runtime.pending_signal_events} 条新动态`;
       if (runtime.runtime_event_type === "refresh.pool_updated") return "刚同步推荐池";
       return runtime.pool_available_count > 0 ? "可直接换一批" : "等待后台补货";
+    }
+
+    // 侧栏摘要说「现在能不能换」，不复述上面的数字：库存数字只出现在
+    // 统计格里一次，摘要负责讲清状态（PRODUCT.md 原则 3：状态用一句人话讲清）。
+    function poolSummarySentence(runtime) {
+      if (!runtime) return "";
+      const available = Number(runtime.pool_available_count) || 0;
+      const target = Number(runtime.pool_target_count) || 0;
+      if (runtime.manual_refresh_state === "running") return "后台正在翻找新的内容。";
+      if (available === 0) return "库存见底，后台在继续找。";
+      if (target > 0 && available >= target) return "库存充足，慢慢换。";
+      return "够换一阵子，后台还在补。";
+    }
+
+    // 运行时事件名是内部词汇，不能直接印到侧栏摘要上。
+    function runtimeEventSentence(type) {
+      switch (String(type || "")) {
+        case "refresh.pool_updated":
+          return "刚同步过推荐池，库存有新变化。";
+        case "pool_status":
+          return "推荐池库存已更新。";
+        case "recommendation.reshuffled":
+          return "刚换了一批推荐。";
+        case "recommendation.served":
+          return "刚取走一批推荐。";
+        case "sources.status":
+          return "内容源状态已更新。";
+        case "degraded":
+          return "AI 服务配置有误，推荐功能暂停。";
+        default:
+          return "";
+      }
     }
 
     function renderPoolStatus(status = state.runtimeStatus) {
@@ -9356,7 +10461,11 @@ ${cardFeedbackBarHtml()}`;
       }
       $("#metricPool").textContent = String(runtime.pool_available_count);
       const summary = getPoolStatusSummary(runtime);
-      $("#poolAvailable").textContent = summary?.available || "后端未初始化";
+      // 「池中素材」是原始候选数，跟统计格的「当前可换库存」是两个不同的量：
+      // 之前这一格复述同一句话，侧栏因此出现三遍同一个数字。
+      $("#poolAvailable").textContent = runtime.pool_raw_count > 0
+        ? String(runtime.pool_raw_count)
+        : "—";
       $("#poolReplenished").textContent = summary?.replenished || "—";
       $("#poolTopics").textContent = summary?.topics || "—";
       $("#poolTopicsLabel").textContent = summary?.replenished === "内容发现未完成" ? "补货状态" : "最近主题";
@@ -9417,12 +10526,11 @@ ${cardFeedbackBarHtml()}`;
     function applyRuntimeStatus(payload) {
       if (!payload) return;
       state.runtimeStatus = normalizeRuntimeStatus(payload);
-      const summary = getPoolStatusSummary(state.runtimeStatus);
       $("#statusLabel").textContent = state.runtimeStatus.initialized === false ? "后端未初始化" : "已连接本地后端";
       $("#metricPool").textContent = String(state.runtimeStatus.pool_available_count);
       syncMessageCount();
       syncSourceMetric();
-      $("#runtimeSummary").textContent = state.runtimeStatus.live_summary || summary?.available || "后端在线，推荐池与采集运行时可读取。";
+      $("#runtimeSummary").textContent = state.runtimeStatus.live_summary || poolSummarySentence(state.runtimeStatus) || "后端在线，推荐池与采集运行时可读取。";
       renderPoolStatus(state.runtimeStatus);
       maybeAutoLoadAfterPoolRefill();
       renderAccountSyncStatus(state.runtimeStatus);
@@ -10926,6 +12034,17 @@ ${cardFeedbackBarHtml()}`;
       const savedAutoSync = $("#savedAutoSync");
       if (savedAutoSync) savedAutoSync.checked = config.saved_sync?.auto_sync_enabled === true;
       if ($("#savedAutoSyncText")) $("#savedAutoSyncText").textContent = savedAutoSync?.checked ? "开启" : "关闭";
+      const digest = config.digest || {};
+      const digestEnabled = $("#digestEnabled");
+      if (digestEnabled) digestEnabled.checked = digest.enabled === true;
+      setInput("digestSendTime", digest.send_time || "09:00");
+      setInput("digestTopN", String(digest.top_n ?? 10));
+      const digestDelight = $("#digestIncludeDelight");
+      if (digestDelight) digestDelight.checked = digest.include_delight !== false;
+      const digestCognition = $("#digestIncludeCognition");
+      if (digestCognition) digestCognition.checked = digest.include_cognition !== false;
+      setInput("digestWebhookUrl", digest.webhook_url || "");
+      setInput("digestBarkUrl", digest.bark_url || "");
       const tailnet = config.tailnet || {};
       const tailnetEnabled = $("#tailnetEnabled");
       if (tailnetEnabled) tailnetEnabled.checked = tailnet.enabled === true;
@@ -11454,6 +12573,14 @@ ${cardFeedbackBarHtml()}`;
         }
         $("#delightReason").textContent = state.delight.reason;
         if ($("#delightStatus")) $("#delightStatus").textContent = state.delight.response_message || "";
+        // 惊喜卡的标题 / 正文同样照抄原文，切到这一条时补中文。
+        localizeCardText($("#delightBanner") || document);
+        // The excerpt/title can be replaced one frame after the banner is
+        // swapped; a second pass catches that late DOM write without
+        // blocking the first paint.
+        window.setTimeout(() => {
+          localizeCardText($("#delightBanner") || document);
+        }, 400);
         if (copy) copy.classList.remove("is-exiting");
         if (thumb) thumb.classList.remove("is-exiting");
         // 用 requestAnimationFrame 手动驱动高度动画（避免 CSS transition 启动时序问题）
@@ -11721,7 +12848,7 @@ ${cardFeedbackBarHtml()}`;
         desktopRuntimeGeneration += 1;
         clearDesktopRuntimeRecovery();
       }
-      applyRuntimeStatus({ ...event, live_summary: event.message || event.live_summary || event.type });
+      applyRuntimeStatus({ ...event, live_summary: event.message || event.live_summary || runtimeEventSentence(event.type) });
       // Credential sync changes the backend-owned source contract. Refresh it
       // immediately so the dashboard warning does not retain the pre-login
       // snapshot until settings is opened or the fallback poll runs.
@@ -11999,6 +13126,7 @@ ${cardFeedbackBarHtml()}`;
       function applyInitialRecommendations(items) {
         applyDesktopRecommendationSnapshot(items, { replace: replaceRecommendations });
         renderFilters();
+        renderTypeFilters();
         renderVideos();
         scheduleAutoLoadCheck();
       }
@@ -12211,7 +13339,7 @@ ${cardFeedbackBarHtml()}`;
     // preserveVideos：跳过推荐网格这一步。给「高频后台事件顺手带起来的重绘」用，
     // 它们只想刷新头部 / 库存 / 侧栏，不该碰用户正在浏览的列表。
     function renderAll({ preserveVideos = false } = {}) {
-      const steps = [renderFilters, renderVideos, syncSourceMetric, renderRail, renderProfileDetails, renderMessages, renderChat, renderPoolStatus];
+      const steps = [renderFilters, renderTypeFilters, renderVideos, syncSourceMetric, renderRail, renderProfileDetails, renderMessages, renderChat, renderPoolStatus];
       for (const step of steps) {
         if (preserveVideos && step === renderVideos) continue;
         try { step(); } catch (error) { showFatal(error, step.name || "渲染"); }
@@ -12618,6 +13746,15 @@ ${cardFeedbackBarHtml()}`;
           danmaku_max_chars: getIntInput("danmakuMaxChars", 500)
         },
         saved_sync: { auto_sync_enabled: Boolean($("#savedAutoSync")?.checked) },
+        digest: {
+          enabled: Boolean($("#digestEnabled")?.checked),
+          send_time: getInput("digestSendTime") || "09:00",
+          top_n: getIntInput("digestTopN", 10),
+          include_delight: $("#digestIncludeDelight")?.checked !== false,
+          include_cognition: $("#digestIncludeCognition")?.checked !== false,
+          webhook_url: getInput("digestWebhookUrl"),
+          bark_url: getInput("digestBarkUrl")
+        },
         tailnet: {
           enabled: Boolean($("#tailnetEnabled")?.checked),
           hostname: getInput("tailnetHostname"),
@@ -13050,7 +14187,10 @@ ${cardFeedbackBarHtml()}`;
         panel.hidden = !isActive;
         panel.setAttribute("aria-hidden", isActive ? "false" : "true");
       });
-      if (panelName === "general") void refreshMigrationStatus({ force: true });
+      if (panelName === "general") {
+        void refreshMigrationStatus({ force: true });
+        void renderBlockedAuthorsList();
+      }
       if (panelName === "logging") startDiagnosticsAlertFeed();
       else stopDiagnosticsAlertFeed();
     }
@@ -13337,9 +14477,11 @@ ${cardFeedbackBarHtml()}`;
     syncTopbarHeight();
     window.addEventListener("resize", syncTopbarHeight);
     safeBind("#themeToggleBtn", "click", cycleThemeMode);
-    bindRovingChoiceGroup("[data-theme-choice]", (button) => setThemeMode(button.dataset.themeChoice, { toast: true }));
-    bindRovingChoiceGroup("[data-hue]", (button) => setThemeHue(parseInt(button.dataset.hue, 10), { toast: true }));
-    bindRovingChoiceGroup("[data-accent-choice]", (button) => setAccentStyle(button.dataset.accentChoice, { toast: true }));
+    bindRovingChoiceGroup("[data-theme-choice]", (button) => setThemeMode(button.dataset.themeChoice));
+    bindRovingChoiceGroup("[data-palette-choice]", (button) => setThemePalette(button.dataset.paletteChoice));
+    bindRovingChoiceGroup("[data-hue]", (button) => setThemeHue(parseInt(button.dataset.hue, 10)));
+    bindRovingChoiceGroup("[data-accent-choice]", (button) => setAccentStyle(button.dataset.accentChoice));
+    safeBind("#themeHueReset", "click", () => resetThemeHue());
     safeBind("#hueSlider", "input", (event) => {
       const val = parseInt(event.target.value, 10);
       setThemeHue(val);
@@ -13349,18 +14491,24 @@ ${cardFeedbackBarHtml()}`;
       setThemeHue(val);
     });
     safeBind("#autoLoadOnScrollSetting", "change", (event) => {
-      setAutoLoadOnScroll(Boolean(event.target.checked), { toast: true });
+      setAutoLoadOnScroll(Boolean(event.target.checked));
     });
     safeBind("#showPendingChatCountSetting", "change", (event) => {
-      setShowPendingChatCount(Boolean(event.target.checked), { toast: true });
+      setShowPendingChatCount(Boolean(event.target.checked));
     });
     safeBind("#chatPendingBadgeToggle", "change", (event) => {
-      setShowPendingChatCount(Boolean(event.target.checked), { toast: true });
+      setShowPendingChatCount(Boolean(event.target.checked));
     });
     window.addEventListener("scroll", scheduleAutoLoadCheck, { passive: true });
     window.addEventListener("resize", scheduleAutoLoadCheck);
     safeBind("#reshuffleBtn", "click", reshuffle);
-    safeBind("#loadMoreBtn", "click", appendMore);
+    safeBind("#loadMoreBtn", "click", () => {
+      if (isAiFrontierFilter()) {
+        void refreshAiFrontierWire();
+        return;
+      }
+      void appendMore();
+    });
     ensureDelightThumbAnchor();
     safeBind("#delightThumb", "click", () => respondDelight(state.delight, "view"));
     safeBind("#delightThumb", "auxclick", (event) => {
@@ -13379,9 +14527,68 @@ ${cardFeedbackBarHtml()}`;
     safeBind("#delightCommentInput", "blur", (event) => {
       autoCollapseComposer(document.querySelector(".delight-main-actions"), event, closeDelightComposer);
     });
-    safeBind("#resetFiltersBtn", "click", () => { state.query = ""; state.filter = "全部"; const input = $("#searchInput"); if (input) input.value = ""; renderAll(); });
-    safeBind("#searchInput", "input", (event) => { state.query = event.target.value || ""; renderAll(); });
-    safeBind("#searchForm", "submit", (event) => { event.preventDefault(); state.query = $("#searchInput")?.value || ""; renderAll(); });
+    async function executeGlobalSearch(query) {
+      const q = String(query || "").trim();
+      if (!q) {
+        clearGlobalSearch();
+        return;
+      }
+      try {
+        const results = await requestJson(`/api/search?q=${encodeURIComponent(q)}&limit=40`);
+        const banner = $("#searchResultsBanner");
+        const bannerText = $("#searchResultsBannerText");
+        if (banner && bannerText) {
+          banner.hidden = false;
+          bannerText.textContent = `全库检索「${q}」：找到 ${results.length} 条匹配素材`;
+        }
+        state.searchResults = Array.isArray(results) ? results : [];
+        renderVideos();
+        if (!results || !results.length) {
+          showToast(`全库检索未找到包含「${q}」的内容`);
+        }
+      } catch (err) {
+        showToast(`搜索失败：${err?.message || "网络异常"}`);
+      }
+    }
+
+    function clearGlobalSearch() {
+      state.searchResults = null;
+      const banner = $("#searchResultsBanner");
+      if (banner) banner.hidden = true;
+      const input = $("#searchInput");
+      if (input) input.value = "";
+      state.query = "";
+      renderVideos();
+    }
+
+    safeBind("#clearSearchResultsBtn", "click", clearGlobalSearch);
+    safeBind("#copyRssFeedBtn", "click", () => {
+      const input = $("#rssFeedUrlInput");
+      const fullUrl = window.location.origin + "/api/feed/rss";
+      if (input) input.value = fullUrl;
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast("已复制 RSS 订阅链接到剪贴板");
+      }).catch(() => {
+        showToast("复制链接：" + fullUrl);
+      });
+    });
+    safeBind("#resetFiltersBtn", "click", () => {
+      clearGlobalSearch();
+      state.filter = "全部";
+      state.typeFilter = "全部";
+      renderAll();
+    });
+    safeBind("#searchInput", "input", (event) => {
+      state.query = event.target.value || "";
+      if (!state.query) clearGlobalSearch();
+      else renderAll();
+    });
+    safeBind("#searchForm", "submit", (event) => {
+      event.preventDefault();
+      const q = $("#searchInput")?.value?.trim() || "";
+      if (q) void executeGlobalSearch(q);
+      else clearGlobalSearch();
+    });
     window.addEventListener("resize", scheduleActivityRailHeightSync);
     safeBind("#desktopPendingToggle", "click", () => {
       state.pendingConfirmations.expanded = !state.pendingConfirmations.expanded;
@@ -13856,6 +15063,151 @@ ${cardFeedbackBarHtml()}`;
       }
     });
 
+    // ------------------------------------------------------------------
+    // 每日日报：手动触发 + 存档对话框
+    // ------------------------------------------------------------------
+
+    function digestSectionMeta() {
+      return {
+        top_picks: { label: "高分推荐" },
+        delight: { label: "惊喜" },
+        cognition: { label: "认知更新" }
+      };
+    }
+
+    function renderDigestIssue(container, issue) {
+      if (!container) return;
+      if (!issue) {
+        container.innerHTML = '<p class="digest-empty-note">这一天没有生成日报。</p>';
+        return;
+      }
+      const meta = digestSectionMeta();
+      const payload = issue.payload || {};
+      const parts = [];
+      Object.entries(meta).forEach(([key, info]) => {
+        const items = Array.isArray(payload[key]) ? payload[key] : [];
+        if (!items.length) return;
+        const rows = items.map((item) => {
+          const url = String(item.url || "");
+          const title = String(item.title || "").replace(/[<>&"]/g, (ch) => ({
+            "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;"
+          }[ch] || ch));
+          const titleHtml = url
+            ? `<a class="digest-item-title" href="${url}" target="_blank" rel="noopener">${title}</a>`
+            : `<span class="digest-item-title">${title}</span>`;
+          const reason = String(item.reason || "");
+          const reasonHtml = reason
+            ? `<span class="digest-item-reason">${reason.replace(/[<>&"]/g, (ch) => ({
+                "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;"
+              }[ch] || ch))}</span>`
+            : "";
+          return `<div class="digest-item">${titleHtml}${reasonHtml}</div>`;
+        }).join("");
+        parts.push(`<section><p class="digest-section-title">${info.label}</p>${rows}</section>`);
+      });
+      if (!parts.length) {
+        container.innerHTML = '<p class="digest-empty-note">这份日报没有可展示的内容。</p>';
+        return;
+      }
+      container.innerHTML = parts.join("");
+    }
+
+    async function openDigestDialog() {
+      const dialog = $("#digestDialog");
+      if (!dialog) return;
+      dialog.hidden = false;
+      const dateRow = $("#digestDateRow");
+      const body = $("#digestDialogBody");
+      if (body) body.innerHTML = '<p class="digest-empty-note">加载中…</p>';
+      try {
+        const [listResp, latestResp] = await Promise.all([
+          requestJsonStrict(ENDPOINTS.digest, { timeoutMs: 15000 }).catch(() => null),
+          requestJsonStrict(ENDPOINTS.digestLatest, { timeoutMs: 15000 }).catch(() => null)
+        ]);
+        const issues = Array.isArray(listResp?.issues) ? listResp.issues : [];
+        if (dateRow) {
+          dateRow.innerHTML = "";
+          issues.forEach((issue) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "digest-date-chip";
+            chip.textContent = String(issue.digest_date || "");
+            chip.setAttribute("role", "tab");
+            chip.setAttribute("aria-selected", "false");
+            chip.addEventListener("click", async () => {
+              dateRow.querySelectorAll(".digest-date-chip").forEach((el) => el.setAttribute("aria-selected", "false"));
+              chip.setAttribute("aria-selected", "true");
+              if (body) body.innerHTML = '<p class="digest-empty-note">加载中…</p>';
+              try {
+                const detail = await requestJsonStrict(`${ENDPOINTS.digest}/${encodeURIComponent(issue.id)}`, { timeoutMs: 15000 });
+                renderDigestIssue(body, detail);
+              } catch (error) {
+                if (body) body.innerHTML = '<p class="digest-empty-note">加载失败，请稍后重试。</p>';
+              }
+            });
+            dateRow.appendChild(chip);
+          });
+        }
+        renderDigestIssue(body, latestResp);
+        const chips = dateRow ? dateRow.querySelectorAll(".digest-date-chip") : [];
+        if (chips.length) chips[0].setAttribute("aria-selected", "true");
+      } catch (error) {
+        renderDigestIssue(body, null);
+      }
+    }
+
+    function closeDigestDialog() {
+      const dialog = $("#digestDialog");
+      if (dialog) dialog.hidden = true;
+    }
+
+    safeBind("#digestArchiveBtn", "click", () => { void openDigestDialog(); });
+    safeBind("#closeDigestDialog", "click", closeDigestDialog);
+    document.querySelectorAll("[data-close-digest-dialog]").forEach((el) => {
+      el.addEventListener("click", closeDigestDialog);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDigestDialog();
+    });
+
+    safeBind("#digestRunNowBtn", "click", async () => {
+      const btn = $("#digestRunNowBtn");
+      const status = $("#digestRunStatus");
+      if (btn?.disabled) return;
+      if (btn) btn.disabled = true;
+      if (status) {
+        status.hidden = false;
+        status.textContent = "正在生成日报并推送…";
+      }
+      try {
+        const result = await requestJsonStrict(ENDPOINTS.digestRunNow, {
+          method: "POST",
+          timeoutMs: 120000,
+          headers: { "Content-Type": "application/json" }
+        });
+        if (!result?.created) {
+          const message = result?.message || "没有可汇总的内容";
+          if (status) status.textContent = `未生成：${message}`;
+          showToast(`日报未生成：${message}`, { duration: 5200 });
+          return;
+        }
+        const delivery = Array.isArray(result.delivery) ? result.delivery : [];
+        const failed = delivery.filter((item) => item.ok === false);
+        let summary;
+        if (!delivery.length) summary = "已存档（未配置推送渠道，仅保存在本机）";
+        else if (!failed.length) summary = `已存档并推送到 ${delivery.length} 个渠道`;
+        else summary = `已存档；${failed.length} 个渠道推送失败（${failed.map((item) => item.channel).join("、")}）`;
+        if (status) status.textContent = summary;
+        showToast(`日报完成：${summary}`, { duration: 5200 });
+      } catch (error) {
+        const message = configErrorMessage(error?.details) || error?.message || "未知错误";
+        if (status) status.textContent = `生成失败：${message}`;
+        showToast("日报生成失败，请查看结果区提示", { duration: 5200 });
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
     safeBind("#settingsDiscardBtn", "click", () => {
       if (!state.config) { clearSettingsDirty(); return; }
       applyConfig(state.config);
@@ -13982,8 +15334,194 @@ ${cardFeedbackBarHtml()}`;
       scheduleActivityRailHeightSync();
     });
 
+    focusedCardIndex = -1;
+
+    function getRecommendationCards() {
+      const g = $("#videoGrid");
+      if (!g) return [];
+      return Array.from(g.querySelectorAll(".video-card:not(.is-skeleton)"));
+    }
+
+    function clearCardFocus() {
+      getRecommendationCards().forEach((c) => c.classList.remove("is-focused"));
+      focusedCardIndex = -1;
+    }
+
+    function focusCardByIndex(index) {
+      const cards = getRecommendationCards();
+      if (!cards.length) return;
+      const clamped = Math.max(0, Math.min(index, cards.length - 1));
+      cards.forEach((c, i) => {
+        if (i === clamped) {
+          c.classList.add("is-focused");
+          c.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else {
+          c.classList.remove("is-focused");
+        }
+      });
+      focusedCardIndex = clamped;
+    }
+
+    function getFocusedCard() {
+      const cards = getRecommendationCards();
+      if (focusedCardIndex >= 0 && focusedCardIndex < cards.length) {
+        return cards[focusedCardIndex];
+      }
+      return null;
+    }
+
+    function openShortcutsModal() {
+      openPanel("shortcutsDialog");
+    }
+
+    function handleGlobalKeydown(event) {
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable ||
+        Boolean(target.closest(".comment-field")) ||
+        Boolean(target.closest(".chat-input-row")) ||
+        Boolean(target.closest(".chat-input")) ||
+        Boolean(target.closest(".card-detail-chat-form"))
+      );
+
+      if (isTyping) {
+        if (event.key === "Escape") {
+          target.blur();
+        }
+        return;
+      }
+
+      // If drawer is open, Escape closes it
+      const openDrawers = Array.from(document.querySelectorAll(".drawer.is-open"));
+      if (openDrawers.length > 0) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          const topDrawer = openDrawers[openDrawers.length - 1];
+          closePanel(topDrawer.id);
+        }
+        return;
+      }
+
+      const key = event.key;
+
+      if (key === "j" || key === "ArrowDown") {
+        event.preventDefault();
+        const cards = getRecommendationCards();
+        if (!cards.length) return;
+        if (focusedCardIndex === -1) {
+          focusCardByIndex(0);
+        } else {
+          focusCardByIndex(focusedCardIndex + 1);
+        }
+        return;
+      }
+
+      if (key === "k" || key === "ArrowUp") {
+        event.preventDefault();
+        const cards = getRecommendationCards();
+        if (!cards.length) return;
+        if (focusedCardIndex === -1) {
+          focusCardByIndex(0);
+        } else {
+          focusCardByIndex(focusedCardIndex - 1);
+        }
+        return;
+      }
+
+      if (key === "Enter" || key === "o") {
+        const card = getFocusedCard();
+        if (card && card._recommendationItem) {
+          event.preventDefault();
+          if (event.shiftKey) {
+            const url = contentUrl(card._recommendationItem);
+            if (url) {
+              window.open(url, "_blank", "noopener,noreferrer");
+              markRecommendationSeen(card._recommendationItem, card);
+            }
+          } else {
+            openCardDetail(card._recommendationItem, card);
+          }
+        }
+        return;
+      }
+
+      if (key === "s") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const favBtn = card.querySelector('[data-action="favorite"]');
+          if (favBtn) favBtn.click();
+        }
+        return;
+      }
+
+      if (key === "l") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const wlBtn = card.querySelector('[data-action="watch-later"]');
+          if (wlBtn) wlBtn.click();
+        }
+        return;
+      }
+
+      if (key === "x") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const disBtn = card.querySelector('[data-action="dislike"]') || card.querySelector('[data-action="dismiss"]');
+          if (disBtn) disBtn.click();
+        }
+        return;
+      }
+
+      if (key === "c") {
+        const card = getFocusedCard();
+        if (card) {
+          event.preventDefault();
+          const commentBtn = card.querySelector('[data-action="comment"]');
+          if (commentBtn) {
+            commentBtn.click();
+            const input = card.querySelector(".comment-field input");
+            if (input) input.focus();
+          }
+        }
+        return;
+      }
+
+      if (key === "/") {
+        event.preventDefault();
+        const searchInput = $("#searchInput");
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+        return;
+      }
+
+      if (key === "?") {
+        event.preventDefault();
+        openShortcutsModal();
+        return;
+      }
+
+      if (key === "Escape") {
+        clearCardFocus();
+        return;
+      }
+    }
+
+    function initKeyboardNavigation() {
+      document.addEventListener("keydown", handleGlobalKeydown);
+    }
+
     restoreBackendEndpoint();
     restoreFrontendSettings();
+    loadSeenCards();
+    initKeyboardNavigation();
     setSideDrawerOpen(!isMobileViewport() && storageGet(SIDE_DRAWER_OPEN_KEY) !== "0", { persist: false });
     initBackToTop();
     startSharedChatSurfaceSync();

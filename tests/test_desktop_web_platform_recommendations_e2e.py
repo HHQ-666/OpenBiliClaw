@@ -24,6 +24,7 @@ from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -84,10 +85,45 @@ def _first_page() -> list[dict[str, Any]]:
     ]
 
 
+def _frontier_card(batch: str, index: int) -> dict[str, Any]:
+    card = _card("youtube", batch, index)
+    card.update(
+        {
+            "title": f"Gemini 4 Argon 前沿评测 {batch}{index}",
+            "content_type": "video",
+            "ai_frontier": True,
+            "ai_frontier_score": 12.0,
+            "ai_frontier_tags": ["前沿模型"],
+            "topic_label": "前沿模型",
+        }
+    )
+    return card
+
+
+def _frontier_paper() -> dict[str, Any]:
+    card = _frontier_card("P", 1)
+    card.update(
+        {
+            "source_platform": "huggingface",
+            "content_type": "paper",
+            "duration": 0,
+            "title": "Gemini 4 Argon 前沿评测：多模态论文",
+            "up_name": "Hugging Face",
+        }
+    )
+    return card
+
+
+def _frontier_page() -> list[dict[str, Any]]:
+    return [_frontier_card("F", 1), _frontier_card("F", 2), _frontier_paper()]
+
+
 class PlatformStub:
     def __init__(self) -> None:
         self.reshuffle_posts: list[dict[str, Any]] = []
         self.append_posts: list[dict[str, Any]] = []
+        self.wire_refresh_posts: list[dict[str, Any]] = []
+        self.wire_refresh_count = 0
         self.availability_reads = 0
         self.config_failures_remaining = 0
         self.lock = threading.Lock()
@@ -136,6 +172,9 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
                     ROOT / "src/openbiliclaw/web/shared/dialogue-confirmation.js",
                     "application/javascript",
                 )
+            if path.startswith("/shared/design/"):
+                rel = path.removeprefix("/shared/")
+                return self._serve_file(ROOT / "src/openbiliclaw/web/shared" / rel)
             if path == "/api/ping":
                 return _json_response(self, {"ok": True})
             if path == "/api/health":
@@ -143,6 +182,21 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
             if path == "/api/auth/status":
                 return _json_response(self, {"enabled": False, "authenticated": True})
             if path == "/api/recommendations":
+                query = parse_qs(urlsplit(self.path).query)
+                if query.get("channel", [""])[0] == "ai_frontier":
+                    with state.lock:
+                        count = 2 + min(state.wire_refresh_count, 2)
+                    items = [_frontier_card("F", index) for index in range(1, count + 1)] + [
+                        _frontier_paper()
+                    ]
+                    return _json_response(
+                        self,
+                        {
+                            "items": items,
+                            "channel": "ai_frontier",
+                            "ai_frontier_count": len(items),
+                        },
+                    )
                 return _json_response(self, {"items": _first_page()})
             if path == "/api/recommendations/platform-availability":
                 with state.lock:
@@ -213,29 +267,51 @@ def _build_platform_app(config_failures: int = 0) -> Iterator[tuple[str, Platfor
             except json.JSONDecodeError:
                 payload = {}
             platform = str(payload.get("source_platform") or "")
+            channel = str(payload.get("channel") or "")
+            if path == "/api/channels/ai-frontier/refresh":
+                with state.lock:
+                    state.wire_refresh_posts.append(payload)
+                    state.wire_refresh_count += 1
+                return _json_response(
+                    self,
+                    {
+                        "ok": True,
+                        "throttled": False,
+                        "fetched": 1,
+                        "inserted": 1,
+                        "skipped": 0,
+                        "failed": 0,
+                    },
+                )
             if path == "/api/recommendations/reshuffle":
                 with state.lock:
                     state.reshuffle_posts.append(payload)
                     batch = f"R{len(state.reshuffle_posts)}"
-                items = (
-                    [_card(platform, batch, index) for index in range(1, 4)]
-                    if platform
-                    else [
-                        _card("bilibili", batch, 1),
-                        _card("zhihu", batch, 1),
-                        _card("bilibili", batch, 2),
-                    ]
-                )
+                if channel == "ai_frontier":
+                    items = [_frontier_card(batch, index) for index in range(1, 3)]
+                else:
+                    items = (
+                        [_card(platform, batch, index) for index in range(1, 4)]
+                        if platform
+                        else [
+                            _card("bilibili", batch, 1),
+                            _card("zhihu", batch, 1),
+                            _card("bilibili", batch, 2),
+                        ]
+                    )
                 return _json_response(self, {"items": items})
             if path == "/api/recommendations/append":
                 with state.lock:
                     state.append_posts.append(payload)
                     batch = f"P{len(state.append_posts)}"
-                items = (
-                    [_card(platform, batch, index) for index in range(1, 3)]
-                    if platform
-                    else [_card("bilibili", batch, 1), _card("zhihu", batch, 1)]
-                )
+                if channel == "ai_frontier":
+                    items = [_frontier_card(batch, 1)]
+                else:
+                    items = (
+                        [_card(platform, batch, index) for index in range(1, 3)]
+                        if platform
+                        else [_card("bilibili", batch, 1), _card("zhihu", batch, 1)]
+                    )
                 return _json_response(self, {"items": items})
             return _json_response(self, {"ok": True})
 
@@ -332,12 +408,27 @@ def _visible_cards(page: Page) -> list[dict[str, str]]:
         ).map((card) => ({
           bvid: card.dataset.bvid || '',
           platform: card.querySelector('.platform')?.dataset.platform || '',
+          title: card.querySelector('.video-title')?.textContent || '',
         }))"""
     )
 
 
 def _click_chip(page: Page, label: str) -> None:
     page.locator(f'#filterRow .chip[data-filter="{label}"]').click()
+
+
+def _type_chips(page: Page) -> list[dict[str, str]]:
+    return page.evaluate(
+        """() => Array.from(document.querySelectorAll('#typeFilterRow .chip')).map((chip) => ({
+          type: chip.dataset.typeFilter || '',
+          count: chip.querySelector('.chip-count')?.textContent || '',
+          selected: chip.getAttribute('aria-selected') || '',
+        }))"""
+    )
+
+
+def _click_type(page: Page, label: str) -> None:
+    page.locator(f'#typeFilterRow .chip[data-type-filter="{label}"]').click()
 
 
 def test_platform_tabs_scope_recommendation_requests_in_chromium(
@@ -360,25 +451,48 @@ def test_platform_tabs_scope_recommendation_requests_in_chromium(
     _wait_for(
         lambda: (
             {chip["filter"] for chip in _chips(chromium_page)}
-            == {"全部", "B 站", "YouTube", "知乎", "Reddit"}
+            == {"全部", "AI 前沿", "B 站", "YouTube", "知乎", "Reddit"}
         ),
         message="已启用平台 Tab 集合未收敛",
     )
     chips = _chips(chromium_page)
-    assert [chip["filter"] for chip in chips] == ["全部", "B 站", "YouTube", "知乎", "Reddit"]
+    assert [chip["filter"] for chip in chips] == [
+        "全部",
+        "AI 前沿",
+        "B 站",
+        "YouTube",
+        "知乎",
+        "Reddit",
+    ]
     assert {chip["filter"]: chip["count"] for chip in chips} == {
         "全部": "29",
+        # The channel chip counts loaded cards (0 before the first channel read).
+        "AI 前沿": "0",
         "B 站": "18",
         "YouTube": "4",
         "知乎": "7",
         # 已启用但 by_platform 里没有这个键 → 显示 0，不是未知也不是隐藏。
         "Reddit": "0",
     }
-    assert [chip["platform"] for chip in chips] == ["", "bilibili", "youtube", "zhihu", "reddit"]
+    assert [chip["platform"] for chip in chips] == [
+        "",
+        "",
+        "bilibili",
+        "youtube",
+        "zhihu",
+        "reddit",
+    ]
     zhihu_chip = next(chip for chip in chips if chip["filter"] == "知乎")
     assert "知乎" in zhihu_chip["label"]
     assert "7" in zhihu_chip["label"]
-    assert [chip["selected"] for chip in chips] == ["true", "false", "false", "false", "false"]
+    assert [chip["selected"] for chip in chips] == [
+        "true",
+        "false",
+        "false",
+        "false",
+        "false",
+        "false",
+    ]
 
     bilibili_first_page = [
         card["bvid"] for card in _visible_cards(chromium_page) if card["platform"] == "bilibili"
@@ -448,7 +562,7 @@ def test_enabled_zero_stock_platform_survives_config_snapshot_retry(
     _wait_for(
         lambda: (
             {chip["filter"] for chip in _chips(chromium_page)}
-            == {"全部", "B 站", "YouTube", "知乎", "Reddit"}
+            == {"全部", "AI 前沿", "B 站", "YouTube", "知乎", "Reddit"}
         ),
         timeout=15.0,
         message="配置快照重试成功后仍缺少已启用平台 Tab",
@@ -476,7 +590,7 @@ def test_platform_tabs_keyboard_focus_selection_and_no_horizontal_overflow(
     _wait_for(
         lambda: (
             {chip["filter"] for chip in _chips(chromium_page)}
-            == {"全部", "B 站", "YouTube", "知乎", "Reddit"}
+            == {"全部", "AI 前沿", "B 站", "YouTube", "知乎", "Reddit"}
         ),
         message="已启用平台 Tab 集合未收敛",
     )
@@ -487,7 +601,7 @@ def test_platform_tabs_keyboard_focus_selection_and_no_horizontal_overflow(
     # tablist 的 roving tabindex：只有选中项在 Tab 序列里。
     assert chromium_page.evaluate(
         """() => Array.from(document.querySelectorAll('#filterRow .chip')).map((c) => c.tabIndex)"""
-    ) == [0, -1, -1, -1, -1]
+    ) == [0, -1, -1, -1, -1, -1]
 
     _click_chip(chromium_page, "全部")
     chromium_page.keyboard.press("ArrowRight")
@@ -502,7 +616,8 @@ def test_platform_tabs_keyboard_focus_selection_and_no_horizontal_overflow(
           };
         }"""
     )
-    assert focused["filter"] == "B 站"
+    # ArrowRight from 全部 now lands on the AI-frontier channel chip.
+    assert focused["filter"] == "AI 前沿"
     assert focused["selected"] == "true"
     assert focused["focusVisible"] is True
     assert focused["boxShadow"] not in {"", "none"}
@@ -518,7 +633,6 @@ def test_platform_tabs_keyboard_focus_selection_and_no_horizontal_overflow(
     )
     assert blurred_box_shadow != focused["boxShadow"]
     assert len(focused["boxShadow"]) > len(blurred_box_shadow)
-    assert "inset" in blurred_box_shadow
 
     # 选中态不能只靠颜色：字重也变化。
     weights = chromium_page.evaluate(
@@ -550,3 +664,56 @@ def test_platform_tabs_keyboard_focus_selection_and_no_horizontal_overflow(
           return row.getBoundingClientRect().width <= window.innerWidth + 1;
         }"""
     )
+
+
+def test_ai_frontier_channel_loads_and_scopes_requests(
+    platform_server: tuple[str, PlatformStub],
+    chromium_page: Page,
+) -> None:
+    base_url, stub = platform_server
+    chromium_page.goto(f"{base_url}/web/")
+    cards = chromium_page.locator("#videoGrid .video-card:not(.is-skeleton)")
+    expect(cards).to_have_count(5, timeout=8000)
+
+    # ── 1. The channel gets its own server-side view ────────────────────
+    _click_chip(chromium_page, "AI 前沿")
+    _wait_for(
+        lambda: len(_visible_cards(chromium_page)) >= 2,
+        message="AI 前沿频道没有加载",
+    )
+    visible = _visible_cards(chromium_page)
+    assert all("Gemini 4 Argon 前沿评测" in card["title"] for card in visible)
+
+    # ── 2. 换一批 carries channel, not source_platform ──────────────────
+    chromium_page.locator("#reshuffleBtn").click()
+    _wait_for(
+        lambda: len(stub.reshuffle_posts) == 1,
+        message="AI 前沿换一批没有发出请求",
+    )
+    assert stub.reshuffle_posts[-1]["channel"] == "ai_frontier"
+    assert "source_platform" not in stub.reshuffle_posts[-1]
+    _wait_for(
+        lambda: all("前沿评测" in card["title"] for card in _visible_cards(chromium_page)),
+        message="AI 前沿换一批后混入了非前沿卡片",
+    )
+
+    # ── 3. 加载更多 AI 前沿 asks the curated article wire ────────────────
+    assert chromium_page.locator("#loadMoreBtn").inner_text() == "加载更多 AI 前沿"
+    baseline_refreshes = len(stub.wire_refresh_posts)
+    before_cards = len(_visible_cards(chromium_page))
+    chromium_page.locator("#loadMoreBtn").click()
+    _wait_for(
+        lambda: len(stub.wire_refresh_posts) > baseline_refreshes,
+        message="AI 前沿加载更多没有请求策展文章源",
+    )
+    assert "channel" not in stub.wire_refresh_posts[-1]
+    assert "source_platform" not in stub.wire_refresh_posts[-1]
+    _wait_for(
+        lambda: len(_visible_cards(chromium_page)) > before_cards,
+        message="AI 前沿加载更多没有追加卡片",
+    )
+
+    # ── 4. Switching back to 全部 restores the untouched general feed ──
+    _click_chip(chromium_page, "全部")
+    expect(cards).to_have_count(5, timeout=4000)
+    assert all("前沿评测" not in card["title"] for card in _visible_cards(chromium_page))

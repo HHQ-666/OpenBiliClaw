@@ -22,6 +22,7 @@ from pydantic import (
 
 from openbiliclaw.agent.persona import validate_chat_persona
 from openbiliclaw.api.source_auth.contract import SourceAuthContract, SourceCapabilityAuth
+from openbiliclaw.recommendation.frontier import AI_FRONTIER_CHANNEL
 from openbiliclaw.saved_sync.identity import canonical_source_platform, make_item_key
 from openbiliclaw.sources.platforms import CANONICAL_SOURCE_FAMILIES, normalize_source_platform
 
@@ -283,12 +284,20 @@ class RecommendationOut(BaseModel):
     rating_count: int = 0
     source_rank: int = 0
     up_mid: int = 0
+    # AI-frontier channel (additive). The classifier runs at read time, so the
+    # same row can be a normal feed card and an AI-frontier card; clients use
+    # these fields for the channel chip and the per-card explanation tooltip.
+    ai_frontier: bool = False
+    ai_frontier_score: float = 0.0
+    ai_frontier_tags: list[str] = Field(default_factory=list)
 
 
 class RecommendationListResponse(BaseModel):
     """Wrapper response for recommendation lists."""
 
     items: list[RecommendationOut]
+    channel: str = ""
+    ai_frontier_count: int = 0
 
 
 ContentHistoryCategory = Literal["clicked", "shown", "removed"]
@@ -368,6 +377,7 @@ class _PlatformScopedRecommendationIn(BaseModel):
 
     excluded_bvids: list[str] = Field(default_factory=list)
     source_platform: str = ""
+    channel: str = ""
 
     @field_validator("source_platform", mode="before")
     @classmethod
@@ -380,6 +390,18 @@ class _PlatformScopedRecommendationIn(BaseModel):
             supported = ", ".join(CANONICAL_SOURCE_FAMILIES)
             raise ValueError(f"unsupported source_platform {raw!r}; expected one of: {supported}")
         return canonical
+
+    @field_validator("channel", mode="before")
+    @classmethod
+    def _canonicalize_channel(cls, value: object) -> str:
+        raw = str(value or "").strip().lower().replace("-", "_")
+        if not raw:
+            return ""
+        if raw != AI_FRONTIER_CHANNEL:
+            raise ValueError(
+                f"unsupported channel {raw!r}; expected {AI_FRONTIER_CHANNEL!r} or an empty string"
+            )
+        return AI_FRONTIER_CHANNEL
 
 
 class RecommendationReshuffleIn(_PlatformScopedRecommendationIn):
@@ -1159,6 +1181,45 @@ class CognitionUpdateSummary(BaseModel):
     created_at: str = ""
 
 
+class DigestChannelResultOut(BaseModel):
+    """One push channel's per-issue delivery outcome."""
+
+    channel: str
+    ok: bool
+    detail: str = ""
+
+
+class DigestIssueOut(BaseModel):
+    """Archive row of one daily digest (list view)."""
+
+    id: int
+    digest_date: str
+    created_at: str
+    title: str
+    item_count: int
+    delivery: list[DigestChannelResultOut] = Field(default_factory=list)
+
+
+class DigestIssueDetailOut(DigestIssueOut):
+    """Full digest issue including the structured payload for web rendering."""
+
+    body_text: str = ""
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class DigestIssueListOut(BaseModel):
+    issues: list[DigestIssueOut] = Field(default_factory=list)
+
+
+class DigestRunNowOut(BaseModel):
+    """Result of a manual digest build+send trigger."""
+
+    created: bool
+    issue: DigestIssueDetailOut | None = None
+    delivery: list[DigestChannelResultOut] = Field(default_factory=list)
+    message: str = ""
+
+
 class SpeculativeSpecificOut(BaseModel):
     """A narrow topic within a speculative domain."""
 
@@ -1202,11 +1263,17 @@ class MBTIDimensionOut(BaseModel):
 
 
 class MBTIOut(BaseModel):
-    """MBTI personality type with dimensional breakdown."""
+    """MBTI personality type with dimensional breakdown.
+
+    ``identity`` 是 16Personalities 的第五维度后缀（-A/-T）；``declared`` 表示这一版
+    来自用户自测而不是推断，前端据此把卡片标成「你自测的结果」。
+    """
 
     type: str = ""
+    identity: str = ""
     dimensions: dict[str, MBTIDimensionOut] = Field(default_factory=dict)
     confidence: float = 0.0
+    declared: bool = False
 
 
 class InterestSpecificOut(BaseModel):
@@ -1594,6 +1661,22 @@ class InsightFeedbackResponse(BaseModel):
     confidence: float = 0.0
 
 
+class ProfileMbtiIn(BaseModel):
+    """自测 MBTI：四字母类型 + 四维「主导极」强度 + 可选的第五维度。
+
+    ``dimensions`` 的键是 ``EI`` / ``SN`` / ``TF`` / ``JP``，值是主导极的强度
+    （0-1，INFJ 的 I 54% 就是 ``{"EI": 0.54}``）；缺省维度按 0.6 记。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: StrictStr = Field(max_length=5)
+    identity: str = ""
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    confidence: float = 1.0
+    source: str = ""
+
+
 class ProfileEditIn(BaseModel):
     """One user edit to the AI-generated profile overlay.
 
@@ -1601,6 +1684,8 @@ class ProfileEditIn(BaseModel):
     interest polarity (``likes`` / ``dislikes``). ``op`` ∈
     {set, add, remove, reset}. ``parent`` targets a specific under an
     interest domain; ``weight`` pins an interest domain's weight.
+    ``core.mbti`` is the one structured target and carries ``mbti`` instead
+    of ``value``.
     """
 
     target: str
@@ -1608,6 +1693,7 @@ class ProfileEditIn(BaseModel):
     value: str | float | None = None
     parent: str = ""
     weight: float | None = None
+    mbti: ProfileMbtiIn | None = None
 
 
 class WatchLaterAddIn(BaseModel):
@@ -1997,6 +2083,42 @@ class RecommendationClickResponse(BaseModel):
     event_id: int = 0
     duplicate: bool = False
     processing: str = "queued"
+
+
+class CardTextTranslationItem(BaseModel):
+    """One ``id``/``text`` pair a surface wants rendered into Chinese."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: StrictStr = Field(max_length=200)
+    text: StrictStr = Field(max_length=8000)
+
+
+class CardTextTranslationIn(BaseModel):
+    """Texts a surface is about to paint and would rather show in Chinese.
+
+    ``id`` is opaque to the backend: the caller invents it, gets it back, and
+    decides how it maps onto the DOM. Cache identity comes from the text
+    itself, so the same tweet asked for from the tray and from the library is
+    one LLM call, not two.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CardTextTranslationItem] = Field(default_factory=list, max_length=60)
+
+
+class CardTextTranslationOut(BaseModel):
+    """Chinese renderings for the texts this call could serve.
+
+    ``pending`` lists ids deliberately not attempted (batch budget spent, or no
+    chat-capable LLM wired): the caller keeps the original text and may ask
+    again. An empty ``translations`` map is a normal answer, never an error.
+    """
+
+    translations: dict[str, str] = Field(default_factory=dict)
+    pending: list[str] = Field(default_factory=list)
+    cached: bool = False
 
 
 class ChatIn(BaseModel):
@@ -2766,6 +2888,42 @@ class SavedSyncConfigUpdateIn(BaseModel):
         return value
 
 
+class DigestConfigOut(BaseModel):
+    enabled: bool = False
+    send_time: str = "09:00"
+    top_n: int = 10
+    include_delight: bool = True
+    include_cognition: bool = True
+    webhook_url: str = ""
+    bark_url: str = ""
+
+
+class DigestConfigUpdateIn(BaseModel):
+    enabled: StrictBool | None = None
+    send_time: str | None = None
+    top_n: int | None = None
+    include_delight: StrictBool | None = None
+    include_cognition: StrictBool | None = None
+    webhook_url: str | None = None
+    bark_url: str | None = None
+
+    @field_validator(
+        "enabled",
+        "send_time",
+        "top_n",
+        "include_delight",
+        "include_cognition",
+        "webhook_url",
+        "bark_url",
+        mode="before",
+    )
+    @classmethod
+    def reject_explicit_null_fields(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("digest fields must not be null; omit the field instead")
+        return value
+
+
 class AutostartStatusOut(BaseModel):
     supported: bool
     enabled: bool
@@ -2804,6 +2962,7 @@ class ConfigResponse(BaseModel):
     discovery: DiscoveryConfigOut = Field(default_factory=DiscoveryConfigOut)
     autostart: AutostartConfigOut = Field(default_factory=AutostartConfigOut)
     saved_sync: SavedSyncConfigOut = Field(default_factory=SavedSyncConfigOut)
+    digest: DigestConfigOut = Field(default_factory=DigestConfigOut)
     tailnet: TailnetConfigOut = Field(default_factory=TailnetConfigOut)
     storage: StorageConfigOut = Field(default_factory=StorageConfigOut)
     logging: LoggingConfigOut = Field(default_factory=LoggingConfigOut)
@@ -2825,6 +2984,7 @@ class ConfigUpdateIn(BaseModel):
     scheduler: dict[str, object] | None = None
     discovery: dict[str, object] | None = None
     saved_sync: SavedSyncConfigUpdateIn | None = None
+    digest: DigestConfigUpdateIn | None = None
     tailnet: TailnetConfigUpdateIn | None = None
     storage: dict[str, object] | None = None
     logging: dict[str, object] | None = None
@@ -2835,6 +2995,13 @@ class ConfigUpdateIn(BaseModel):
     def reject_explicit_null_saved_sync(cls, value: object) -> object:
         if value is None:
             raise ValueError("saved_sync must be an object")
+        return value
+
+    @field_validator("digest", mode="before")
+    @classmethod
+    def reject_explicit_null_digest(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("digest must be an object")
         return value
 
 
@@ -2943,3 +3110,35 @@ class SourceShareSuggestionResponse(BaseModel):
     event_counts: dict[str, int] = Field(default_factory=dict)
     enabled_sources: dict[str, bool] = Field(default_factory=dict)
     suggested_shares: dict[str, int] = Field(default_factory=dict)
+
+
+class BlockedAuthorIn(BaseModel):
+    """Payload to add an author to the persistent blacklist."""
+
+    author_name: str = Field(..., min_length=1, description="Author or UP name")
+    source_platform: str = Field(
+        default="",
+        description="Platform identifier or empty for all platforms",
+    )
+    author_id: str = Field(default="", description="Optional stable author ID or UP mid")
+    reason: str = Field(default="", description="Optional note or reason")
+
+
+class BlockedAuthorOut(BaseModel):
+    """One blocked author record."""
+
+    id: int
+    source_platform: str = ""
+    author_name: str
+    author_id: str = ""
+    reason: str = ""
+    created_at: str = ""
+
+
+class BlockedAuthorActionResponse(BaseModel):
+    """Result of adding or removing a blocked author."""
+
+    ok: bool = True
+    id: int = 0
+    message: str = ""
+    purged_count: int = 0

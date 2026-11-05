@@ -1645,8 +1645,9 @@ class TestBackendAPI:
 
         assert response.status_code == 200
         assert response.headers.get("cache-control") == "no-store"
-        assert 'href="/web/assets/css/app.css?v=' in response.text
-        assert 'href="/web/assets/css/classic.css?v=' in response.text
+        assert 'href="/shared/design/tokens.css?v=' in response.text
+        assert 'href="/shared/design/world.css?v=' in response.text
+        assert 'href="/shared/design/pages/desktop.css?v=' in response.text
         assert 'src="/web/assets/js/app.js?v=' in response.text
         assert 'src="/web/assets/js/chat-agent-core.js?v=' in response.text
         assert 'src="/shared/agent-chat.js?v=' in response.text
@@ -6055,6 +6056,148 @@ class TestBackendAPI:
         assert data["items"][0]["up_mid"] == 112233
         assert_publication(data["items"][0])
 
+    def test_recommendations_ai_frontier_channel_filters_and_marks_rows(self) -> None:
+        from fastapi.testclient import TestClient
+
+        class FakeDatabase:
+            def get_recommendations(
+                self, limit: int = 20, *, exclude_processed: bool = False
+            ) -> list[dict[str, object]]:
+                assert limit in {40, 120}
+                assert exclude_processed is True
+                return [
+                    {
+                        "id": 21,
+                        "bvid": "BVF-FRONTIER",
+                        "title": "Gemini 4 Argon 正式发布，基准第一",
+                        "description": "1M 上下文，Agent 能力大幅提升。",
+                        "topic": "前沿模型",
+                        "source_platform": "bilibili",
+                        "content_type": "video",
+                        "franchise_key": "",
+                    },
+                    {
+                        "id": 22,
+                        "bvid": "BVF-COOKING",
+                        "title": "家常菜谱：青瓜酿肉",
+                        "description": "一口锅就能焖熟的家常菜。",
+                        "topic": "家常美食",
+                        "source_platform": "bilibili",
+                        "content_type": "video",
+                        "franchise_key": "",
+                    },
+                ]
+
+        client = TestClient(create_app(database=FakeDatabase()))
+
+        channel = client.get("/api/recommendations?channel=ai_frontier")
+        assert channel.status_code == 200, channel.text
+        channel_data = channel.json()
+        assert channel_data["channel"] == "ai_frontier"
+        assert [item["bvid"] for item in channel_data["items"]] == ["BVF-FRONTIER"]
+        assert channel_data["items"][0]["ai_frontier"] is True
+        assert channel_data["items"][0]["ai_frontier_score"] >= 6.0
+        assert "前沿模型" in channel_data["items"][0]["ai_frontier_tags"]
+        assert channel_data["ai_frontier_count"] == 1
+
+        # The one-second snapshot cache is channel-aware: a general read right
+        # after the channel read must not inherit the filtered list.
+        general = client.get("/api/recommendations")
+        assert general.status_code == 200
+        general_data = general.json()
+        assert {item["bvid"] for item in general_data["items"]} == {
+            "BVF-FRONTIER",
+            "BVF-COOKING",
+        }
+        assert general_data["channel"] == ""
+        assert general_data["ai_frontier_count"] == 1
+
+    def test_recommendations_rejects_unknown_channel(self) -> None:
+        from fastapi.testclient import TestClient
+
+        class FakeDatabase:
+            def get_recommendations(
+                self, limit: int = 20, *, exclude_processed: bool = False
+            ) -> list[dict[str, object]]:
+                return []
+
+        response = TestClient(create_app(database=FakeDatabase())).get(
+            "/api/recommendations?channel=not-a-channel"
+        )
+
+        assert response.status_code == 422
+        assert "channel" in response.text
+
+    def test_ai_frontier_channel_request_model_accepts_alias_and_rejects_unknown(self) -> None:
+        from pydantic import ValidationError
+
+        from openbiliclaw.api.models import RecommendationReshuffleIn
+
+        assert RecommendationReshuffleIn(channel="ai-frontier").channel == "ai_frontier"
+        assert RecommendationReshuffleIn(channel="AI_FRONTIER").channel == "ai_frontier"
+        assert RecommendationReshuffleIn(channel="").channel == ""
+        with pytest.raises(ValidationError):
+            RecommendationReshuffleIn(channel="not-a-channel")
+
+    def test_ai_frontier_wire_refresh_endpoint_ingests_and_throttles(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from openbiliclaw.discovery import frontier_wire
+
+        class FakeDatabase:
+            def __init__(self) -> None:
+                import sqlite3
+
+                self.cached: list[tuple[str, dict[str, object]]] = []
+                self.recommendations: list[dict[str, object]] = []
+                self._conn = sqlite3.connect(":memory:", check_same_thread=False)
+                self._conn.row_factory = sqlite3.Row
+                self._conn.execute("CREATE TABLE content_cache (bvid TEXT PRIMARY KEY)")
+
+            @property
+            def conn(self) -> object:
+                return self._conn
+
+            def cache_content(self, bvid: str, **kwargs: object) -> None:
+                self.cached.append((bvid, kwargs))
+
+            def batch_insert_recommendations(self, items: list[dict[str, object]]) -> list[int]:
+                self.recommendations.extend(items)
+                return [1]
+
+        item = frontier_wire.FrontierWireItem(
+            source_platform="arxiv",
+            content_id="arxiv:2610.12345",
+            content_url="https://arxiv.org/abs/2610.12345",
+            title="A Paper",
+            body_text="An abstract.",
+            expression="arXiv 最新论文。",
+            topic_label="AI 前沿 · 人工智能",
+        )
+        monkeypatch.setattr(
+            frontier_wire,
+            "fetch_frontier_wire",
+            lambda **_kwargs: [item],
+        )
+        database = FakeDatabase()
+        client = TestClient(create_app(database=database))
+
+        first = client.post("/api/channels/ai-frontier/refresh")
+        assert first.status_code == 200, first.text
+        first_data = first.json()
+        assert first_data["ok"] is True
+        assert first_data["throttled"] is False
+        assert first_data["inserted"] == 1
+        assert first_data["sources"] == {"arxiv": 1}
+        assert database.recommendations[0]["bvid"] == "arxiv:2610.12345"
+
+        second = client.post("/api/channels/ai-frontier/refresh")
+        assert second.status_code == 200
+        assert second.json()["throttled"] is True
+        assert second.json()["inserted"] == 0
+
     def test_recommendations_endpoint_exposes_fail_closed_github_source_metadata(
         self,
     ) -> None:
@@ -7502,10 +7645,16 @@ class TestBackendAPI:
                     "up_mid": 987654321,
                     "published_at": "2026-07-08T06:30:00Z",
                     "published_label": "3 days ago",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                 },
                 {
                     "id": 12,
                     "bvid": "BV1PLAIN",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                     "item_key": "bilibili:BV1PLAIN",
                     "title": "朴素对象",
                     "up_name": "UPB",
@@ -7818,6 +7967,9 @@ class TestBackendAPI:
                 {
                     "id": 22,
                     "bvid": "BV1NEXT",
+                    "ai_frontier": False,
+                    "ai_frontier_score": 0.0,
+                    "ai_frontier_tags": [],
                     "item_key": "bilibili:BV1NEXT",
                     "title": "下一批 1",
                     "up_name": "UPB",

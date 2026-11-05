@@ -120,6 +120,8 @@ test("desktop empty-page gate waits for stock in the selected source", () => {
     state: { autoLoadOnScroll: true, runtimeStatus: { pool_available_count: 100 } },
     appendMoreInFlight: false, emptyAppendInventory: new Map([["zhihu", 5]]),
     activePlatformAvailableCount: () => available, activePlatformSlug: () => "zhihu",
+    AI_FRONTIER_FILTER: "AI 前沿", AI_FRONTIER_CHANNEL: "ai_frontier",
+    isAiFrontierFilter: () => false,
     $: () => ({ hidden: false }), grid: { querySelector: () => ({}) },
     lastAutoLoadAt: 0, AUTO_LOAD_COOLDOWN_MS: 8000,
   });

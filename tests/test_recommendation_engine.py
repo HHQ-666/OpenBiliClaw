@@ -1647,6 +1647,52 @@ async def test_serve_returns_immediately_when_pool_available_count_is_zero() -> 
 
 
 @pytest.mark.asyncio
+async def test_serve_ai_frontier_channel_filters_pool_candidates() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db = Database(Path(tmpdir) / "test.db")
+        db.initialize()
+        _seed_visible(
+            db,
+            "BVF-FRONTIER",
+            title="Gemini 4 正式发布：API 价格砍半，SDK 一行接入",
+            description="1M 上下文，前端项目直接调用。",
+            source="search",
+            source_platform="bilibili",
+            content_type="video",
+            topic_group="前沿模型",
+            topic_key="前沿模型",
+        )
+        _seed_visible(
+            db,
+            "BVF-COOKING",
+            title="家常菜谱：青瓜酿肉",
+            description="一口锅就能焖熟的家常菜。",
+            source="search",
+            source_platform="bilibili",
+            content_type="video",
+            topic_group="家常美食",
+            topic_key="家常美食",
+        )
+
+        engine = RecommendationEngine(llm=_DummyLLM(), database=db)
+
+        channel_recs = await engine.serve(_build_profile(), limit=5, channel="ai_frontier")
+
+        assert [rec.content.bvid for rec in channel_recs] == ["BVF-FRONTIER"]
+        # Serving the channel writes the same recommendation-history row as the
+        # general feed (so feedback keeps working) and marks it shown, while
+        # the non-frontier row stays available to the general feed.
+        assert {row["bvid"] for row in db.get_pool_candidates(limit=10)} == {
+            "BVF-COOKING",
+        }
+        assert any(
+            row["bvid"] == "BVF-FRONTIER"
+            for row in db.get_recommendations(limit=10, exclude_processed=False)
+        )
+        db.close()
+
+
+@pytest.mark.asyncio
 async def test_serve_pool_reads_run_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = RecommendationEngine(llm=_DummyLLM(), database=object())  # type: ignore[arg-type]
     event_loop_thread_id = threading.get_ident()

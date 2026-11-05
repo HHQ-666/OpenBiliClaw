@@ -2,9 +2,88 @@
 
 > 按里程碑记录各阶段交付内容。每次分支合回 main 时追加条目。
 
-## 未发布：TikTok 源后端缺口修复与前端展示面补全（issue #88）
+## 未发布：UI 全面重设计与视觉系统统一（feat/ui-redesign）
 
-- 桌面卡片视觉体验优化：将推荐卡片与收藏卡片右上角的文字平台徽标升级为各平台专属品牌矢量 SVG 图标（支持 B 站、GitHub、Linux.do、知乎、抖音、小红书、微博、YouTube、X/Twitter、Reddit、Bangumi、V2EX、Instagram 等），增加品牌底色与无障碍 Tooltip；移除无图文字卡片的封面矮化限制，统一所有卡片封面区域为标准 16:9 比例，配合卡片内部弹性排版实现同一排卡片的封面、标题与底部操作栏整齐水平对齐。
+- **全新视觉基准「博古清流 / Curated Scholar」**：全栈统一设计语言，涵盖桌面端与移动端 Web 界面。
+- 桌面卡片视觉体验优化：将推荐卡片与收藏卡片右上角的文字平台徽标升级为各平台专属品牌矢量 SVG 图标（支持 B 站、GitHub、Linux.do、知乎、抖音、小红书、微博、YouTube、X/Twitter、Reddit、Bangumi、V2EX、Instagram、TikTok 等），增加品牌底色与无障碍 Tooltip；移除无图文字卡片的封面矮化限制，统一所有卡片封面区域为标准 16:9 比例，配合卡片内部弹性排版实现同一排卡片的封面、标题与底部操作栏整齐水平对齐。
+
+## 未发布：AI 前沿只收「能上手的东西」（2026-11-02）
+
+- 分类器新增**发布门**：标题含发布/开源但没有任何工作流、部署或工程角度的裸模型发布新闻，压到阈值以下不再入频。
+- `_APPLIED` 移除「开源模型 / 开源权重」——模型卡不是工具，只有标题里带上使用方式（本地部署、实战、SDK、MCP 等）才算应用内容。
+- 策展线下线 Hugging Face 趋势开源模型源（8 张模型卡曾占据频道一半版面），只保留 Hacker News，并把词表从「模型/benchmark/training」改为「claude / cursor / codex / mcp / agent / ollama / rag / sdk / plugin / vibe coding」，同时继续拒绝论文标题。
+- 关键词种子包整体改为应用向：Claude Code / Cursor / MCP / AI 编程提效 / 独立开发 / 免费 API 额度，不再塞「大模型发布」「基准评测」这类会产出不相关内容的词。
+
+## 未发布：AI 前沿频道改为应用优先（2026-11-02）
+
+- `recommendation/frontier.py` 新增「应用 vs 学术」评分轴：工具 / SDK / 工作流 / 产品角度（含 Claude Code、Cursor、MCP、Ollama、AI SDK、前端接入等）加分并打 `应用与工具` 标签，且自身可作为入频锚点；只有研究语言（arXiv、论文、消融、数据集、SOTA、we propose）而没有可用产物的条目被压到阈值以下——纯论文不再进入频道，论文附带开源/可运行产物时仍保留。
+- `discovery/frontier_wire.py` 停用 arXiv 与 Hugging Face Daily Papers 两个纯论文源，改为 Hugging Face 趋势开源模型（可本地跑 / 可接 API），Hacker News 侧新增 `arXiv / paper / preprint` 标题拒绝。策展文案随之改为「权重公开、可本地运行」。
+- 兴趣画像（`profile_overrides.json`）同步调整：移除「具身智能与机器人」「AI 安全与对齐」「AI 研究论文解读」等学术标签，新增「AI 编程工具实战」「前端与全栈接入大模型」「开源 AI 工具与浏览器插件」「独立开发与 AI 小产品」「免费 Token 与低成本 API 方案」；新增避开项「学术论文与预印本」「理论推导与消融实验」「CUDA 算子与底层内核优化」「模型评测榜单与跑分」。
+
+## 未发布：每日日报与多渠道推送（feat/daily-digest，2026-11-01）
+
+- 新增每日日报（Daily Digest）全链路能力：每天在可配置的时刻（默认 09:00）从发现池（按 relevance 门槛）、惊喜队列（未消费高分候选）和最新认知更新自动提炼出结构化日报，存档到本地 SQLite 并通过配置的渠道（Webhook / Bark）外发推送。
+- 新增 `[digest]` 配置段（`enabled`, `send_time`, `top_n`, `include_delight`, `include_cognition`, `webhook_url`, `bark_url`），默认关闭；支持时间格式自动归一化与非法输入回退，PUT `/api/config` 严格校验并持久化到 `config.toml`。
+- 新增 `runtime/digest.py`：包含 `build_daily_digest` 构建器、`WebhookChannel` 与 `BarkChannel` 推送适配器、`DigestScheduler` 周期调度器及测试 seam。调度具备三层幂等防护：开关门控、同日唯一定点归档（UNIQUE 约束 + upsert）、空池/失败后 1 小时退避，避免无效打扰。
+- 后台集成：`ContinuousRefreshController` 新增 `_loop_daily_digest` 独立循环，不占用 LLM 门控；`api/runtime_context.py` 在组件刷新时自动装载调度器。
+- 存储层新增 `digest_issues` 表，支持结构化 payload 存取、多渠道结果状态记录及按日期查询与列表归档。
+- API 层新增 `/api/digest`（归档列表）、`/api/digest/latest`（最新日报详情）、`/api/digest/{id}`（历史期号详情）、`/api/digest/run-now`（手动触发生成并推送）。
+- 桌面 Web 前端：在「设置 → 调度」面板底部新增「每日日报」配置卡片，支持推送时间、条数限制、惊喜与认知选项、Webhook / Bark 链接配置；支持「立即生成并发送」状态回显与「查看日报存档」对话框（卡片式日期切换与分类渲染）。
+- 验证：新增 `tests/test_digest_config.py`、`tests/test_digest_runtime.py`、`tests/test_digest_api.py` 共 37 项单元测试全部通过；`ruff check`、`ruff format --check` 及 `mypy src/`（严格模式 315 个源文件）全部零警告通过。
+
+## 未发布：AI 前沿频道（feat/ai-frontier-channel，2026-10-26）
+
+- PC Web 推荐筛选行在「全部」后新增「AI 前沿」频道 chip。首次选中按需请求 `GET /api/recommendations?channel=ai_frontier`，频道卡片独立于普通推荐列表缓存；频道内「换一批」「加载更多」分别以 `channel=ai_frontier` 调用既有 reshuffle / append，不发 `source_platform`。切回来源 Tab 时普通列表原样保留。
+- 新增 `recommendation/frontier.py`：纯文本、确定性的 AI 前沿分类器。版本化模型名 + 发布/评测/论文/推理工程锚点加分；营销、教程、泛 AI 评论、仅“使用模型”的工具仓库降权/封顶。输出 `ai_frontier / ai_frontier_score / ai_frontier_tags`，不新增 LLM 调用。`serve / reshuffle / append`（含 `*_with_result`）新增默认空 keyword-only `channel`；频道读取窗口扩到 `max(limit*20, 400)`，命中候选带一个上限 0.48 的排序 tie-breaker，其余 curator / MMR / feedback / 持久化逻辑不变。
+- `GET /api/recommendations` 支持 `channel=ai_frontier` 并返回 `channel` / `ai_frontier_count`；`POST /reshuffle` / `/append` 的 body 支持 `channel`；未知 channel 返回 422。省略 `channel` 时旧请求/响应形状保持兼容。
+- 新增 `discovery/frontier_seed.py`：频道命中不足 5 条时，按 30 分钟节流向正常 `discovery_keywords` 插入一组平台化策展词（模型发布、benchmark、open weights、agent、inference 等），使用当前画像 digest 并写 `source_interest="AI 前沿"` 溯源；仍由既有 keyword fetch → producer → eval → admission 链路补货，`sources.<platform>.enabled=false` 不注入。
+- 验证：`tests/test_recommendation_frontier.py` 9 项、`tests/test_frontier_seed.py` 7 项、`tests/test_recommendation_engine.py` + frontier 175 项、`tests/test_api_app.py` 622 项、`tests/test_desktop_web_platform_recommendations_e2e.py` 4 项通过；`ruff check` / `ruff format --check` 与改动文件的 `mypy` 通过。真实候选池临时副本跑通 `serve(channel="ai_frontier")`；分类器按当前池子返回的供给量取决于用户已看/未看库存，频道见底时由 seed + 既有补货链路继续填充。
+
+### AI 前沿频道增强（feat/ai-frontier-polish，2026-10-26）
+
+- 新增 `discovery/frontier_wire.py` 与 `POST /api/channels/ai-frontier/refresh`：从 arXiv（cs.AI/cs.CL/cs.LG）、Hugging Face Daily Papers、Hacker News（>100 分、近 14 天、技术词过滤）拉取高质量文章，单源失败不影响其它源，单次限频 10 分钟。文章写入正常 `content_cache` + `recommendations` 行，保留反馈、保存、分类器和三端卡片链路；重复 content_id 幂等跳过。该端点在 LLM registry 降级时仍可用。
+- 前端「加载更多 AI 前沿」改为调用策展文章源后合并频道列表；首次打开不足 3 条时自动补一次；按钮文案随 Tab 切换为「加载更多 AI 前沿」/「加载更多推荐」。
+- wire 推荐理由按摘要主题生成（推荐系统 / Agent / 多模态 / 强化学习 / 时间序列 / 安全伦理 / 推理优化等），不再所有 Hugging Face 卡片共用同一句模板；arXiv/HF 条目改用 `article` 文字卡路径，旧缓存下也优先显示摘要而不是空白封面。
+- 推荐页主筛选行下方新增内容类型二级筛选：仅当前列表同时存在两种以上类型时显示「全部 / 文章 / 视频 / 帖子 / 项目 / 其他」，计数随当前来源 / 频道 / 搜索词变化；切换只过滤本地视图，不发请求；支持方向键与重置筛选。
+- Linux.do 徽标改为官方三分色圆标，微博改为 Sina Weibo 官方 path；新增 arXiv / Hugging Face / Hacker News 的平台标签、徽标与配色。
+- 卡片译文覆盖 `.video-title` / `.cover-text` / 正文摘录 / 惊喜卡标题与摘要；标题优先进入翻译队列（避免长摘要占满首批），惊喜卡切条后 400ms 再补一次本地化，覆盖晚到的 DOM 写入。
+- 频道历史读取窗口从 40 行扩到 120 行，让新论文与已看过的平台视频混合展示，而不是被最新 wire 批次独占；wire 的 `content_id` 存平台原始 ID、`item_key` 统一为 `arxiv:<id>` / `huggingface:<id>` / `hackernews:<id>`，避免双前缀。
+- 验证：`tests/test_frontier_wire.py` 7 项、`tests/test_api_app.py` 新增 refresh 端点与降级模式可用性、`tests/test_desktop_web_platform_recommendations_e2e.py` 覆盖自动补货与「加载更多 AI 前沿」，`tests/test_desktop_web_load_more.py` / `tests/test_mobile_recommend_consistency.py` 同步；真实网络抓取 arXiv/HF/HN 并以临时库跑通频道文章，线上频道实测 20 条（论文 + YouTube 视频）且英文标题/摘要自动显示中文。
+
+## 未发布：私人卡片目录馆 —— 三端界面重构（feat/ui-redesign）
+
+- **提示条不再堆积**：旧实现里只有最底下那条会启动倒计时（`_reposition` 的 `first` 分支），叠在上面的每一条都永远等不到计时器 —— 补货重试几轮后右下角就挂了一列永不消失的提示（用户截图里十几条「已加载更多推荐」「候选池暂时没有新内容」）。现在每条创建即计时，同文案 20 秒内只出现一次，同时最多挂 3 条；同时删掉纯告知型提示：「已加载更多推荐」、主题/纸张/色相切换、开关类设置（界面本身已经变了，不需要再说一遍）。
+
+- **批注全文可读**：`.reason` 上的 `-webkit-line-clamp: 4` 从来没生效过 —— `display: -webkit-box` 与内部 `white-space: pre-wrap` 的子元素组合让行数推算失效，浏览器只按容器高度硬裁，于是第 5 行被切成半行字（截图里那道锯齿）；而点击时加的 `is-expanded` 在整个设计层里**没有任何样式**，点了也展不开。现在截断落在 `.reason-text` 上、上限放宽到 10 行（池里的批注大多 80-150 字，实际几乎全量展示），真被截断时右下角印「展开全文 ⌄」，展开后变「收起 ⌃」，并盖住被切断的字脚。
+
+- **卡片底部那个空方框**：那是内联评论输入框（86×26，标签只存在于 placeholder），而唯一能打开它的「聊一聊」按钮被 `.composer-cancel, .chat-action { display: none }` 一起藏了 —— 没有任何代码会把 `.card-actions` 切进 `is-composing`，所以那一格既没字也没用。现在入口是 30×30 的「聊一句」图标按钮（与印章按钮同尺寸），按下才展开输入框 + 返回 + 发送；惊喜卡的「聊一聊」入口也在同一处显示规则里被误藏，一并恢复。
+
+- **MBTI 可以按自测结果固定**：`core.mbti` 只能由 LLM 从行为推断，会被 core layer 重建覆盖，而且可以推断得很有信心地错（本机实测 ISFJ 78%，用户自测其实是 INFJ-A）。新增 `MBTIPin`（`profile_overrides.json` 里的 `mbti_pin`）：`POST /api/profile/edit` 的 `target="core.mbti"` 接受 `{type, identity, dimensions}`，写入后覆盖推断值并在画像页标成「你自测」、类型带第五维度后缀（INFJ-A），`reset` 回到系统推断。画像编辑面板新增四条二分维度滑杆（类型由滑杆直接算出）+ A/T 选择，并提示「系统现在推断为 X」的分歧。
+
+- **视觉密度提升**：标题改用衬线（`--font-display`，只作用于标题与区块抬头，正文元数据不变），台面加印刷网点，卡片加纸切口高光与悬停印章浅洗，封面加内细线与底部墨晕（来源章在任何封面上都读得清），卡片按 `--card-index` 错峰进场，区块抬头改成渐隐印刷线，惊喜卡升级为杂志式头条（印章浅洗底 + 衬线大标题）。
+
+- **linux.do 没有内容的原因**：用户的 `config.toml` 里 `[sources.linuxdo] enabled = false` 且五个分支预算全 0（12 个来源里只有 douyin 开着），所以生产者从不排队；浏览器扩展在轮询 `next-task`（已登录，`login-state` 心跳正常）但拿不到任务。已开启该来源并给了预算。**另有一个扩展侧问题**：当前会话里扩展对 linux.do 的 `next-task` 轮询为 0 次（同期其它 8 个来源各轮询 16 次），疑似 2026-10-09 那批 `stale_pending` 任务留下的 runner 行让 `taskInFlight` 卡住；重载扩展/重启浏览器即可恢复，代码侧待修。
+
+- **纸张（配色）可换，默认换成素白**：新增 `obc.palette` 与 `tokens.css` 的 `:root[data-palette=...]` 区块，同一套目录馆世界可以裁在三张纸上——**素白**（新默认：冷中性白卡纸、钢制五金、靛蓝印）、**暖纸**（原米色台面＋黄铜＋印章红，现在是选项而非唯一外观）、**青苔**（灰绿纸＋旧铜＋苔绿印）。每张纸自带默认印章色相，只有用户显式挑过色相才写行内 `--hue-primary`，设置页新增「跟随纸张」一键复位。同时修好两个让色相选择形同虚设的旧缺陷：12 个色相色板从未画出颜色（`--swatch` 在 CSS 里没有消费者，26px 方格里塞着被裁掉的中文标签），色相数值框被 `input[type=number] { width: 100% }` 撑满整行、把滑块压成 0 宽。桌面与移动共用同一份 localStorage；`manifest.json` 的 PWA 主题色与移动端 `theme-color` 也一并跟上纸张，不再固定为重构前的粉色。
+
+- **卡片原文自动中文化**：卡片照抄来源原文，X / Reddit / GitHub 卡片是英文标题与正文，中文用户看不懂。新增 `POST /api/translate-texts` 与 `web/shared/text-localize.js`：渲染后扫描标题与摘要文本节点，批量取回译文就地替换，原文保留在悬浮提示里。翻译是纯展示路径，不写推荐 / 内容 / 事件表，不影响排序与评分；没有可用模型、超时或输出格式异常时返回空译文并继续显示原文，单次请求最多 2 批 LLM（每批 8 条 / 3000 字符）以保证首屏不被拖住。译文按源文本哈希缓存在新表 `text_translations`（懒创建，不进迁移序列），同一条内容在托盘 / 内容库 / 惊喜卡之间只翻一次，重渲染零成本。超过 600 字的原文只翻首段并在译文末尾标注「此处为节译」，避免长贴尾部被截断后冒充全文。
+
+- **长文剪报封顶，卡片高度重新由封面决定**：无图长文的封面槽此前没有任何上限，一条 2000 字推文把它撑到 ~1400px，网格行拉伸又把同排卡片一起拉高。现在桌面封顶 176px ＋ 6 行截断、手机 132px ＋ 5 行，与 16:9 封面等高；顺手清掉了 `.video-card.is-text-card` 这组从未匹配过任何元素的死选择器（真实选择器是 `.cover.is-text-card`），并把 114px 的右侧留白收回到 14px，让剪报把宽度用在正文上。
+
+- **视觉世界整体替换**：桌面 Web、移动 Web 与插件弹窗改为一套设计系统「私人卡片目录馆」——卡纸与台面中性色、印刷细线做结构、黄铜做抽屉硬件、印章红是唯一强调色，全部来自 `web/shared/design/tokens.css`（含 light/dark 与旧 token 桥接）。原先的两套并行样式（`web/css/app.css`、`web/desktop/assets/css/app.css` + `classic.css` 覆盖层）整体删除，由 `tokens.css` / `base.css` / `world.css` + `pages/*`（desktop、mobile、home、library、profile、chat、settings）取代；页族文件零字面色值，只有 tokens 带十六进制，由 `test_desktop_web_dark_mode` 锁定。插件弹窗是扩展页面、无法链接后端样式表，`popup.html` 末尾以镜像层对齐同一套 token 值（含设置表单、来源卡、画像编辑树、文本卡）。
+
+- **词汇与交互**：编目卡（封面＋来源章＋等宽元数据）、批注块（印章红左规＝「为什么推给你」）、印章式反馈（`aria-pressed` 触发 `stamp-press` 260ms 回弹并微旋 -4°）、流通单侧栏（点线引导行＋三格度量）、导卡式平台/设置分隔（选中＝底部印章条＋字重，不只靠颜色）、印刷式表单与色相墨垫。动效语法为「impressions」：页面进场仅透明度（不移动几何），骨架屏为干胶呼吸；`prefers-reduced-motion` 全程兜底。触控目标 ≥44px（`pointer: coarse` 或 ≤820px）。
+
+- **设置页语义收缩**：退役「经典配色 / 动态主题色」双色板开关与其提示条（`data-accent`、`obc.accentStyle` 的界面入口、`#themeNotice` 标记与音效式提示一并移除），保留并改名为「印章色相」——`--hue-primary` 只旋转印章红，卡纸/墨色/黄铜固定。`settings-tabs` 在桌面印为 7 列一行。
+
+- **接口与资产服务**：`/web` 与 `/m` 的索引都由后端注入 `/shared/design/*.css?v=<指纹>`（`_design_asset_version()` 覆盖共享设计层，移动页此前完全没有版本号，升级后会继续吃旧样式）；桌面静态指纹列表改为覆盖设计层与新 JS。运行时事件名不再直接印到侧栏：新增 `runtimeEventSentence()` 把 `refresh.pool_updated` 等内部词汇翻成人话。
+
+- **契约测试迁移**：约 50 个前端契约测试改读共享设计层（新增 `tests/_design_css.py` 统一读取），并按新世界重写/补齐真实 UX 契约——焦点可见（tab/chip/chat-log/pending 开关）、文本卡与无封面图卡必须不透明可读、`--ink` on `--card` 两种外观均 ≥7:1、有界滚动（`max-height: min(30dvh,240px)` 等）、触控 44px、抽屉关闭动画与 reduced-motion 守卫、骨架 `skeleton-sweep`、诊断两级严重度、初始化进度/停滞提示。`tests/test_image_network_boundary.py` 按本机代理事实更新：`198.18.0.0/15` 是唯一放行例外，且仅在主机名通过白名单后生效。
+
+- **已知环境失败（与本变更无关）**：`test_tailnet_notices` 与 `test_six_platform_native_save_e2e_harness` 需要 Go 1.26.6 工具链与 Node ≥22 的 `--experimental-strip-types`，本机（Go 1.26.5 / Node 20）既有失败，主工作区同样红。
+
+
+## v0.3.227：macOS 正式签名与 Instagram 实验性来源（2026-10-06）
 
 - 修复一条脏候选拖死整批评估（#284）：B 站简介等来源文本夹带 ASCII 控制字符时，`build_canonical_evaluation_batch` 的 wire 校验对整批抛错，重试烧完 50 次 `batch_eval_attempts` 后全批进 `failed_eval`。现新增 `_sanitize_wire_text()`，在构建 canonical 评估批的边界剥除 `\t \r \n` 之外的 C0 控制字符与 DEL、替换孤立代理项，清洗后为空的 tag 条目丢弃、整字段为空则省略；清洗只作用于发给 LLM 的 wire 副本，存储行保留原文，wire 校验器对 LLM 响应侧保持严格。已死信的历史候选由评估协调器启动时既有的 `revive_failed_eval_candidates` 自动复活，复活后经清洗即可正常评估。
 

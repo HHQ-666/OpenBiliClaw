@@ -203,14 +203,41 @@ result，再经过后端身份门禁转换统一事件和账号分区 Node affin
 | `GET /api/delight/pending-batch` | ✅ | 动态阈值、候选查询与不喜欢主题过滤在线程池完整执行；返回 liked/delivered 队列成员，避免读取阻塞主 API 的推荐转发。参数与响应不变。 |
 | `POST /api/delight/sent` | ✅ | 仅确认主动通知已送达并维护推送冷却，不代表用户已看，不写 `seen_items`，也不置 `delight_seen`；该候选仍会被 `GET /api/delight/pending-batch` 返回用于 popup 重灌。UI 叉号不得把它作为消费路径。 |
 
+## 展示期文案翻译（`POST /api/translate-texts`）
+
+| 方法与路径 | 状态 | 契约 |
+|---|---|---|
+| `POST /api/translate-texts` | ✅ | 请求 `{"items":[{"id","text"}]}`（≤60 条、单条 ≤8000 字符，`extra="forbid"`），响应 `{"translations":{"<id>":"<中文>"},"pending":["<id>"],"cached":bool}`。`id` 由调用方自定义，后端只负责原样带回。 |
+
+语义要点：
+
+- **纯展示路径**：不写 `recommendations`、`content_cache`、`events` 或反馈状态，也不影响排序与评分。没有 chat-capable LLM 时返回空 `translations` + 全部 `pending`（HTTP 200），调用方继续显示原文；同一响应里已命中的缓存项照常返回。
+- **判定与预算**：`needs_translation` 过滤掉中文、纯数字、纯链接与过短文本；未命中缓存的部分按每批 8 条 / 3000 字符交给 `recommendation.translate_card_text`，单次请求最多 2 批（`CARD_TEXT_MAX_LLM_BATCHES`），其余进 `pending` 由下一次渲染再问。
+- **缓存**：`storage.text_translation_cache` 的 `text_translations` 表按源文本哈希存取（见 `storage.md`），同一段话在托盘、内容库与惊喜卡之间共享一次翻译；命中时 `cached=true` 且不发生任何 LLM 调用。
+- **身份**：缓存键是文本本身（归一化空白后 sha256），与 `bvid` / `item_key` 无关，因此重渲染、换批与跨端复用都命中同一条。
+
+## 画像编辑端点（`POST /api/profile/edit`）
+
+`ProfileEditIn` 的 `target` 支持洋葱字段路径（`core.core_traits` 等）、兴趣极性（`likes` / `dislikes`），以及**唯一的结构化字段** `core.mbti`：
+
+| 字段 | 语义 |
+|---|---|
+| `value` | 文本 / 标量 / 列表类目标的取值 |
+| `mbti` | `core.mbti` 专用：`{type, identity, dimensions, confidence, source}`，`dimensions` 键为 `EI/SN/TF/JP`、值为主导极强度（0-1，INFJ 的 I 54% → `{"EI": 0.54}`），缺省维度按 0.6 记 |
+
+- `op="set"` 写入用户自测结果（覆盖推断值并固定，后续 core layer 重建不覆盖），`op="reset"` 回到系统推断；非法类型（非四字母、字母与位次不符）或非法第五维度（非 A/T）由归约器抛 `ProfileEditError` → HTTP 422。
+- 响应与其它编辑一致：返回 `{ok, target, op, edit_state}`，`edit_state.fields["core.mbti"]` 是 `{type: "mbti", pinned, value, ai_suggestion}`，`ai_suggestion` 只在固定值与当前推断类型不同时给出。
+- `/api/profile-summary` 的 `mbti` 增加 `identity`（第五维度后缀）与 `declared`（是否来自自测），桌面与移动据此把卡片标成「你自测 / INFJ-A」而不是「人格推断」。
+
 ## 推荐反馈端点
 
 ### 推荐输出与 dislike 的即时一致性
 
 | 方法与路径 | 状态 | 契约 |
 |---|---|---|
-| `GET /api/recommendations` | ✅ | 只读未处理历史；1 秒 snapshot 只有在 TTL 与 effective dislike digest 都未变化时复用。加载期间 dislike 变化会按新快照重读，再在 franchise cap 前过滤。 |
-| `POST /api/recommendations/reshuffle` / `append` | ✅ | serve 使用带 flat-preference overlay 的画像，完成后在 HTTP 序列化前再读一次最新 effective dislikes，关闭请求进行中的偏好竞态。 |
+| `GET /api/recommendations` | ✅ | 只读未处理历史；1 秒 snapshot 只有在 TTL、effective dislike digest 与 `channel` 都未变化时复用。加载期间 dislike 变化会按新快照重读，再在 franchise cap 前过滤。可选 `channel=ai_frontier` 只返回 AI 前沿分类命中的行；不足 5 条时限频注入策展关键词并唤醒补货。响应新增 `channel` / `ai_frontier_count`，每个 item 新增 `ai_frontier / ai_frontier_score / ai_frontier_tags`；未知 channel 返回 422。 |
+| `POST /api/recommendations/reshuffle` / `append` | ✅ | serve 使用带 flat-preference overlay 的画像，完成后在 HTTP 序列化前再读一次最新 effective dislikes，关闭请求进行中的偏好竞态。body 可选 `channel`（目前仅 `ai_frontier`）；频道请求通常不带 `source_platform`，两者都由 API 契约校验。 |
+| `POST /api/channels/ai-frontier/refresh` | ✅ | 「加载更多 AI 前沿」的策展文章补货。拉取 arXiv / Hugging Face Daily Papers / Hacker News（单源失败不影响其它源），限频 10 分钟；以正常 `content_cache` + `recommendations` 行写入，保留反馈 / 保存 / 卡片链路。响应 `{ok, throttled, fetched, inserted, skipped, failed, sources, retry_after_seconds}`；该端点在 LLM registry 降级时仍可用。 |
 | `GET /api/notifications/pending` | ✅ | 单条候选在返回前按最新 dislike 复核；模糊命中时不使用多卡窗口的“全灭恢复”保护。 |
 | profile edit / `POST /api/feedback` | ✅ | durable edit 或单卡反馈 projection 完成后立即失效 recommendation snapshot；单卡反馈仍由 `exclude_processed` 同步隐藏。 |
 
@@ -421,6 +448,7 @@ popup、移动 Web 与桌面 Web 只有 durable 对话中的假设卡片保留 c
 | 已实现能力 | 接口 |
 | --- | --- |
 | 卡片与库存一起返回 | `POST /api/recommendations/reshuffle`、`POST /api/recommendations/append` 在已有字段旁新增可空 `pool_status`；库存读取失败为 null，旧客户端可忽略该字段。 |
+| AI 前沿频道字段 | `GET /api/recommendations?channel=ai_frontier` 的 `channel` / `ai_frontier_count` 与 item 级 `ai_frontier*` 都是附加字段，旧客户端可忽略；`POST /reshuffle` / `/append` 的 `channel` 默认空，省略时请求形状与旧版逐字一致。 |
 | 库存读取版本 | `GET /api/recommendations/platform-availability` 新增 `pool_status_version`，和 mutation / `refresh.pool_updated` 共用读取开始时的 Unix 毫秒版本。 |
 | 跨进程广播 | socket 代理把成功响应库存桥接到主 API 的事件总线，补货变动由单个 app-owned 观察任务同步。 |
 
@@ -476,3 +504,10 @@ scheme 归一化的前提是入口能算出外部有效 host：反向代理保�
 ### TikTok 默认账号范围与周期启用（2026-10-13）
 
 `POST /api/init` 的 TikTok 默认范围是喜欢、收藏、关注，观看历史不再是必要输入；`next-task` / `task-result` 协议不变，显式历史任务仍按原契约执行。非空结果沿账号隔离、staged result 与幂等 ingress 进入 generic 画像消费路径，重复回调及下轮重复收藏不会重复写事件。正常 runtime 构建/热重载现在向周期调度器传递 TikTok 来源开关，保持全局和逐源双 opt-in，不新增端点或权限。
+
+### 每日日报端点（Daily Digest）
+
+- `GET /api/digest`：获取最近日报列表归档，默认按日期倒序返回至多 14 期，包含日期、标题、内容条数和渠道投递结果状态。
+- `GET /api/digest/latest`：获取最新一期日报的完整结构化详情（含 top_picks / delight / cognition payload 与 plain-text 渲染正文）。没有日报时返回 404。
+- `GET /api/digest/{digest_id}`：按 ID 获取单期日报详情。
+- `POST /api/digest/run-now`：立即生成并推送当期日报（忽略每日定时门控，适合设置页测试与手动补发）。若当日已有记录则原地幂等更新，返回创建结果、详情和各渠道推送回执。池子为空时返回 `created: false` 与友好提示。

@@ -3,8 +3,9 @@
 ## 概述
 
 `src/openbiliclaw/web/desktop/` 是桌面 Web 单页应用（`/web`，入口
-`index.html`，主逻辑 `assets/js/app.js` 单文件 IIFE，样式
-`assets/css/app.css`）。本文档当前聚焦「聊聊口味」tab 的 agent loop
+`index.html`，主逻辑 `assets/js/app.js` 单文件 IIFE，样式来自与移动 Web
+共用的设计系统 `web/shared/design/`，见
+[设计系统记录](../../DESIGN.md)）。本文档当前聚焦「聊聊口味」tab 的 agent loop
 前端（M8，设计共识见
 [聊一聊 Agent Loop 设计](../plans/2026-09-23-chat-agent-loop-design.md)，
 后端协议见 [agent 模块](agent.md) 与 [api 模块](api.md)）。
@@ -29,6 +30,16 @@ LLM 实例设置页可选择 `cheaperinference`（Cheaper Inference），新实�
 | 聊天风格选择 | ✅ | 顶部独立风格入口，六种单选模板、说明和同题预览；保存到当前会话，刷新/跨端同步，从新消息生效。保存期间阻止本会话抢先发送；晚到请求不覆盖新会话或已保存选择 |
 | 审批拒绝草稿 | ✅ | 与移动 Web / popup 共用 `agent-chat.js` 的拒绝编辑保留助手，轮询和过程重绘保留原因输入与焦点；终态更新不会复活旧操作按钮 |
 | 聊天提示条避让 | ✅ | 聊天页提示条固定在输入区上方且不接收指针事件，避免遮挡卡片或输入区、悬停导致提示长期不消失；其他页面仍可点击关闭与悬停暂停。`scripts/browser/chat-toast-hit-test.js` 验证真实 CSS 下的点击穿透 |
+| MBTI 自测编辑 | ✅ | 画像页 MBTI 卡在自测固定后显示「你自测 / INFJ-A」；编辑模式里是四条二分维度滑杆（类型由滑杆算出来）+ A/T 选择 + 「系统现在推断为 X」分歧提示 + 保存/恢复，保存即 `POST /api/profile/edit {target: "core.mbti", op: "set", mbti}` |
+| 提示条治理 | ✅ | 每条 toast 自己计时（同文案 20 秒内只出现一次、最多同时 3 条）；纯告知型提示（已加载更多推荐、主题/纸张/色相切换、开关类设置）不再弹出 |
+| 卡片批注与内联输入 | ✅ | 批注截断从 `.reason` 移到 `.reason-text`（10 行），被截断时右下角印「展开全文 / 收起」；卡片底部改为 30×30「聊一句」图标入口，按下才展开输入框 + 返回 + 发送，空方框不再常驻 |
+| 纸张（配色）选择 | ✅ | 设置 → 前端相关设置新增「纸张」单选：素白（默认，冷中性白纸＋钢制五金＋靛蓝印）、暖纸（原目录馆米色纸＋黄铜＋印章红）、青苔（灰绿纸＋旧铜＋苔绿印）。`data-palette` 由 `obc.palette` 写入，样式是 `tokens.css` 的 `:root[data-palette=...]` 区块；每张纸自带默认印章色相，只有用户显式挑过色相（`obc.themeHue`）才写行内 `--hue-primary`，`跟随纸张` 一键回到纸张默认。桌面与移动共用同一份 localStorage，两端都不再闪默认纸 |
+| 卡片原文中文化 | ✅ | 卡片照抄来源原文，非中文来源（X / Reddit / GitHub）由 `shared/text-localize.js` 在渲染后换成中文：`localizeWithin(root)` 扫描标题与摘要文本节点，`POST /api/translate-texts` 批量取译文后就地改写，原文留在 `title` 悬浮提示。只重写文本、不参与卡片对账、不阻塞首屏；失败或 `pending` 时继续显示原文（每个元素最多重试 2 次）。托盘、惊喜卡、内容库、历史四处接在同一入口 |
+| 长文剪报封顶 | ✅ | 无图长文（X 推文 / 知乎 / Reddit）的封面槽是有界剪报：桌面 `max-height: 176px` ＋摘要 6 行截断，手机 `132px` ＋ 5 行。此前该槽无上限，一条 2000 字推文能把卡片撑到 ~1400px，并因网格行拉伸把同排卡片一起拉高 |
+| AI 前沿频道 Tab | ✅ | 推荐筛选行在「全部」后新增「AI 前沿」chip；首次选中按需请求 `GET /api/recommendations?channel=ai_frontier`，频道卡片独立于 `state.videos` 缓存，切回来源 Tab 时原推荐列表原样保留。频道内「换一批」仍走 `POST /api/recommendations/reshuffle` 并带 `channel=ai_frontier`；「加载更多 AI 前沿」改为 `POST /api/channels/ai-frontier/refresh` 拉取 arXiv / Hugging Face Daily Papers / Hacker News 的策展文章，再合并频道列表，不发 `source_platform`。首次加载不足 3 条时自动补一次。分类与供给由后端 `recommendation/frontier.py` + `discovery/frontier_wire.py` + `discovery/frontier_seed.py` 完成，前端不猜关键词 |
+| 平台徽标与卡片译文 | ✅ | Linux.do 使用官方三分色圆标，微博使用 Sina Weibo 官方 path；arXiv / Hugging Face / Hacker News 新增徽标与平台配色。卡片译文覆盖 `.video-title` / `.cover-text` / 正文摘录 / 惊喜卡标题与摘要；英文、西语等非中文原文在后台翻译完成后原地替换，惊喜卡切条后 400ms 再补一次，覆盖晚到的 DOM 写入 |
+| 内容类型二级筛选 | ✅ | 主筛选行下方新增 `#typeFilterRow`：仅当前来源 / 频道列表同时存在两种以上类型时显示「全部 / 文章 / 视频 / 帖子 / 项目 / 其他」，计数来自当前列表。文章 = `paper/article`，视频 = `video` 或 `duration > 0`，帖子 = `tweet/thread/answer/question/post/comment`，项目 = `repository`。切换只过滤本地视图、不发请求；支持方向键 / Home / End，重置筛选同时清空类型。 |
+| 每日日报设置与存档查看 | ✅ | 设置 → 调度面板新增「每日日报」配置卡（开关、推送时刻、高分条数上限、惊喜与认知附带选项、Webhook / Bark 链接输入）；提供「立即生成并发送」手动触发按钮（带状态回显）与「查看日报存档」对话框（卡片式多日切换、渲染高分/惊喜/认知三个分区与外链）。 |
 
 接口：`GET /api/chat/personas` 获取目录，`PATCH /api/chat/sessions/{id}` 保存 persona，
 会话列表/详情中的 `metadata.persona` 是唯一持久来源。目录不可用时仅风格入口降级，
@@ -48,7 +59,7 @@ LLM 实例设置页可选择 `cheaperinference`（Cheaper Inference），新实�
 web/desktop/
 ├── index.html                       # SPA 骨架；chatPage = 会话侧栏 + 对话区 + 三个浮层
 └── assets/
-    ├── css/app.css                  # 末尾「聊一聊 Agent Loop（M8）」段：侧栏/过程流/卡片/抽屉样式
+    ├── shared/design/pages/chat.css  # 设计系统页族层：会话侧栏/过程流/卡片/抽屉
     └── js/
         ├── app.js                   # 主逻辑；M8 集中在「agent loop（M8）」注释段
         └── chat-agent-core.js       # M8 纯逻辑层（无 DOM）：SSE 增量解析、

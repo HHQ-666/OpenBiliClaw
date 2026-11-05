@@ -2378,6 +2378,8 @@ class Database:
         self._ensure_discovery_keywords_table()
         self._ensure_favorites_table()
         self._ensure_saved_sync_tables()
+        self._ensure_digest_issues_table()
+        self._ensure_blocked_authors_table()
         self._ensure_content_history_tables()
         self._ensure_user_visual_clusters_table()
         self._ensure_auth_state_table()
@@ -18027,6 +18029,344 @@ class Database:
                 ON recommendations (feedback_type, feedback_at DESC, id DESC);
         """)
         self.prune_content_history()
+
+    def _ensure_digest_issues_table(self) -> None:
+        """Create the daily-digest archive table if it does not exist.
+
+        ``digest_date`` is UNIQUE so a scheduler retry / manual run-now on the
+        same local day upserts in place — at most one digest per day, by
+        design. ``payload_json`` carries the structured sections (top picks /
+        delight / cognition) the web archive renders; ``delivery_json``
+        records each push channel's outcome for the settings UI.
+        """
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS digest_issues (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                digest_date   TEXT NOT NULL UNIQUE,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                title         TEXT NOT NULL DEFAULT '',
+                body_text     TEXT NOT NULL DEFAULT '',
+                item_count    INTEGER NOT NULL DEFAULT 0,
+                payload_json  TEXT NOT NULL DEFAULT '',
+                delivery_json TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_digest_issues_date
+                ON digest_issues (digest_date);
+        """)
+
+    def upsert_digest_issue(
+        self,
+        *,
+        digest_date: str,
+        title: str,
+        body_text: str,
+        payload: Mapping[str, Any],
+        delivery: Sequence[Mapping[str, Any]] = (),
+    ) -> int:
+        """Insert or replace today's digest issue and return its row id."""
+        cursor = self._execute_write(
+            """INSERT INTO digest_issues
+                   (digest_date, title, body_text, item_count, payload_json, delivery_json)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(digest_date) DO UPDATE SET
+                   title = excluded.title,
+                   body_text = excluded.body_text,
+                   item_count = excluded.item_count,
+                   payload_json = excluded.payload_json,
+                   delivery_json = excluded.delivery_json,
+                   created_at = CURRENT_TIMESTAMP""",
+            (
+                digest_date,
+                title,
+                body_text,
+                int(payload.get("item_count", 0) or 0),
+                json.dumps(dict(payload), ensure_ascii=False, sort_keys=True),
+                json.dumps([dict(item) for item in delivery], ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        row = self.conn.execute(
+            "SELECT id FROM digest_issues WHERE digest_date = ?", (digest_date,)
+        ).fetchone()
+        return int(row[0]) if row else (cursor.lastrowid or 0)
+
+    def update_digest_delivery(self, digest_id: int, delivery: Sequence[Mapping[str, Any]]) -> None:
+        """Persist per-channel delivery outcomes for one digest issue."""
+        self._execute_write(
+            "UPDATE digest_issues SET delivery_json = ? WHERE id = ?",
+            (
+                json.dumps([dict(item) for item in delivery], ensure_ascii=False, sort_keys=True),
+                int(digest_id),
+            ),
+        )
+
+    @staticmethod
+    def _digest_issue_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        def _load_json(raw: object) -> Any:
+            if not raw:
+                return []
+            try:
+                return json.loads(str(raw))
+            except (TypeError, ValueError):
+                return []
+
+        return {
+            "id": int(row["id"]),
+            "digest_date": str(row["digest_date"]),
+            "created_at": str(row["created_at"]),
+            "title": str(row["title"]),
+            "body_text": str(row["body_text"]),
+            "item_count": int(row["item_count"]),
+            "payload": _load_json(row["payload_json"]),
+            "delivery": _load_json(row["delivery_json"]),
+        }
+
+    _DIGEST_ISSUE_COLUMNS = (
+        "id, digest_date, created_at, title, body_text, item_count, payload_json, delivery_json"
+    )
+
+    def get_digest_issues(self, limit: int = 14) -> list[dict[str, Any]]:
+        """Return the most recent digest issues, newest first."""
+        rows = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues "
+            "ORDER BY digest_date DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [self._digest_issue_from_row(row) for row in rows]
+
+    def get_digest_issue(self, digest_id: int) -> dict[str, Any] | None:
+        """Return one digest issue by id, or None."""
+        row = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues WHERE id = ?",
+            (int(digest_id),),
+        ).fetchone()
+        return self._digest_issue_from_row(row) if row else None
+
+    def get_latest_digest_issue(self) -> dict[str, Any] | None:
+        """Return the newest digest issue, or None when none was built yet."""
+        row = self.conn.execute(
+            f"SELECT {self._DIGEST_ISSUE_COLUMNS} FROM digest_issues "
+            "ORDER BY digest_date DESC LIMIT 1"
+        ).fetchone()
+        return self._digest_issue_from_row(row) if row else None
+
+    def _ensure_blocked_authors_table(self) -> None:
+        """Create the blocked authors (blacklist) table if it does not exist."""
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS blocked_authors (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_platform TEXT NOT NULL DEFAULT '',
+                author_name     TEXT NOT NULL,
+                author_id       TEXT NOT NULL DEFAULT '',
+                reason          TEXT NOT NULL DEFAULT '',
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_blocked_authors_platform_name
+                ON blocked_authors (source_platform, author_name);
+        """)
+
+    def purge_pool_by_blocked_author(self, author_name: str, source_platform: str = "") -> int:
+        """Mark pool candidates matching a blocked author as purged."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            return 0
+        clean_platform = source_platform.strip().lower()
+
+        if clean_platform and clean_platform != "*":
+            cursor = self._execute_write(
+                """
+                UPDATE content_cache
+                SET pool_status = 'purged_by_dislike'
+                WHERE pool_status IN ('fresh', 'active')
+                  AND (author_name = ? OR up_name = ?)
+                  AND LOWER(source_platform) = ?
+                """,
+                (clean_author, clean_author, clean_platform),
+            )
+        else:
+            cursor = self._execute_write(
+                """
+                UPDATE content_cache
+                SET pool_status = 'purged_by_dislike'
+                WHERE pool_status IN ('fresh', 'active')
+                  AND (author_name = ? OR up_name = ?)
+                """,
+                (clean_author, clean_author),
+            )
+        return cursor.rowcount or 0
+
+    def add_blocked_author(
+        self,
+        author_name: str,
+        source_platform: str = "",
+        author_id: str = "",
+        reason: str = "",
+    ) -> int:
+        """Add an author to the persistent blacklist and purge matching candidates."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            raise ValueError("author_name must not be empty")
+        clean_platform = source_platform.strip().lower()
+
+        cursor = self._execute_write(
+            """
+            INSERT INTO blocked_authors (source_platform, author_name, author_id, reason)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(source_platform, author_name) DO UPDATE SET
+                author_id = CASE
+                    WHEN excluded.author_id != '' THEN excluded.author_id
+                    ELSE blocked_authors.author_id
+                END,
+                reason = CASE
+                    WHEN excluded.reason != '' THEN excluded.reason
+                    ELSE blocked_authors.reason
+                END
+            """,
+            (clean_platform, clean_author, author_id.strip(), reason.strip()),
+        )
+        self.purge_pool_by_blocked_author(clean_author, clean_platform)
+        if cursor.lastrowid:
+            return cursor.lastrowid
+        row = self.conn.execute(
+            "SELECT id FROM blocked_authors WHERE source_platform = ? AND author_name = ?",
+            (clean_platform, clean_author),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def remove_blocked_author(
+        self,
+        blocked_id: int | None = None,
+        *,
+        author_name: str | None = None,
+        source_platform: str = "",
+    ) -> bool:
+        """Remove a blocked author by ID or platform+author_name."""
+        if blocked_id is not None:
+            cursor = self._execute_write(
+                "DELETE FROM blocked_authors WHERE id = ?",
+                (int(blocked_id),),
+            )
+            return bool(cursor.rowcount and cursor.rowcount > 0)
+        if author_name:
+            cursor = self._execute_write(
+                "DELETE FROM blocked_authors WHERE author_name = ? AND source_platform = ?",
+                (author_name.strip(), source_platform.strip().lower()),
+            )
+            return bool(cursor.rowcount and cursor.rowcount > 0)
+        return False
+
+    def get_blocked_authors(self) -> list[dict[str, Any]]:
+        """Return all blocked authors ordered by creation time descending."""
+        rows = self.conn.execute(
+            """
+            SELECT id, source_platform, author_name, author_id, reason, created_at
+            FROM blocked_authors
+            ORDER BY created_at DESC, id DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "source_platform": row[1],
+                "author_name": row[2],
+                "author_id": row[3],
+                "reason": row[4],
+                "created_at": str(row[5]) if row[5] else "",
+            }
+            for row in rows
+        ]
+
+    def is_author_blocked(self, author_name: str, source_platform: str = "") -> bool:
+        """Check if an author is blocked either globally or on a specific platform."""
+        clean_author = author_name.strip()
+        if not clean_author:
+            return False
+        clean_platform = source_platform.strip().lower()
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM blocked_authors
+            WHERE author_name = ?
+              AND (source_platform = '' OR source_platform = '*' OR source_platform = ?)
+            LIMIT 1
+            """,
+            (clean_author, clean_platform),
+        ).fetchone()
+        return row is not None
+
+    def search_content(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Search content_cache across titles, authors, and descriptions.
+
+        Automatically filters out blocked authors.
+        """
+        clean = query.strip()
+        if not clean:
+            return []
+
+        tokens = [t.strip() for t in clean.split() if t.strip()]
+        if not tokens:
+            return []
+
+        blocked_pairs: set[tuple[str, str]] = set()
+        try:
+            for b in self.get_blocked_authors():
+                platform_key = b.get("source_platform", "").strip().lower()
+                name_key = b.get("author_name", "").strip()
+                blocked_pairs.add((platform_key, name_key))
+        except Exception:
+            pass
+
+        like_clauses: list[str] = []
+        params: list[Any] = []
+        for token in tokens:
+            like = f"%{token}%"
+            like_clauses.append(
+                "(title LIKE ? OR description LIKE ? OR author_name LIKE ? "
+                "OR up_name LIKE ? OR pool_topic_label LIKE ?)"
+            )
+            params.extend([like, like, like, like, like])
+
+        where_sql = " AND ".join(like_clauses)
+        limit_val = min(100, max(1, int(limit)))
+        params.append(limit_val)
+
+        sql = f"""
+            SELECT bvid, title, author_name, up_name, source_platform,
+                   cover_url, content_url, description, published_at,
+                   pool_topic_label, view_count, like_count, relevance_score
+            FROM content_cache
+            WHERE {where_sql}
+            ORDER BY relevance_score DESC, published_at DESC, bvid DESC
+            LIMIT ?
+        """
+        rows = self.conn.execute(sql, params).fetchall()
+
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            platform = str(row[4] or "").strip().lower()
+            author = str(row[2] or row[3] or "").strip()
+            if (
+                (platform, author) in blocked_pairs
+                or ("", author) in blocked_pairs
+                or ("*", author) in blocked_pairs
+            ):
+                continue
+
+            results.append(
+                {
+                    "bvid": row[0],
+                    "title": row[1],
+                    "author": author,
+                    "platform": platform or "bilibili",
+                    "cover_url": row[5] or "",
+                    "url": row[6] or "",
+                    "description": row[7] or "",
+                    "published_at": str(row[8] or ""),
+                    "topic": row[9] or "",
+                    "view_count": row[10] or 0,
+                    "like_count": row[11] or 0,
+                    "relevance_score": row[12] or 0.0,
+                }
+            )
+        return results
 
     def _ensure_saved_sync_tables(self) -> None:
         """Create normalized saved-content tables and import legacy saved rows once."""

@@ -206,6 +206,31 @@ auto_sync_enabled = false
 开启，必须先确认外部账号写入警告。列表页的手动单项 / 批量同步是独立的显式授权入口，
 即使这里仍为 `false` 也可用。
 
+### `[digest]`
+
+```toml
+[digest]
+enabled = false
+send_time = "09:00"
+top_n = 10
+include_delight = true
+include_cognition = true
+webhook_url = ""
+bark_url = ""
+```
+
+| 键 | 类型 | 默认值 | 说明 |
+|----|------|--------|------|
+| `enabled` | bool | `false` | 每日日报总开关。默认关闭，纯增值输出，开启后到点汇总推送 |
+| `send_time` | string | `"09:00"` | 本地时区推送时间 `HH:MM`。错过推送时间会在后端启动后补发当天的 |
+| `top_n` | int | `10` | 日报中高分推荐候选条数上限，范围 1..50 |
+| `include_delight` | bool | `true` | 是否在日报中附带未消费的惊喜推荐（delight） |
+| `include_cognition` | bool | `true` | 是否在日报中附带最新的认知更新（画像/口味近期演化） |
+| `webhook_url` | string | `""` | 通用 webhook 接收端点（POST JSON），可对接 ntfy / 企业微信机器人等 |
+| `bark_url` | string | `""` | Bark 基础 URL（含设备 key，如 `https://api.day.app/xxx`） |
+
+`GET /api/config` 返回 `digest.*`；`PUT /api/config` 接受同形状的部分更新并保存到 `[digest]`。`send_time` 经过格式归一化，合法格式如 `"9:05"` 自动归一为 `"09:05"`；`top_n` 限制在 `1..50` 之间；`webhook_url` 与 `bark_url` 为可选推送渠道，若开启日报但未配置任何渠道，日报仅存档到本地数据库，不外发网络请求。
+
 ### `[autostart]`
 
 当前用户作用域的**开机 / 登录自启动**配置（`AutostartConfig`）。该功能只注册当前用户的桌面登录项，不写系统级服务、不要求管理员权限；Docker / 容器环境和未知平台会显示为不支持。
@@ -1268,6 +1293,22 @@ TOML 与显式环境变量覆盖在构造 `SchedulerConfig` 前统一归一为�
 `GET /api/config` 返回 `saved_sync.auto_sync_enabled`；`PUT /api/config` 接受同形状的部分更新并保存到 `[saved_sync]`。输入采用 presence-aware 严格布尔校验：省略 `saved_sync` 仍是合法的部分更新；显式传 `saved_sync: null`、`auto_sync_enabled: null`、字符串 `"true"` 或数字 `1` 都返回 422。CLI `openbiliclaw config-show` 会显示解析后的「收藏自动同步」状态。
 
 `false` 时 `POST /api/saved/{list_kind}` 只完成本地保存并返回 `pending`；`true` 时同一路径创建由 runtime registry 跟踪的后台平台任务，但仍立即返回本地成功，不等待 B 站网络。显式 `POST /api/saved/{list_kind}/sync` 是本批账号写入授权，始终无视该开关。旧 `/api/watch-later`、`/api/favorites` 不消费该开关。
+
+### `[digest]`
+
+每日日报（`DigestConfig`）配置契约。默认值、TOML 序列化、配置 API、桌面 Web 设置控件与归档对话框均已接入。
+
+| 键 | 类型 | 默认值 | 说明 |
+|----|------|--------|------|
+| `enabled` | bool | `false` | 每日日报总开关。默认关闭 |
+| `send_time` | string | `"09:00"` | 本地时区推送时刻 `HH:MM` |
+| `top_n` | int | `10` | 发现池高分条目数上限（1..50） |
+| `include_delight` | bool | `true` | 是否包含未消费的惊喜内容 |
+| `include_cognition` | bool | `true` | 是否包含近期认知更新 |
+| `webhook_url` | string | `""` | 通用 webhook 接收 URL |
+| `bark_url` | string | `""` | Bark 基础 URL（含 device key） |
+
+`GET /api/config` 返回 `digest.*`，`PUT /api/config` 接受同结构部分更新。若开启但两个推送 URL 均为空，系统记录一条提示性 config issue，但允许保存并仅存档至本地数据库。
 
 ### `[storage]`
 

@@ -67,6 +67,13 @@ _TRANSIENT_RESULT_MARKERS = (
 )
 
 
+# 扩展一次只跑一条 linux.do 任务（开一个 tab、串行取数再回传），排队中的任务只是在等
+# 前面那条做完；窗口太短会把「排到了但还没轮到」的任务判成 stale_pending，结果回传时行
+# 已经作废，取回的帖子全被丢掉（实测 180s 下每条都死在 3 分钟上）。这个值既是等待认领的
+# 上限，也是同类型老任务被判超时的阈值 —— 两个用途共用一个数字，别再各写一份。
+DEFAULT_LINUXDO_WAIT_SECONDS = 900.0
+
+
 @dataclass
 class LinuxdoDiscoveryProducer:
     """Throttle and invoke plugin-backed Linux.do discovery."""
@@ -81,7 +88,7 @@ class LinuxdoDiscoveryProducer:
     daily_feed_budget: int = 0
     daily_creator_budget: int = 0
     daily_related_budget: int = 0
-    wait_seconds: float = 180.0
+    wait_seconds: float = DEFAULT_LINUXDO_WAIT_SECONDS
     poll_interval_seconds: float = 0.5
     max_items_per_keyword: int = 20
     max_seed_count: int = 5
@@ -364,6 +371,8 @@ class LinuxdoDiscoveryProducer:
         expire = getattr(self.task_queue, "expire_stale_pending", None)
         if callable(expire):
             with suppress(Exception):
+                # 同类型里还没有被认领的老任务才算超时：扩展串行执行，正在排队的那条
+                # 只是在等前一条（认领后的任务状态是 in_progress，本来就不在这个范围）。
                 expire((task_type,), older_than_seconds=max(60.0, self.wait_seconds))
         task_payload = dict(payload)
         task_payload.setdefault(
@@ -629,7 +638,7 @@ def build_linuxdo_discovery_producer(
         logger.info("linuxdo producer disabled: database does not expose sqlite connection")
         return None
 
-    wait_seconds = float(getattr(linuxdo_cfg, "wait_seconds", 0) or 180.0)
+    wait_seconds = float(getattr(linuxdo_cfg, "wait_seconds", 0) or DEFAULT_LINUXDO_WAIT_SECONDS)
     return LinuxdoDiscoveryProducer(
         task_queue=LinuxdoTaskQueue(database),
         database=database,

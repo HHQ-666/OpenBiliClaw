@@ -1645,6 +1645,28 @@ class SavedSyncConfig:
 
 
 @dataclass
+class DigestConfig:
+    """每日日报（daily digest）配置。
+
+    定时把发现池高分条目、未消费惊喜（delight）和最新认知更新汇总成一份
+    日报，存档到本地数据库并推送到已配置的渠道（webhook / Bark）。
+    全部默认关闭——日报是纯增值输出，绝不应在用户未明确开启时外发网络请求。
+    """
+
+    enabled: bool = False
+    # 本地时区 HH:MM；到达后发送当天日报（每天至多一份，错过则下次启动补发）。
+    send_time: str = "09:00"
+    # 日报主列表（发现池高分条目）的条数上限。
+    top_n: int = 10
+    include_delight: bool = True
+    include_cognition: bool = True
+    # 通用 webhook：POST JSON {title, digest_date, text, payload}。
+    webhook_url: str = ""
+    # Bark 推送：填「服务器 + 设备 key」基础 URL，例如 https://api.day.app/AbCdEf。
+    bark_url: str = ""
+
+
+@dataclass
 class LoggingConfig:
     """Logging configuration."""
 
@@ -1879,6 +1901,7 @@ class Config:
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     autostart: AutostartConfig = field(default_factory=AutostartConfig)
     saved_sync: SavedSyncConfig = field(default_factory=SavedSyncConfig)
+    digest: DigestConfig = field(default_factory=DigestConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     # Top-level `[soul]` is distinct from `[llm.soul]` (per-module
@@ -2215,6 +2238,9 @@ def _build_config(
     saved_sync_raw = raw.get("saved_sync", {})
     if not isinstance(saved_sync_raw, dict):
         saved_sync_raw = {}
+    digest_raw = raw.get("digest", {})
+    if not isinstance(digest_raw, dict):
+        digest_raw = {}
     store_raw = raw.get("storage", {})
     logging_raw = raw.get("logging", {})
 
@@ -3084,6 +3110,7 @@ def _build_config(
         saved_sync=SavedSyncConfig(
             auto_sync_enabled=_coerce_bool(saved_sync_raw.get("auto_sync_enabled"), default=False),
         ),
+        digest=_build_digest_config(digest_raw),
         storage=StorageConfig(
             **_filter_dataclass_kwargs(
                 StorageConfig,
@@ -3311,6 +3338,55 @@ def _coerce_bool(value: object, *, default: bool = False) -> bool:
     if isinstance(value, int | float):
         return bool(value)
     return default
+
+
+_DIGEST_SEND_TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d|[0-5])$")
+
+
+def normalize_digest_send_time(value: object, *, default: str = "09:00") -> str:
+    """Normalize the digest send time to a canonical ``HH:MM`` string.
+
+    Accepts ``9:7`` / ``09:07`` and returns ``09:07``; anything malformed
+    (including non-strings) falls back to ``default`` with one WARNING —
+    a typo must not disable the whole digest silently, but must also never
+    crash ``load_config`` (same policy as ``_coerce_ttl_hours``).
+    """
+    text = str(value or "").strip()
+    match = _DIGEST_SEND_TIME_RE.match(text)
+    if match is None:
+        if text:
+            logger.warning(
+                "config: [digest].send_time %r 非法（应为 HH:MM），已回退为 %s",
+                text,
+                default,
+            )
+        return default
+    return f"{int(match.group(1)):02d}:{int(match.group(2)):02d}"
+
+
+def _build_digest_config(raw: dict[str, Any]) -> DigestConfig:
+    """Build ``[digest]`` with per-field coercion (pitfall rule 4: clamp,
+    never crash). Unknown keys were already dropped by the raw-dict guard."""
+    top_n_raw = raw.get("top_n", DigestConfig.top_n)
+    try:
+        top_n = int(top_n_raw)
+    except (TypeError, ValueError):
+        top_n = DigestConfig.top_n
+        logger.warning("config: [digest].top_n %r 非法，已回退为默认值", top_n_raw)
+
+    return DigestConfig(
+        enabled=_coerce_bool(raw.get("enabled"), default=DigestConfig.enabled),
+        send_time=normalize_digest_send_time(raw.get("send_time"), default=DigestConfig.send_time),
+        top_n=max(1, min(50, top_n)),
+        include_delight=_coerce_bool(
+            raw.get("include_delight"), default=DigestConfig.include_delight
+        ),
+        include_cognition=_coerce_bool(
+            raw.get("include_cognition"), default=DigestConfig.include_cognition
+        ),
+        webhook_url=str(raw.get("webhook_url") or "").strip(),
+        bark_url=str(raw.get("bark_url") or "").strip(),
+    )
 
 
 def _coerce_ttl_hours(value: object) -> int:
@@ -5140,6 +5216,16 @@ def _collect_config_issues(config: Config) -> list[ConfigIssue]:
             )
         )
 
+    if config.digest.enabled and not config.digest.webhook_url and not config.digest.bark_url:
+        issues.append(
+            ConfigIssue(
+                field="digest.webhook_url",
+                message="日报已启用但没有配置任何推送渠道（webhook_url / bark_url），"
+                "日报只会存档到本机，不会推送。",
+                severity="warning",
+            )
+        )
+
     return issues
 
 
@@ -6417,6 +6503,16 @@ def _render_config_toml(
             "",
             "[saved_sync]",
             f"auto_sync_enabled = {_toml_bool(config.saved_sync.auto_sync_enabled)}",
+            "",
+            "[digest]",
+            "# 每日日报：定时汇总高分池子 / 惊喜 / 认知更新，存档并推送。",
+            f"enabled = {_toml_bool(config.digest.enabled)}",
+            f"send_time = {_toml_string(config.digest.send_time)}",
+            f"top_n = {config.digest.top_n}",
+            f"include_delight = {_toml_bool(config.digest.include_delight)}",
+            f"include_cognition = {_toml_bool(config.digest.include_cognition)}",
+            f"webhook_url = {_toml_string(config.digest.webhook_url)}",
+            f"bark_url = {_toml_string(config.digest.bark_url)}",
             "",
             "[storage]",
             f"db_path = {_toml_string(config.storage.db_path)}",

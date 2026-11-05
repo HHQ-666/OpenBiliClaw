@@ -127,6 +127,9 @@ def test_build_profile_summary_includes_full_profile_context() -> None:
     assert summary["disliked_topics"] == ["标题党", "低质混剪"]
     assert summary["mbti"] == {
         "type": "INTJ",
+        # 推断结果没有第五维度、也没被用户自测固定过
+        "identity": "",
+        "declared": False,
         "confidence": 0.76,
         "dimensions": {"EI": {"pole": "I", "strength": 0.8}},
         "inferred_from": ["长期观看模式"],

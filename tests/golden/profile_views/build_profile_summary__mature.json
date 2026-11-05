@@ -2838,6 +2838,7 @@
   "life_stage": "工作稳定期",
   "mbti": {
     "confidence": 0.82,
+    "declared": false,
     "dimensions": {
       "EI": {
         "pole": "I",
@@ -2848,6 +2849,7 @@
         "strength": 0.7
       }
     },
+    "identity": "",
     "inferred_from": [
       "信号-0",
       "信号-1",
