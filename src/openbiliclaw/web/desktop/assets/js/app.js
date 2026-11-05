@@ -243,6 +243,7 @@
       { key: "douyin", label: "抖音" },
       { key: "weibo", label: "微博" },
       { key: "youtube", label: "YouTube" },
+      { key: "tiktok", label: "TikTok" },
       { key: "twitter", label: "X (Twitter)" },
       { key: "github", label: "GitHub" },
       { key: "zhihu", label: "知乎" },
@@ -256,10 +257,11 @@
     // 首次成功读到库存快照之前是"未知"，不能把还没读到伪装成 0。
     const PLATFORM_COUNT_UNKNOWN_TEXT = "—";
     const PLATFORM_COUNT_UNKNOWN_LABEL = "库存待读取";
-    const platformLabel = { bilibili: "B 站", youtube: "YouTube", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
-    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "douyin", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
+    const platformLabel = { bilibili: "B 站", youtube: "YouTube", tiktok: "TikTok", douyin: "抖音", xiaohongshu: "小红书", xhs: "小红书", weibo: "微博", wb: "微博", twitter: "X (Twitter)", x: "X (Twitter)", github: "GitHub", gh: "GitHub", zhihu: "知乎", reddit: "Reddit", rd: "Reddit", bangumi: "Bangumi", bgm: "Bangumi", linuxdo: "Linux.do", "linux.do": "Linux.do", v2ex: "V2EX", v2: "V2EX", instagram: "Instagram", ig: "Instagram" };
+    const platformAliases = { bili: "bilibili", bilibili: "bilibili", xhs: "xiaohongshu", xiaohongshu: "xiaohongshu", rednote: "xiaohongshu", dy: "douyin", douyin: "douyin", tiktok: "tiktok", tt: "tiktok", wb: "weibo", weibo: "weibo", yt: "youtube", youtube: "youtube", x: "twitter", twitter: "twitter", gh: "github", github: "github", zh: "zhihu", zhihu: "zhihu", rd: "reddit", reddit: "reddit", bgm: "bangumi", bangumi: "bangumi", linuxdo: "linuxdo", "linux.do": "linuxdo", v2: "v2ex", v2ex: "v2ex", ig: "instagram", instagram: "instagram" };
     const PLATFORM_BRAND_ICONS = {
       bilibili: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.81 4.65h.85c1.51 0 2.77.84 3.3 2.05.33.75.39 1.6.39 2.47v7.54c0 .87-.06 1.72-.39 2.47-.53 1.21-1.79 2.05-3.3 2.05H5.33c-1.51 0-2.77-.84-3.3-2.05-.33-.75-.39-1.6-.39-2.47V9.17c0-.87.06-1.72.39-2.47.53-1.21 1.79-2.05 3.3-2.05h.85L4.85 2.67a.8.8 0 0 1 .24-.92.78.78 0 0 1 .91-.02l3.24 2.92h5.52l3.24-2.92a.78.78 0 0 1 .91.02.8.8 0 0 1 .24.92L17.81 4.65zm-10.48 5.68c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25zm9.34 0c-.69 0-1.25.56-1.25 1.25v2.5c0 .69.56 1.25 1.25 1.25s1.25-.56 1.25-1.25v-2.5c0-.69-.56-1.25-1.25-1.25z"/></svg>',
+      tiktok: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 1 1-2.59-2.5 2.73 2.73 0 0 1 .52.05V9.77a5.72 5.72 0 0 0-.52-.02 5.75 5.75 0 1 0 5.75 5.75V8.6a7.37 7.37 0 0 0 4.39 1.44V6.9a4.29 4.29 0 0 1-3.4-1.08z"/></svg>',
       github: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>',
       linuxdo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C9.5 2 7.5 4 7.5 6.5c0 1.6.8 3.1 2 4-2.8 1.4-4.5 4.1-4.5 7.5 0 1 .8 2 2.5 2.5 1.5.5 3.5.5 5 .5s3.5 0 5-.5c1.7-.5 2.5-1.5 2.5-2.5 0-3.4-1.7-6.1-4.5-7.5 1.2-.9 2-2.4 2-4C16.5 4 14.5 2 12 2zm-1.8 4.2c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm3.6 0c.6 0 1 .4 1 1s-.4 1-1 1-1-.4-1-1 .4-1 1-1zm-1.8 3.3c1 0 1.7.5 1.7 1.2h-3.4c0-.7.7-1.2 1.7-1.2z"/></svg>',
       zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.3 4C4.6 4 4 4.6 4 5.3v9.4C4 15.4 4.6 16 5.3 16h3.2v3.6c0 .4.5.6.8.3L13 16h5.7c.7 0 1.3-.6 1.3-1.3V5.3C20 4.6 19.4 4 18.7 4H5.3zm4 2.8h5.4c.4 0 .7.3.7.7v4.4c0 .4-.3.7-.7.7H9.3a.7.7 0 0 1-.7-.7V7.5c0-.4.3-.7.7-.7z"/></svg>',
@@ -9635,6 +9637,7 @@ ${cardFeedbackBarHtml()}`;
     const SOURCE_STATUS_REFRESH_EVENTS = new Set([
       "bilibili_cookie_synced",
       "douyin_cookie_synced",
+      "tiktok_cookie_synced",
       "x_cookie_synced",
       "reddit_cookie_synced"
     ]);
@@ -9648,6 +9651,7 @@ ${cardFeedbackBarHtml()}`;
       douyin: "douyinEnabled",
       weibo: "weiboEnabled",
       youtube: "youtubeEnabled",
+      tiktok: "tiktokEnabled",
       twitter: "twitterEnabled",
       zhihu: "zhihuEnabled",
       reddit: "redditEnabled",
@@ -9946,6 +9950,7 @@ ${cardFeedbackBarHtml()}`;
       xiaohongshu: "shareXhs",
       douyin: "shareDouyin",
       youtube: "shareYoutube",
+      tiktok: "shareTiktok",
       twitter: "shareTwitter",
       zhihu: "shareZhihu",
       reddit: "shareReddit",
@@ -9962,6 +9967,7 @@ ${cardFeedbackBarHtml()}`;
       douyin: "抖音",
       weibo: "微博",
       youtube: "YouTube",
+      tiktok: "TikTok",
       twitter: "X (Twitter)",
       zhihu: "知乎",
       reddit: "Reddit",
@@ -10860,6 +10866,7 @@ ${cardFeedbackBarHtml()}`;
       setInput("shareXhs", scheduler.pool_source_shares?.xiaohongshu);
       setInput("shareDouyin", scheduler.pool_source_shares?.douyin);
       setInput("shareYoutube", scheduler.pool_source_shares?.youtube);
+      setInput("shareTiktok", scheduler.pool_source_shares?.tiktok);
       setInput("shareTwitter", scheduler.pool_source_shares?.twitter);
       setInput("shareZhihu", scheduler.pool_source_shares?.zhihu);
       setInput("shareReddit", scheduler.pool_source_shares?.reddit);
@@ -11037,6 +11044,20 @@ ${cardFeedbackBarHtml()}`;
       setInput("youtubeDailyChannelBudget", config.sources?.youtube?.daily_channel_budget);
       setInput("youtubeRequestInterval", config.sources?.youtube?.request_interval_seconds);
       setInput("youtubeMinInterval", config.sources?.youtube?.min_interval_minutes);
+      setSelect("tiktokEnabled", config.sources?.tiktok?.enabled === true ? "on" : "off");
+      setCookieOverrideInput("tiktokCookie", config.sources?.tiktok?.cookie, " TikTok");
+      setInput("tiktokCookieEnv", config.sources?.tiktok?.cookie_env);
+      setSelect("tiktokMode", config.sources?.tiktok?.mode || "auto");
+      setInput("tiktokRegion", config.sources?.tiktok?.region);
+      setInput("tiktokTzName", config.sources?.tiktok?.tz_name);
+      setInput("tiktokTags", (config.sources?.tiktok?.tags || []).join(", "));
+      setInput("tiktokCreators", (config.sources?.tiktok?.creators || []).join(", "));
+      setInput("tiktokDailyFeedBudget", config.sources?.tiktok?.daily_feed_budget);
+      setInput("tiktokDailySearchBudget", config.sources?.tiktok?.daily_search_budget);
+      setInput("tiktokDailyTagBudget", config.sources?.tiktok?.daily_tag_budget);
+      setInput("tiktokDailyUserBudget", config.sources?.tiktok?.daily_user_budget);
+      setInput("tiktokRequestInterval", config.sources?.tiktok?.request_interval_seconds);
+      setInput("tiktokMinInterval", config.sources?.tiktok?.min_interval_minutes);
       setSelect("twitterEnabled", config.sources?.twitter?.enabled === true ? "on" : "off");
       setCookieOverrideInput("twitterCookie", config.sources?.twitter?.cookie, " X");
       setInput("twitterCookieEnv", config.sources?.twitter?.cookie_env);
@@ -12208,7 +12229,7 @@ ${cardFeedbackBarHtml()}`;
       if (weightField) weightField.hidden = mode !== "custom";
     }
 
-    const DESKTOP_SOURCE_DATE_SLUGS = ["bilibili", "xiaohongshu", "douyin", "weibo", "youtube", "twitter", "github", "zhihu", "reddit", "bangumi", "linuxdo", "v2ex", "instagram"];
+    const DESKTOP_SOURCE_DATE_SLUGS = ["bilibili", "xiaohongshu", "douyin", "weibo", "youtube", "tiktok", "twitter", "github", "zhihu", "reddit", "bangumi", "linuxdo", "v2ex", "instagram"];
 
     function ensureSourceDateFields() {
       for (const slug of DESKTOP_SOURCE_DATE_SLUGS) {
@@ -12290,6 +12311,7 @@ ${cardFeedbackBarHtml()}`;
       if (getInput("embeddingBaseUrl")) embedding.base_url = getInput("embeddingBaseUrl");
       const cookie = getInput("biliCookie");
       const douyinCookie = getInput("douyinCookie");
+      const tiktokCookie = getInput("tiktokCookie");
       const twitterCookie = getInput("twitterCookie");
       const redditCookie = getInput("redditCookie");
       const bilibiliDateMode = getInput("biliDateMode") || "soft";
@@ -12378,6 +12400,29 @@ ${cardFeedbackBarHtml()}`;
             request_interval_seconds: getIntInput("youtubeRequestInterval", 2),
             min_interval_minutes: getIntInput("youtubeMinInterval", 3),
             ...sourceDateFieldsForUpdate("youtube")
+          },
+          tiktok: {
+            enabled: $("#tiktokEnabled").value === "on",
+            mode: getInput("tiktokMode") || "auto",
+            ...(tiktokCookie ? { cookie: tiktokCookie } : {}),
+            cookie_env: getInput("tiktokCookieEnv"),
+            region: getInput("tiktokRegion"),
+            tz_name: getInput("tiktokTzName"),
+            tags: getInput("tiktokTags")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean),
+            creators: getInput("tiktokCreators")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean),
+            daily_feed_budget: getIntInput("tiktokDailyFeedBudget", 3),
+            daily_search_budget: getIntInput("tiktokDailySearchBudget", 3),
+            daily_tag_budget: getIntInput("tiktokDailyTagBudget", 0),
+            daily_user_budget: getIntInput("tiktokDailyUserBudget", 0),
+            request_interval_seconds: getIntInput("tiktokRequestInterval", 2),
+            min_interval_minutes: getIntInput("tiktokMinInterval", 3),
+            ...sourceDateFieldsForUpdate("tiktok")
           },
           twitter: {
             enabled: $("#twitterEnabled").value === "on",
@@ -12526,6 +12571,7 @@ ${cardFeedbackBarHtml()}`;
             xiaohongshu: getIntInput("shareXhs", 1),
             douyin: getIntInput("shareDouyin", 1),
             youtube: getIntInput("shareYoutube", 1),
+            tiktok: getIntInput("shareTiktok", 1),
             twitter: getIntInput("shareTwitter", 1),
             zhihu: getIntInput("shareZhihu", 1),
             reddit: getIntInput("shareReddit", 1),
@@ -13573,13 +13619,14 @@ ${cardFeedbackBarHtml()}`;
       safeBind(`#${id}`, "change", () => renderSourcesStatusRows(state.sourceStatus));
     });
     safeBind("#suggestSharesBtn", "click", async () => {
-      const result = await requestJson(ENDPOINTS.sourceShareSuggestion, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled_sources: { bilibili: $("#bilibiliEnabled").value === "on", xiaohongshu: $("#xhsEnabled").value === "on", douyin: $("#douyinEnabled").value === "on", youtube: $("#youtubeEnabled").value === "on", twitter: $("#twitterEnabled").value === "on", github: $("#githubEnabled").value === "on", zhihu: $("#zhihuEnabled").value === "on", reddit: $("#redditEnabled").value === "on", bangumi: $("#bangumiEnabled").value === "on", linuxdo: $("#linuxdoEnabled").value === "on", v2ex: $("#v2exEnabled").value === "on", weibo: $("#weiboEnabled").value === "on", instagram: $("#instagramEnabled").value === "on" }, configured_shares: buildConfigUpdate().scheduler.pool_source_shares }) });
+      const result = await requestJson(ENDPOINTS.sourceShareSuggestion, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled_sources: { bilibili: $("#bilibiliEnabled").value === "on", xiaohongshu: $("#xhsEnabled").value === "on", douyin: $("#douyinEnabled").value === "on", youtube: $("#youtubeEnabled").value === "on", tiktok: $("#tiktokEnabled").value === "on", twitter: $("#twitterEnabled").value === "on", github: $("#githubEnabled").value === "on", zhihu: $("#zhihuEnabled").value === "on", reddit: $("#redditEnabled").value === "on", bangumi: $("#bangumiEnabled").value === "on", linuxdo: $("#linuxdoEnabled").value === "on", v2ex: $("#v2exEnabled").value === "on", weibo: $("#weiboEnabled").value === "on", instagram: $("#instagramEnabled").value === "on" }, configured_shares: buildConfigUpdate().scheduler.pool_source_shares }) });
       const shares = result?.pool_source_shares || result?.shares || result?.suggested_shares;
       if (shares) {
         setInput("shareBilibili", shares.bilibili);
         setInput("shareXhs", shares.xiaohongshu);
         setInput("shareDouyin", shares.douyin);
         setInput("shareYoutube", shares.youtube);
+        if (shares.tiktok !== undefined) setInput("shareTiktok", shares.tiktok);
         if (shares.twitter !== undefined) setInput("shareTwitter", shares.twitter);
         if (shares.zhihu !== undefined) setInput("shareZhihu", shares.zhihu);
         if (shares.reddit !== undefined) setInput("shareReddit", shares.reddit);
