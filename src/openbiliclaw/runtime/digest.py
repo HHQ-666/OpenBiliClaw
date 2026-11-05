@@ -259,9 +259,7 @@ class WebhookChannel:
                     "post": {
                         "zh_cn": {
                             "title": draft.title,
-                            "content": [
-                                [{"tag": "text", "text": draft.body_text}]
-                            ],
+                            "content": [[{"tag": "text", "text": draft.body_text}]],
                         }
                     }
                 },
@@ -269,9 +267,7 @@ class WebhookChannel:
         if "qyapi.weixin.qq.com" in url_lower:
             return {
                 "msg_type": "markdown",
-                "markdown": {
-                    "content": f"### {draft.title}\n{draft.body_text}"
-                },
+                "markdown": {"content": f"### {draft.title}\n{draft.body_text}"},
             }
         return {
             "title": draft.title,

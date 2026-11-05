@@ -7942,8 +7942,7 @@ def _ask_tiktok_inclusion() -> bool:
     console.print()
     console.print("[bold]🎬 TikTok 数据接入(可选)[/bold]")
     console.print(
-        "把你的 TikTok[bold cyan]点赞 / 收藏 / 关注[/bold cyan]混进画像,"
-        "系统能读懂你跨平台的口味。"
+        "把你的 TikTok[bold cyan]点赞 / 收藏 / 关注[/bold cyan]混进画像,系统能读懂你跨平台的口味。"
     )
     console.print()
     console.print("启用需要:")
