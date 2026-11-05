@@ -6,7 +6,7 @@
 `docs/plans/2026-09-23-chat-agent-loop-design.md`）。M1 交付后端核心三件：
 JSON Schema 工具注册表、provider 原生 function calling、多跳 `AgentLoop`；
 M2 把 loop 接上了聊天 SSE 端点（真流式）；M3 交付 14 个 v1 标准工具；
-M4 交付 skill 体系（SKILL.md 加载、4 个内置 skill、会话绑定与切换）；
+M4 交付 skill 体系（SKILL.md 加载、5 个内置 skill、会话绑定与切换）；
 M6 交付任务中心（durable 后台任务 + 建议清单回报）；
 M7 交付 L2 审批门（hard_write 工具逐项审批 + 审计台账）；
 M8 交付桌面 Web 前端（`web/desktop/`）：agent loop 真流式过程展示
@@ -32,7 +32,7 @@ M9 交付移动 Web（`web/js/views/chat.js`）与插件 popup（`extension/popu
 | 公开网页与聊天笔记 | ✅ | search_web/read_webpage 按需联网并保留来源；agent_notes 可检索、CAS 更正和审批删除，后续聊天按权限注入有界引用 |
 | 对话收敛 | ✅ | 所有角色共享需求优先规则；口味探寻师只在用户主动探索时访谈，信息够用即总结，连续两轮提问后先收敛。详见下文 Skill 体系 |
 | 会话聊天风格 | ✅ | 六种表达模板独立于功能角色；会话持久化、发送时冻结，三端选择与示例预览，工具权限保持 |
-| M4 skill 加载与切换 | ✅ | `agent/skill.py`：`SkillDefinition` + `*/SKILL.md` 解析（手写 frontmatter 子集，无 YAML 依赖）+ `load_skill_catalog()`（内置 → `data/skills/` 覆盖，非法文件跳过记日志）；4 个内置 skill；`suggest_skill` 元工具 + 端点 skill 绑定，见下文「Skill 体系（M4）」 |
+| M4 skill 加载与切换 | ✅ | `agent/skill.py`：`SkillDefinition` + `*/SKILL.md` 解析（手写 frontmatter 子集，无 YAML 依赖）+ `load_skill_catalog()`（内置 → `data/skills/` 覆盖，非法文件跳过记日志）；5 个内置 skill；`suggest_skill` 元工具 + 端点 skill 绑定，见下文「Skill 体系（M4）」 |
 | M6 任务中心（durable 后台任务） | ✅ | `agent/tasks.py`：`AgentTaskRunner` 在 `BackgroundTaskRegistry` 登记的 asyncio task 里跑**只读** AgentLoop（`filter_by_permission("read")` ∩ skill 白名单），事件逐步落 `agent_tasks.steps`；写动作只经 `propose_suggestion` 元工具产出结构化建议清单，完成后往来源会话写汇总消息；交互侧另有 `start_background_task` 元工具（同 suggest_skill 确认卡模式）。见下文「任务中心（M6）」 |
 | M7 L2 审批门 | ✅ | `agent/approvals.py`：loop 拦截 hard_write 调用 → `approval_request` SSE 事件 + durable 审批记录（JSON 文件存储，免迁移）；`/api/chat/approvals` 端点批准（立即返回 + 后台任务二次 dispatch 真执行，幂等）/拒绝；审计落 `profile_update_ledger`。见下文「L2 审批门（M7）」 |
 
@@ -64,11 +64,12 @@ agent/
 ├── skill.py             # SkillDefinition / SkillCatalog / SKILL.md 加载（M4）
 │                        # + 既有 Skill ABC / SkillRegistry 代码技能骨架（未使用）
 ├── tasks.py             # AgentTaskRunner + propose_suggestion / start_background_task 元工具（M6）
-├── skills_builtin/      # 4 个内置 skill 的 SKILL.md（随包分发）
+├── skills_builtin/      # 5 个内置 skill 的 SKILL.md（随包分发）
 │   ├── taste-companion/   # 口味伙伴（默认）
 │   ├── taste-explorer/    # 口味探寻师
 │   ├── bangumi-advisor/   # 追番顾问
-│   └── system-steward/    # 系统管家
+│   ├── system-steward/    # 系统管家
+│   └── ai-frontier-radar/ # AI 前沿雷达（跨平台情报汇总）
 └── tools/
     ├── registry.py      # Tool / ToolResult / ToolRegistry / validate_tool_arguments
     ├── source_tools.py  # 订阅源管理三工具的 JSON Schema 定义与 handler
@@ -229,7 +230,7 @@ tools:                        # 可选白名单；缺省 = 无工具
 source=builtin|custom）与 `SkillCatalog`（`get` / `default` /
 `to_public_list` / `render_switch_guide`）是纯数据层，不持有运行时组件。
 
-内置 4 个 skill 及工具白名单：
+内置 5 个 skill 及工具白名单：
 
 | name | 显示名 | 工具白名单 |
 |------|--------|-----------|
@@ -237,6 +238,7 @@ source=builtin|custom）与 `SkillCatalog`（`get` / `default` /
 | `taste-explorer` | 口味探寻师 | get_profile / read_memory / write_memory / delete_memory / search_history / submit_feedback / search_web / read_webpage（访谈角色） |
 | `bangumi-advisor` | 追番顾问 | get_profile / read_memory / get_recommendations / get_watch_history / save_item / submit_feedback / search_web / read_webpage |
 | `system-steward` | 系统管家 | list_sources / get_config / search_web / read_webpage + hard_write 三件套（create_source / toggle_source / update_config；人设强调改动需用户批准） |
+| `ai-frontier-radar` | AI 前沿雷达 | search_web / read_webpage / get_profile / read_memory / search_history / get_recommendations / query_discovery_pool / list_sources / save_item / submit_feedback（跨平台汇总，优先一手来源，区分已确认与传闻） |
 
 **会话绑定与切换**：`POST /api/chat/agent/stream` 请求体新增可选 `skill`
 字段（空 = 默认口味伙伴，未知名返回 422）。选中 skill 后：loop 的工具集 =

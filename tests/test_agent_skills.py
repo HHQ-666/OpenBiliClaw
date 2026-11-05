@@ -96,6 +96,18 @@ BUILTIN_TOOL_WHITELISTS: dict[str, set[str]] = {
         "toggle_source",
         "update_config",
     },
+    "ai-frontier-radar": {
+        "search_web",
+        "read_webpage",
+        "get_profile",
+        "read_memory",
+        "search_history",
+        "get_recommendations",
+        "query_discovery_pool",
+        "list_sources",
+        "save_item",
+        "submit_feedback",
+    },
 }
 
 

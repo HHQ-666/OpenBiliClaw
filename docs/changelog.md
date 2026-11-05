@@ -70,6 +70,13 @@
 
 - **长文剪报封顶，卡片高度重新由封面决定**：无图长文的封面槽此前没有任何上限，一条 2000 字推文把它撑到 ~1400px，网格行拉伸又把同排卡片一起拉高。现在桌面封顶 176px ＋ 6 行截断、手机 132px ＋ 5 行，与 16:9 封面等高；顺手清掉了 `.video-card.is-text-card` 这组从未匹配过任何元素的死选择器（真实选择器是 `.cover.is-text-card`），并把 114px 的右侧留白收回到 14px，让剪报把宽度用在正文上。
 
+## 未发布：AI 前沿雷达 chat skill（2026-10-26）
+
+- 新增内置 chat skill `ai-frontier-radar`（显示名「AI 前沿雷达」）：面向 AI 模型发布、论文、开源项目与视频的跨平台情报汇总。技能要求先取一手来源（官方博客、模型卡、定价页、许可证、arXiv、Hugging Face Daily Papers），再覆盖 Hacker News、Reddit、linux.do、V2EX、微博、B 站、YouTube；输出区分「已确认 / 官方未确认 / 传闻」，优先参数、上下文、价格、吞吐、许可证和基准测试条件，过滤无数据的宏观叙事与营销内容。工具白名单：`search_web` / `read_webpage` / `get_profile` / `read_memory` / `search_history` / `get_recommendations` / `query_discovery_pool` / `list_sources` / `save_item` / `submit_feedback`。
+- 桌面端 skill 选择器补充 📡 图标；`tests/test_agent_skills.py` 的内置白名单夹具同步新增该技能，`docs/modules/agent.md`、`docs/modules/api.md`、`docs/architecture.md` 的内置 skill 数量与清单同步更新为 5 个。
+
+## v0.3.227：macOS 正式签名与 Instagram 实验性来源（2026-10-06）
+
 - **视觉世界整体替换**：桌面 Web、移动 Web 与插件弹窗改为一套设计系统「私人卡片目录馆」——卡纸与台面中性色、印刷细线做结构、黄铜做抽屉硬件、印章红是唯一强调色，全部来自 `web/shared/design/tokens.css`（含 light/dark 与旧 token 桥接）。原先的两套并行样式（`web/css/app.css`、`web/desktop/assets/css/app.css` + `classic.css` 覆盖层）整体删除，由 `tokens.css` / `base.css` / `world.css` + `pages/*`（desktop、mobile、home、library、profile、chat、settings）取代；页族文件零字面色值，只有 tokens 带十六进制，由 `test_desktop_web_dark_mode` 锁定。插件弹窗是扩展页面、无法链接后端样式表，`popup.html` 末尾以镜像层对齐同一套 token 值（含设置表单、来源卡、画像编辑树、文本卡）。
 
 - **词汇与交互**：编目卡（封面＋来源章＋等宽元数据）、批注块（印章红左规＝「为什么推给你」）、印章式反馈（`aria-pressed` 触发 `stamp-press` 260ms 回弹并微旋 -4°）、流通单侧栏（点线引导行＋三格度量）、导卡式平台/设置分隔（选中＝底部印章条＋字重，不只靠颜色）、印刷式表单与色相墨垫。动效语法为「impressions」：页面进场仅透明度（不移动几何），骨架屏为干胶呼吸；`prefers-reduced-motion` 全程兜底。触控目标 ≥44px（`pointer: coarse` 或 ≤820px）。
